@@ -38,6 +38,7 @@ WaterSource::WaterSource(const char *name, const int id, const vector<Catchment 
           name(name),
           source_type(source_type),
           construction_time(NON_INITIALIZED) {
+    // std::cerr << "[NEW WS] id=" << id << " name=" << name << " ptr=" << this << "\n";
     for (Catchment *c : catchments) {
         this->catchments.push_back(Catchment(*c));
     }
@@ -194,6 +195,7 @@ WaterSource::WaterSource(const char *name, const int id, const vector<Catchment 
 }
 
 void WaterSource::checkForInputErrorsConstruction() {
+    // std::cerr << "[NEW WS] id=" << id << " name=" << name << " ptr=" << this << "\n";
     if (std::isnan(permitting_time) || permitting_time < 0) {
         string error = "Invalid permitting period for water source " + to_string(id);
         throw invalid_argument(error.c_str());
@@ -368,10 +370,7 @@ void WaterSource::setAllocations(
 			+ ": " + to_string((*allocated_fractions)[i]) + "\n";
 	}
 
-	char error_carray[error.size() + 1];
-	strcpy(error_carray, error.c_str());
-
-        throw invalid_argument(error_carray);
+        throw invalid_argument(error);
     }
 
     // Check if treatment capacity was allocated to water quality pool

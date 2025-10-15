@@ -127,6 +127,6 @@ void Quarry::applyContinuity(int week, double upstream_source_inflow,
 void Quarry::setOnline() {
     WaterSource::setOnline();
 
-    /// start empty and gradually fill as inflows start coming in.
-    available_volume = NONE;
+    /// start at full capacity to ensure valid continuity calculations.
+    available_volume = capacity;
 }

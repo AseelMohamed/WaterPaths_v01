@@ -16,6 +16,7 @@ File $Id: QuadProg++.cc 232 2007-06-21 12:29:00Z digasper $
 #include <algorithm>
 #include <sstream>
 #include "QuadProg++.h"
+#include <limits>
 
 // Utility functions for updating some data needed by the solution method 
 void compute_d(Vector<double> &d, const Matrix<double> &J, const Vector<double> &np);

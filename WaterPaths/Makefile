@@ -5,7 +5,7 @@ LDFLAGS=-lstdc++
 SOURCES=$(shell find ./src -name "*.cpp")
 OBJECTS=$(SOURCES:.cpp=.o)
 
-TARGET=triangleSimulation
+TARGET=FDBsimulation
 EXECUTABLE=$(TARGET)
 
 LIB_DIR=./lib

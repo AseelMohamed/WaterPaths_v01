@@ -10,16 +10,16 @@ TransfersBilateral::TransfersBilateral(const int id,
                                        double source_treatment_buffer,
                                        double surcharge_percentage_fee,
                                        const vector<double> &transfer_triggers,
-                                       const vector<int> &utilities_ids)
+                                       const vector<int> &wss_ids)
         : DroughtMitigationPolicy(id, TRANSFERS_CAESB),
           source_treatment_buffer(source_treatment_buffer),
           surcharge_percentage_fee(surcharge_percentage_fee),
           pipe_transfer_capacities(pipe_transfer_capacities),
           transfer_overhead(surcharge_percentage_fee),
-          transfer_triggers(vector<double>(max(utilities_ids[0], utilities_ids[1]) + 1, NON_INITIALIZED)) {
-    this->transfer_triggers[utilities_ids[0]] = transfer_triggers[0];
-    this->transfer_triggers[utilities_ids[1]] = transfer_triggers[1];
-    this->utilities_ids = utilities_ids;
+          transfer_triggers(vector<double>(max(wss_ids[0], wss_ids[1]) + 1, NON_INITIALIZED)) {
+    this->transfer_triggers[wss_ids[0]] = transfer_triggers[0];
+    this->transfer_triggers[wss_ids[1]] = transfer_triggers[1];
+    this->wss_ids = wss_ids;
 
 }
 
@@ -30,31 +30,31 @@ TransfersBilateral::TransfersBilateral(const TransfersBilateral &transfer_caesb)
         pipe_transfer_capacities(transfer_caesb.pipe_transfer_capacities),
         transfer_overhead(transfer_caesb.surcharge_percentage_fee),
         transfer_triggers(transfer_caesb.transfer_triggers) {
-    this->utilities_ids = transfer_caesb.utilities_ids;
+    this->wss_ids = transfer_caesb.wss_ids;
 }
 
 void TransfersBilateral::applyPolicy(int week) {
 
-    double transfer_volume = performTransfer(realization_utilities[0],
-                                      realization_utilities[1],
+    double transfer_volume = performTransfer(realization_wss[0],
+                                      realization_wss[1],
                                       pipe_transfer_capacities[1], week);
 
     transfered_volumes = {-transfer_volume, transfer_volume};
 
     if (transfer_volume == 0) {
-        transfer_volume = performTransfer(realization_utilities[1],
-                                          realization_utilities[0],
+        transfer_volume = performTransfer(realization_wss[1],
+                                          realization_wss[0],
                                           pipe_transfer_capacities[0], week);
         transfered_volumes = {transfer_volume, -transfer_volume};
     }
 }
 
-double TransfersBilateral::performTransfer(Utility *sender, Utility *receiver,
+double TransfersBilateral::performTransfer(WaterSupplySystems *sender, WaterSupplySystems *receiver,
                                            double pumping_capacity,
                                            int week) const {
 
     double transfer_volume = 0;
-    if (receiver->getRisk_of_failure() > transfer_triggers[receiver->id] &&
+    if (receiver->getRisk_of_failure() > transfer_triggers[receiver->system_id] &&
         sender->getRisk_of_failure() == 0.) {
         // Calculate transfer volume
         double available_transfer_volume =
@@ -67,23 +67,23 @@ double TransfersBilateral::performTransfer(Utility *sender, Utility *receiver,
         // Perform transfer and apply tariffs
         int price_week = Utils::weekOfTheYear(week);
         receiver->setDemand_offset(transfer_volume,
-                                   sender->waterPrice(price_week) *
+                                   sender->getOwner()->waterPrice(price_week) *
                                    transfer_overhead);
         sender->setDemand_offset(-transfer_volume,
-                                 2. * sender->waterPrice(price_week));
+                                 2. * sender->getOwner()->waterPrice(price_week));
     }
 
     return transfer_volume;
 }
 
-void TransfersBilateral::addSystemComponents(vector<Utility *> utilities,
+void TransfersBilateral::addSystemComponents(vector<WaterSupplySystems *> wss,
                                              vector<WaterSource *> water_sources,
                                              vector<MinEnvFlowControl *> min_env_flow_controls) {
-    realization_utilities = {utilities[0], utilities[1]};
+    realization_wss = {wss[0], wss[1]};
 }
 
 void TransfersBilateral::setRealization(unsigned long realization_id,
-                                        vector<double> &utilities_rdm,
+                                        vector<double> &wss_rdm,
                                         vector<double> &water_sources_rdm,
                                         vector<double> &policy_rdm) {}
 

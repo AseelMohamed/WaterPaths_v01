@@ -8,22 +8,23 @@
 
 #include "../../SystemComponents/WaterSources/Base/WaterSource.h"
 #include "../../SystemComponents/Utility/Utility.h"
+#include "../../SystemComponents/Utility/WaterSupplySystems.h"
 
 class MinEnvFlowControl {
 protected:
     vector<WaterSource *> water_sources;
     vector<Catchment *> catchments;
-    vector<Utility* > utilities;
+    vector<WaterSupplySystems *> WSS;
 
 public:
     const vector<int> water_sources_ids;
-    const vector<int> utilities_ids;
+    const vector<int> WSS_ids;
     const int water_source_id;
     const int type;
 
     MinEnvFlowControl(int water_source_id,
                               const vector<int> &aux_water_sources_id,
-                              const vector<int> &aux_utilities_ids, int type);
+                              const vector<int> &aux_WSS_ids, int type);
 
     MinEnvFlowControl(const MinEnvFlowControl &min_env_control);
 
@@ -32,7 +33,7 @@ public:
     virtual double getRelease(int week) = 0;
 
     void addComponents(
-            vector<WaterSource *> water_sources, vector<Utility *> utilities);
+            vector<WaterSource *> water_sources, vector<WaterSupplySystems *> WSS);
 
     virtual void setRealization(unsigned long r, vector<double> &rdm_factors);
 };

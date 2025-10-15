@@ -92,6 +92,7 @@ public:
     connectWaterSourcesVectorsToUtilities(vector<WaterSource *> &water_sources,
                                           vector<int> &priority_draw_water_source,
                                           vector<int> &non_priority_draw_water_source);
+    void reset();
 
     const vector<int> &getRof_infra_construction_order() const;
 

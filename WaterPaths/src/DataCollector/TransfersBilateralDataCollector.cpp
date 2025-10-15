@@ -3,6 +3,7 @@
 //
 
 #include <iomanip>
+#include <sstream>
 #include "TransfersBilateralDataCollector.h"
 
 
@@ -11,7 +12,7 @@ TransfersBilateralDataCollector::TransfersBilateralDataCollector(
         : DataCollector(transfer_policy->id, nullptr, realization,
                         TRANSFERS_CAESB, NON_INITIALIZED),
           transfer_policy(transfer_policy),
-          utilities_ids(transfer_policy->getUtilities_ids()) {
+          utilities_ids(transfer_policy->getWSS_ids()) {
 }
 
 string TransfersBilateralDataCollector::printTabularString(int week) {

@@ -3,6 +3,7 @@
 //
 
 #include <cmath>
+#include <stdexcept>
 #include "Catchment.h"
 
 
@@ -57,8 +58,7 @@ Catchment::~Catchment() {}
  */
 double Catchment::getStreamflow(int week) {
     int adjusted_week = week + delta_week;
-    return streamflows_realization[adjusted_week];
-//    return streamflows_realization.at((unsigned long) adjusted_week);
+    return streamflows_realization.at((unsigned long) adjusted_week);
 }
 
 /**

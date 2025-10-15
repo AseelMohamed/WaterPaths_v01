@@ -253,39 +253,29 @@ void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow
     }
 
     if ((int) abs(sum_allocations - available_volume) > 1) {
-        char error[4000];
-        sprintf(error, "Sum of allocated volumes in a reservoir must \n"
+        string error = "Sum of allocated volumes in a reservoir must \n"
                         "total current storage minus unallocated \n"
                         "volume.Please report this error to \n"
                         "bct52@cornell.edu.\n\n"
-                        "week: %d\nsum_allocations: %f\n"
-                        "available_volume_old: %f\navailable_volume %f\n"
-                        "total_upstream_inflow: %f\n"
-                        "upstream_catchment_inflow: %f\nevaporation: %f\n"
-                        "total_demand: %f\npolicy_added_demand: %f\n"
-                        "total_outflow: %f\ncontinuity error: %f\n",
-                week, sum_allocations, available_volume_old, available_volume,
-                total_upstream_inflow, upstream_catchment_inflow,
-                evaporated_volume, total_demand, policy_added_demand,
-                total_outflow, cont_error);
+                        "week: " + to_string(week) + "\nsum_allocations: " + to_string(sum_allocations) + "\n"
+                        "available_volume_old: " + to_string(available_volume_old) + "\navailable_volume " + to_string(available_volume) + "\n"
+                        "total_upstream_inflow: " + to_string(total_upstream_inflow) + "\n"
+                        "upstream_catchment_inflow: " + to_string(upstream_catchment_inflow) + "\nevaporation: " + to_string(evaporated_volume) + "\n"
+                        "total_demand: " + to_string(total_demand) + "\npolicy_added_demand: " + to_string(policy_added_demand) + "\n"
+                        "total_outflow: " + to_string(total_outflow) + "\ncontinuity error: " + to_string(cont_error);
 
 	throw runtime_error(error);
 //        throw_with_nested(runtime_error(error));
     }
 
     if (abs(cont_error) > 1.f || available_volume < -1.f || sum_allocations < -1.f) {
-        char error[4000];
-        sprintf(error, "Continuity error in %s\n\n"
-                        "week: %d\nsum_allocations: %f\n"
-                        "available_volume_old: %f\navailable_volume %f\n"
-                        "total_upstream_inflow: %f\n"
-                        "upstream_catchment_inflow: %f\nevaporation: %f\n"
-                        "total_demand: %f\npolicy_added_demand: %f\n"
-                        "total_outflow: %f\ncontinuity error: %f\n",
-                name, week, sum_allocations, available_volume_old, available_volume,
-                total_upstream_inflow, upstream_catchment_inflow,
-                evaporated_volume, total_demand, policy_added_demand,
-                total_outflow, cont_error);
+        string error = "Continuity error in " + string(name) + "\n\n"
+                        "week: " + to_string(week) + "\nsum_allocations: " + to_string(sum_allocations) + "\n"
+                        "available_volume_old: " + to_string(available_volume_old) + "\navailable_volume " + to_string(available_volume) + "\n"
+                        "total_upstream_inflow: " + to_string(total_upstream_inflow) + "\n"
+                        "upstream_catchment_inflow: " + to_string(upstream_catchment_inflow) + "\nevaporation: " + to_string(evaporated_volume) + "\n"
+                        "total_demand: " + to_string(total_demand) + "\npolicy_added_demand: " + to_string(policy_added_demand) + "\n"
+                        "total_outflow: " + to_string(total_outflow) + "\ncontinuity error: " + to_string(cont_error);
 
 	throw runtime_error(error);
 //        throw_with_nested(runtime_error(error));
@@ -409,11 +399,11 @@ bool AllocatedReservoir::mass_balance_without_wq_pool(double net_inflow,
 void AllocatedReservoir::setOnline() {
     Reservoir::setOnline();
 
-    // start empty and gradually fill as inflows start coming in.
-    available_volume = 0;
-    //set all allocated volumes to zero
+    // start at full capacity to ensure valid continuity calculations.
+    available_volume = capacity;
+    //set all allocated volumes to their full capacity proportionally
     for (int u : *utilities_with_allocations) {
-        available_allocated_volumes[u] = 0;
+        available_allocated_volumes[u] = capacity * allocated_fractions[u];
     }
 }
 

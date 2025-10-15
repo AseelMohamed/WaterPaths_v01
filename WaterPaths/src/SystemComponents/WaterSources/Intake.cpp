@@ -69,10 +69,17 @@ void Intake::applyContinuity(int week, double upstream_source_inflow,
     for (Catchment &c : catchments)
         upstream_catchment_inflow += c.getStreamflow(week);
 
-    /// Water availability for next ime step.
+    /// Water availability for next time step.
     double next_upstream_catchment_inflow = 0;
-    for (Catchment &c : catchments)
-        next_upstream_catchment_inflow += c.getStreamflow(week + 1);
+    for (Catchment &c : catchments) {
+        // Check if next week is within bounds, otherwise use current week's flow
+        try {
+            next_upstream_catchment_inflow += c.getStreamflow(week + 1);
+        } catch (const std::out_of_range&) {
+            // If next week is out of bounds, use current week's streamflow
+            next_upstream_catchment_inflow += c.getStreamflow(week);
+        }
+    }
 
     /// The available volume for the following week will be next week's gain
     /// - this week's minimum environmental outflow (assuming next week's

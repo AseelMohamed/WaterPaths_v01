@@ -430,14 +430,14 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                    17330.0};
     DataSeries corumba_storage_area(&corumba_storage, &corumba_area);
 
-    vector<int> cIV_allocations_ids = {0,
-                                       WATER_QUALITY_ALLOCATION}; //0 é a id da companhia do Descoberto
+    vector<int> cIV_allocations_ids = {0,  // CAESB utility id (single utility)
+                                       WATER_QUALITY_ALLOCATION}; //0 é a id da CAESB (single utility managing both systems)
     vector<double> cIV_allocation_fractions = {
             cIV_supply_caesb_capacity / cIV_storage_capacity,
             (cIV_wq_capacity + cIV_supply_saneago_capacity +
              cIV_energy_capacity) / cIV_storage_capacity};
     vector<double> cIV_treatment_allocation_fractions = {
-            1.0};  //A companhia descoberto trata água do Corumbá IV. A companhia TortoSM não trata nada.
+            1.0};  //The Descoberto system treats water from Corumbá IV
 
     AllocatedReservoir corumba("Corumba IV",
                                2,
@@ -456,13 +456,13 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double lp_wq_capacity = 423.524 *
                             table_gen_storage_multiplier; //volume destinado a qualidade da água do lago em hm³
     double lp_storage_capacity = lp_wq_capacity + lp_supply_capacity;
-    vector<int> lp_allocations_ids = {1,
-                                      WATER_QUALITY_ALLOCATION}; //1 é a id da companhia do TortoSM
+    vector<int> lp_allocations_ids = {0,  // CAESB utility id (single utility)
+                                      WATER_QUALITY_ALLOCATION}; //0 é a id da CAESB (single utility managing both systems)
     vector<double> lp_allocation_fractions = {
             lp_supply_capacity / lp_storage_capacity,
             lp_wq_capacity / lp_storage_capacity};
     vector<double> lp_treatment_allocation_fractions = {
-            1.0}; //A companhia descoberto não trata nenhuma água do Lago Paranoá. A companhia TortoSM trata.
+            1.0}; //The TortoSM system treats water from Lago Paranoá
 
     AllocatedReservoir paranoa("Lago Paranoa", 3,
                                bacia_paranoa,
@@ -706,51 +706,58 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7,
             0.7e-6 * 3600 * 24 * 7};
 
+    // Create single CAESB utility with two water supply systems
+    // First system: Descoberto (system_id=0, utility_id=0)
+    // Second system: TortoSM (system_id=1, utility_id=0)
+    
     rof_triggered_infra_order_caesb_descoberto.push_back(13);
     rofs_infra_caesb_descoberto.push_back(1.1);
-    Utility caesb_descoberto((char *) "CAESB Descoberto", 0,
-                             demand_caesb_descoberto, demand_n_weeks,
-                             caesb_descoberto_annual_payment,
-                             caesbDescobertoDemandClassesFractions,
-                             caesbDescobertoUserClassesWaterPrices,
-                             wwtp_discharge_caesb_descoberto,
-                             caesb_descoberto_inf_buffer,
-                             water_sources_to_wtp_caesb_1,
-                             wtp_capacities_caesb_1,
-                             rof_triggered_infra_order_caesb_descoberto,
-                             vector<int>(), rofs_infra_caesb_descoberto,
-                             0.04, // taxa de desconto
-                             15, 0.12);
+    
+    // Combine both demands for the utility level
+    // Note: We'll handle system-specific demands within each WaterSupplySystem
+    
+    // Create the single CAESB utility, which will hold the water supply systems.
+    Utility caesb((char *) "CAESB", 0,
+                  demand_caesb_descoberto, // Placeholder, will be managed by WSS
+                  demand_n_weeks,
+                  (caesb_descoberto_annual_payment + caesb_tortoSM_annual_payment) / 2.0,
+                  caesbDescobertoDemandClassesFractions, // Placeholder
+                  caesbDescobertoUserClassesWaterPrices, // Placeholder
+                  wwtp_discharge_caesb_descoberto, // Placeholder
+                  caesb_descoberto_inf_buffer, // Placeholder
+                  {}, {}); // Empty vectors - no default WSS will be created
 
-    Utility caesb_tortoSM((char *) "CAESB Torto/Santa Maria", 1,
-                          demand_caesb_tortoSM, demand_n_weeks,
-                          caesb_tortoSM_annual_payment,
-                          caesbTortoSMDemandClassesFractions,
-                          caesbTortoSMUserClassesWaterPrices,
-                          wwtp_discharge_caesb_tortoSM,
-                          caesb_tortoSM_inf_buffer,
-                          water_sources_to_wtp_caesb_2,
-                          wtp_capacities_caesb_2,
-                          rof_triggered_infra_order_caesb_tortoSM,
-                          vector<int>(), rofs_infra_caesb_tortoSM,
-                          0.04, // 0.04 = taxa de desconto
-                          15, 0.12);
+    // Add Descoberto water supply system (system_id=0)
+    caesb.addWaterSupplySystem("Descoberto", 0, 0,
+                               demand_caesb_descoberto, demand_n_weeks,
+                               wwtp_discharge_caesb_descoberto,
+                               caesb_descoberto_inf_buffer,
+                               water_sources_to_wtp_caesb_1,
+                               wtp_capacities_caesb_1);
+
+    // Add Torto/SM water supply system (system_id=1)
+    caesb.addWaterSupplySystem("TortoSM", 1, 0,
+                               demand_caesb_tortoSM, demand_n_weeks,
+                               wwtp_discharge_caesb_tortoSM,
+                               caesb_tortoSM_inf_buffer,
+                               water_sources_to_wtp_caesb_2,
+                               wtp_capacities_caesb_2);
 
 
-    vector<Utility *> utilities; //vetor que junta as companhias criadas acima
-    utilities.push_back(&caesb_descoberto);
-    utilities.push_back(&caesb_tortoSM);
+    vector<Utility *> utilities; //vetor que contém a única companhia CAESB
+    utilities.push_back(&caesb);
 
-    // Water-source-utility connectivity matrix (each row corresponds to a utility and numbers are water
-    // sources IDs.
+    // Water-source-utility connectivity matrix (single utility with two water supply systems)
+    // Row represents the single CAESB utility (id=0)
+    // Water sources are distributed between the two systems within the utility
     vector<vector<int>> reservoir_utility_connectivity_matrix = {
-            {0, 2, 6, 7, 8,  12, 13},  //CAESB Descoberto
-            {1, 3, 4, 9, 10, 11}  //CAESB Torto/Santa Maria
+            {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13}  // All sources belong to single CAESB utility
     };
 
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
 //    // O que table_storage_shift representa? O que são esses números (2000, 5000...) [3] [17]
-    auto table_storage_shift = vector<vector<double>>(2,
+    // Update table storage shift for single utility
+    auto table_storage_shift = vector<vector<double>>(1,  // Single utility instead of 2
                                                       vector<double>(14, 0.));
     table_storage_shift[0][13] = 30;
 //    table_storage_shift[3][17] = 2000.; //tem a ver com a RdF
@@ -794,16 +801,17 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             caesb_tortoSM_restriction_trigger +
             2. * delta_tortoSM_restriction_trigger}; //estágio 3
 
-    // Criação das políticas de restrição de uso da água (puxa o código Restrictions.h, que contém os comandos dessa política)
+    // Criação das políticas de restrição de uso da água (agora referenciando sistemas de abastecimento)
+    // Restrictions now target specific water supply systems within the single utility
 
-    Restrictions restrictions_descoberto(0,
+    Restrictions restrictions_descoberto(0,  // utility_id=0, targets system_id=0 (Descoberto)
                                          restriction_stage_multipliers_caesb_descoberto,
                                          restriction_stage_triggers_caesb_descoberto,
                                          &caesbDescobertoDemandClassesFractions,
                                          &caesbDescobertoUserClassesWaterPrices,
                                          &caesbPriceRestrictionMultipliers);
 
-    Restrictions restrictions_tortoSM(1,
+    Restrictions restrictions_tortoSM(0,  // utility_id=0, targets system_id=1 (TortoSM)
                                       restriction_stage_multipliers_caesb_tortoSM,
                                       restriction_stage_triggers_caesb_tortoSM,
                                       &caesbTortoSMDemandClassesFractions,
@@ -840,7 +848,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                     caesb_descoberto_transfer_trigger};
     vector<double> transfer_capacities = {0.5e-6 * 3600 * 24 * 7,
                                           0.7e-6 * 3600 * 24 * 7};
-    vector<int> tranfers_utils_ids = {0, 1};
+    vector<int> tranfers_utils_ids = {0, 0};  // Both systems belong to utility id=0
     TransfersBilateral transfers(0, transfer_capacities, 0.1, 1.1,
                                  transfer_rofs, tranfers_utils_ids);
     drought_mitigation_policies.push_back(&transfers);

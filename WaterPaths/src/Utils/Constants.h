@@ -10,7 +10,7 @@
 #include <cmath>
 #include <cstring>
 #include <vector>
-
+#include <string>
 
 namespace Constants {
 #ifdef _WIN32
@@ -24,7 +24,7 @@ namespace Constants {
 //#define NUM_DEC_VAR 57;
     const int NUM_DEC_VAR = 19; // infrastructure turned off
 
-    const std::string DEFAULT_DATA_DIR = "TestFiles" + BAR;
+    const std::string DEFAULT_DATA_DIR = "InputFiles" + BAR;
     const std::string DEFAULT_OUTPUT_DIR = "output" + BAR;
     const std::string DEFAULT_ROF_TABLES_DIR = "rof_tables" + BAR;
     const std::string DEFAULT_RDM_TSERIES_DIR = "";

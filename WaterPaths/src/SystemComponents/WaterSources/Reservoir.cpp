@@ -28,8 +28,7 @@ Reservoir::Reservoir(
         fixed_area(false), evaporation_series(evaporation_series) {
 
     if (storage_area_curve && storage_area_curve->getSeries_x().back() != capacity) {
-	char error[1024];
-    	sprintf(error, "Error Reservoir %d: Last storage of data series must be equal to reservoir capacity.", id);
+    	string error = "Error Reservoir " + to_string(id) + ": Last storage of data series must be equal to reservoir capacity.";
         throw invalid_argument(error);
     }
 }
@@ -76,8 +75,7 @@ Reservoir::Reservoir(const char *name, const int id, const vector<Catchment *> &
         evaporation_series(evaporation_series) {
 
     if (storage_area_curve && storage_area_curve->getSeries_x().back() != capacity) {
-	char error[1024];
-    	sprintf(error, "Error Reservoir %d: Last storage of data series must be equal to reservoir capacity.", id);
+    	string error = "Error Reservoir " + to_string(id) + ": Last storage of data series must be equal to reservoir capacity.";
         throw invalid_argument(error);
     }
 }
@@ -129,8 +127,7 @@ Reservoir::Reservoir(
         evaporation_series(evaporation_series) {
 
     if (storage_area_curve && storage_area_curve->getSeries_x().back() != capacity) {
-	char error[1024];
-    	sprintf(error, "Error Reservoir %d: Last storage of data series must be equal to reservoir capacity.", id);
+    	string error = "Error Reservoir " + to_string(id) + ": Last storage of data series must be equal to reservoir capacity.";
         throw invalid_argument(error);
     }
 }
@@ -184,8 +181,7 @@ Reservoir::Reservoir(const char *name, const int id, const vector<Catchment *> &
         evaporation_series(evaporation_series) {
 
     if (storage_area_curve && storage_area_curve->getSeries_x().back() != capacity) {
-	char error[1024];
-    	sprintf(error, "Error Reservoir %d: Last storage of data series must be equal to reservoir capacity.", id);
+    	string error = "Error Reservoir " + to_string(id) + ": Last storage of data series must be equal to reservoir capacity.";
         throw invalid_argument(error);
     }
 }
@@ -311,8 +307,8 @@ void Reservoir::applyContinuity(int week, double upstream_source_inflow,
 void Reservoir::setOnline() {
     WaterSource::setOnline();
 
-    /// start empty and gradually fill as inflows start coming in.
-    available_volume = NONE;
+    /// start at full capacity to ensure valid continuity calculations.
+    available_volume = capacity;
 }
 
 void Reservoir::setRealization(unsigned long r, vector<double> &rdm_factors) {

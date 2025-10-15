@@ -3,6 +3,8 @@
 //
 
 #include <algorithm>
+#include <stdexcept>
+#include <cstdio>
 #include "InfrastructureManager.h"
 #include "../WaterSources/SequentialJointTreatmentExpansion.h"
 #include "../WaterSources/ReservoirExpansion.h"
@@ -62,6 +64,18 @@ InfrastructureManager &InfrastructureManager::operator=(
     return *this;
 }
 
+void InfrastructureManager::reset() {
+    infra_built_last_week.clear();
+    construction_end_date.clear();
+    under_construction.clear();
+    infra_net_present_cost = NONE;
+
+    if (water_sources != nullptr) {
+        under_construction.resize(water_sources->size(), false);
+        construction_end_date.resize(water_sources->size(), NON_INITIALIZED);
+    }
+}
+
 /**
  * Connects a reservoir to the utility.
  * @param water_source
@@ -70,8 +84,10 @@ void InfrastructureManager::addWaterSource(WaterSource *water_source) {
     /// Add water sources with their IDs matching the water sources vector
     /// indexes.
     if (water_source->id > (int) under_construction.size() - 1) {
-        under_construction.resize(water_sources->size(), false);
-        construction_end_date.resize(water_sources->size(), NON_INITIALIZED);
+        // Resize to accommodate the new water source ID + some buffer
+        size_t new_size = water_source->id + 1;
+        under_construction.resize(new_size, false);
+        construction_end_date.resize(new_size, NON_INITIALIZED);
     }
 }
 
@@ -99,13 +115,7 @@ vector<double> InfrastructureManager::rearrangeInfraRofVector(
     auto n_options = max(rof_infra_construction_order.size(),
                          demand_infra_construction_order.size());
     if (infra_construction_triggers.size() != n_options) {
-        char error[200];
-        sprintf(error,
-                "Number of ROF or demand triggers (%lu) for utility %d must match the number of "
-                "infrastructure options triggered by ROf or demand (%lu, %lu, respectively).",
-                infra_construction_triggers.size(), id,
-                rof_infra_construction_order.size(),
-                demand_infra_construction_order.size());
+        string error = "Number of ROF or demand triggers (" + to_string(infra_construction_triggers.size()) + ") for utility " + to_string(id) + " must match the number of infrastructure options triggered by ROf or demand (" + to_string(rof_infra_construction_order.size()) + ", " + to_string(demand_infra_construction_order.size()) + ", respectively).";
         throw invalid_argument(error);
     }
 
@@ -133,7 +143,36 @@ void InfrastructureManager::addWaterSourceToOnlineLists(int source_id,
                                                         double &total_storage_capacity,
                                                         double &total_available_volume,
                                                         double &total_stored_volume) {
+    // Add comprehensive debugging and bounds checking
+    // printf("DEBUG: addWaterSourceToOnlineLists called with source_id=%d\n", source_id);
+    // printf("DEBUG: water_sources pointer = %p\n", (void*)water_sources);
+    
+    if (water_sources == nullptr) {
+        // printf("DEBUG: water_sources is null!\n");
+        throw std::runtime_error("InfrastructureManager: water_sources pointer is null");
+    }
+    
+    // printf("DEBUG: water_sources pointer is not null, trying to access size...\n");
+    
+    // Check if the pointer itself is valid by trying to access size safely
+    size_t sources_size;
+    try {
+        sources_size = water_sources->size();
+        // printf("DEBUG: water_sources->size() = %zu\n", sources_size);
+    } catch (...) {
+        // printf("DEBUG: Exception when accessing water_sources->size()\n");
+        throw std::runtime_error("InfrastructureManager: water_sources pointer is invalid - cannot access size()");
+    }
+    
+    if (source_id < 0 || source_id >= static_cast<int>(sources_size)) {
+        throw std::out_of_range("InfrastructureManager: source_id " + std::to_string(source_id) + 
+                                " out of range. Available sources: " + std::to_string(sources_size));
+    }
+    
     auto ws = water_sources->at((unsigned long) source_id);
+    if (ws == nullptr) {
+        throw std::runtime_error("InfrastructureManager: water source at index " + std::to_string(source_id) + " is null");
+    }
 
     /// Add capacities to utility.
     total_storage_capacity +=
@@ -495,9 +534,14 @@ void InfrastructureManager::connectWaterSourcesVectorsToUtilities(
         vector<WaterSource *> &water_sources,
         vector<int> &priority_draw_water_source,
         vector<int> &non_priority_draw_water_source) {
+    // printf("DEBUG: connectWaterSourcesVectorsToUtilities called\n");
+    // printf("DEBUG: water_sources vector address = %p, size = %zu\n", (void*)&water_sources, water_sources.size());
+    
     this->water_sources = &water_sources;
     this->priority_draw_water_source = &priority_draw_water_source;
     this->non_priority_draw_water_source = &non_priority_draw_water_source;
+    
+    // printf("DEBUG: Stored water_sources pointer = %p\n", (void*)this->water_sources);
 }
 
 const vector<int> &

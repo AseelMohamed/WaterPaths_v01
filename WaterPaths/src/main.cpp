@@ -13,7 +13,7 @@
 
 #include <sys/stat.h>
 #include <algorithm>
-#include <getopt.h>
+// #include <getopt.h> // Removed for portability
 #include <fstream>
 #include <omp.h>
 
@@ -30,8 +30,7 @@ void eval(double *vars, double *objs, double *consts) {
     try {
         for (int i = 0; i < NUM_DEC_VAR; ++i) {
             if (isnan(vars[i])) {
-                char error[50];
-                sprintf(error, "Nan in decision variable %d", i);
+                string error = "Nan in decision variable " + to_string(i);
                 throw invalid_argument(error);
             }
         }
@@ -91,133 +90,81 @@ int main(int argc, char *argv[]) {
     vector<vector<double>> water_sources_rdm;
     vector<vector<double>> policies_rdm;
 
-    int c;
-    while ((c = getopt(argc, argv, "?s:u:T:r:t:d:f:l:m:v:c:p:b:i:n:o:e:y:S:A:R:U:P:W:I:C:O:B:")) != -1) {
-        switch (c) {
-            case '?':
-                fprintf(stdout,
-                        "%s\n"
-                        "\t-?: print this message\n"
-                        "\t-s: solutions file (hard coded solutions)\n"
-                        "\t-u: uncertain factors file (hard coded values)\n"
-                        "\t-T: number of threads (auto)\n"
-                        "\t-r: number of realizations (%lu)\n"
-                        "\t-t: total simulated time in weeks (%lu)\n"
-                        "\t-d: directory for system I/O (%s)\n"
-                        "\t-f: first solution number\n"
-                        "\t-l: last solution number\n"
-                        "\t-m: individual solution number\n"
-                        "\t-v: verbose mode (false)\n"
-                        "\t-c: tabular output (really big files, false)\n"
-                        "\t-p: plotting output (smaller csv files)\n"
-                        "\t-b: run optimization with Borg (false)\n"
-                        "\t-i: number of islands if using Borg (2)\n"
-                        "\t-n: number of function evaluations if using"
-                        " Borg (1000)\n"
-                        "\t-o: output frequency if using Borg (200)\n"
-                        "\t-e: seed number (none)\n"
-                        "\t-y: file with bootstrap samples\n"
-                        "\t-S: number of bootstrap samples per set for bootstrap analysis.\n"
-                        "\t-A: number of sets of bootstrap samples for bootstrap analysis.\n"
-                        "\t-R: RDM sample number\n"
-                        "\t-U: Utility RDM file\n"
-                        "\t-P: Policies RDM file\n"
-                        "\t-W: Water sources RDM file\n"
-                        "\t-I: Inflows and evaporation folder suffix to"
-                        " be added to \"inflows\" and "
-                        "\"evaporation\" (e.g., _high for "
-                        "inflows_high)\n"
-                        "\t-O: Directory containing the pre-computed "
-                        "ROF table binaries\n"
-                        "\t-C: Import/export rof tables (1: export, 0:"
-                        " do nothing (standard), -1: import)\n"
-                        "\t-B: Export objectives for all utilities on a single line",
-                        argv[0], n_realizations, n_weeks, system_io.c_str());
-                return -1;
-            case 's':
-                solution_file = optarg;
-                break;
-            case 'u':
-                uncertainty_file = optarg;
-                break;
-            case 'T':
-                n_threads = atoi(optarg);
-                break;
-            case 'r':
-                n_realizations = (unsigned long) atoi(optarg);
-                break;
-            case 't':
-                n_weeks = (unsigned long) atoi(optarg);
-                break;
-            case 'd':
-                system_io = optarg;
-                break;
-            case 'f':
-                first_solution = atoi(optarg);
-                break;
-            case 'l':
-                last_solution = atoi(optarg);
-                break;
-            case 'm':
-                standard_solution = (unsigned long) atoi(optarg);
-                break;
-            case 'v':
-                verbose = static_cast<bool>(atoi(optarg));
-                break;
-            case 'c':
-                tabular = static_cast<bool>(atoi(optarg));
-                break;
-            case 'p':
-                plotting = static_cast<bool>(atoi(optarg));
-                break;
-            case 'b':
-                run_optimization = true;
-                break;
-            case 'i':
-                n_islands = (unsigned long) atoi(optarg);
-                break;
-            case 'n':
-                nfe = (unsigned long) atoi(optarg);
-                break;
-            case 'o':
-                output_frequency = (unsigned long) atoi(optarg);
-                break;
-            case 'e':
-                seed = atoi(optarg);
-                break;
-            case 'y':
-                bootstrap_file = optarg;
-                break;
-            case 'R':
-                rdm_no = atoi(optarg);
-                break;
-            case 'U':
-                utilities_rdm_file = optarg;
-                break;
-            case 'P':
-                policies_rdm_file = optarg;
-                break;
-            case 'W':
-                water_sources_rdm_file = optarg;
-                break;
-            case 'I':
-                inflows_evap_directory_suffix = optarg;
-                break;
-            case 'C':
-                import_export_rof_table = atoi(optarg);
-                break;
-            case 'S':
-                n_bs_samples = atoi(optarg);
-                break;
-            case 'A':
-                n_sets = atoi(optarg);
-                break;
-            case 'O':
-                rof_tables_directory = optarg;
-                break;
-            default:
-                fprintf(stderr, "Unknown option (-%c)\n", c);
-                return -1;
+    // Portable argument parsing (simple version)
+    for (int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        if (arg == "-s" && i + 1 < argc) solution_file = argv[++i];
+        else if (arg == "-u" && i + 1 < argc) uncertainty_file = argv[++i];
+        else if (arg == "-T" && i + 1 < argc) n_threads = atoi(argv[++i]);
+        else if (arg == "-r" && i + 1 < argc) n_realizations = (unsigned long) atoi(argv[++i]);
+        else if (arg == "-t" && i + 1 < argc) n_weeks = (unsigned long) atoi(argv[++i]);
+        else if (arg == "-d" && i + 1 < argc) system_io = argv[++i];
+        else if (arg == "-f" && i + 1 < argc) first_solution = atoi(argv[++i]);
+        else if (arg == "-l" && i + 1 < argc) last_solution = atoi(argv[++i]);
+        else if (arg == "-m" && i + 1 < argc) standard_solution = (unsigned long) atoi(argv[++i]);
+        else if (arg == "-v" && i + 1 < argc) verbose = static_cast<bool>(atoi(argv[++i]));
+        else if (arg == "-c" && i + 1 < argc) tabular = static_cast<bool>(atoi(argv[++i]));
+        else if (arg == "-p" && i + 1 < argc) plotting = static_cast<bool>(atoi(argv[++i]));
+        else if (arg == "-b") run_optimization = true;
+        else if (arg == "-i" && i + 1 < argc) n_islands = (unsigned long) atoi(argv[++i]);
+        else if (arg == "-n" && i + 1 < argc) nfe = (unsigned long) atoi(argv[++i]);
+        else if (arg == "-o" && i + 1 < argc) output_frequency = (unsigned long) atoi(argv[++i]);
+        else if (arg == "-e" && i + 1 < argc) seed = atoi(argv[++i]);
+        else if (arg == "-y" && i + 1 < argc) bootstrap_file = argv[++i];
+        else if (arg == "-R" && i + 1 < argc) rdm_no = atoi(argv[++i]);
+        else if (arg == "-U" && i + 1 < argc) utilities_rdm_file = argv[++i];
+        else if (arg == "-P" && i + 1 < argc) policies_rdm_file = argv[++i];
+        else if (arg == "-W" && i + 1 < argc) water_sources_rdm_file = argv[++i];
+        else if (arg == "-I" && i + 1 < argc) inflows_evap_directory_suffix = argv[++i];
+        else if (arg == "-C" && i + 1 < argc) import_export_rof_table = atoi(argv[++i]);
+        else if (arg == "-S" && i + 1 < argc) n_bs_samples = atoi(argv[++i]);
+        else if (arg == "-A" && i + 1 < argc) n_sets = atoi(argv[++i]);
+        else if (arg == "-O" && i + 1 < argc) rof_tables_directory = argv[++i];
+        else if (arg == "-?" || arg == "--help") {
+            fprintf(stdout,
+                    "%s\n"
+                    "\t-?: print this message\n"
+                    "\t-s: solutions file (hard coded solutions)\n"
+                    "\t-u: uncertain factors file (hard coded values)\n"
+                    "\t-T: number of threads (auto)\n"
+                    "\t-r: number of realizations (%lu)\n"
+                    "\t-t: total simulated time in weeks (%lu)\n"
+                    "\t-d: directory for system I/O (%s)\n"
+                    "\t-f: first solution number\n"
+                    "\t-l: last solution number\n"
+                    "\t-m: individual solution number\n"
+                    "\t-v: verbose mode (false)\n"
+                    "\t-c: tabular output (really big files, false)\n"
+                    "\t-p: plotting output (smaller csv files)\n"
+                    "\t-b: run optimization with Borg (false)\n"
+                    "\t-i: number of islands if using Borg (2)\n"
+                    "\t-n: number of function evaluations if using"
+                    " Borg (1000)\n"
+                    "\t-o: output frequency if using Borg (200)\n"
+                    "\t-e: seed number (none)\n"
+                    "\t-y: file with bootstrap samples\n"
+                    "\t-S: number of bootstrap samples per set for bootstrap analysis.\n"
+                    "\t-A: number of sets of bootstrap samples for bootstrap analysis.\n"
+                    "\t-R: RDM sample number\n"
+                    "\t-U: Utility RDM file\n"
+                    "\t-P: Policies RDM file\n"
+                    "\t-W: Water sources RDM file\n"
+                    "\t-I: Inflows and evaporation folder suffix to"
+                    " be added to \"inflows\" and "
+                    "\"evaporation\" (e.g., _high for "
+                    "inflows_high)\n"
+                    "\t-O: Directory containing the pre-computed "
+                    "ROF table binaries\n"
+                    "\t-C: Import/export rof tables (1: export, 0:"
+                    " do nothing (standard), -1: import)\n"
+                    "\t-B: Export objectives for all utilities on a single line\n",
+                    argv[0], n_realizations, n_weeks, system_io.c_str());
+            return -1;
+        }
+        // Unknown option handling
+        else if (arg[0] == '-') {
+            fprintf(stderr, "Unknown option (%s)\n", arg.c_str());
+            return -1;
         }
     }
 
@@ -406,25 +353,14 @@ int main(int argc, char *argv[]) {
             WaterSource::setSeed(seed);
 	    BORG_Random_seed(seed);
         }
-        char output_directory[256], output_file_name[256];
-	char io_directory[256];
-        char runtime[256];
-        FILE* outputFile = nullptr;
+        string output_directory = system_io + DEFAULT_OUTPUT_DIR;
+        string output_file_name = output_directory + "NC_output_MS_S" + to_string(seed) + "_N" + to_string(nfe) + ".set";
+        string runtime_file = output_directory + "NC_runtime_MS_S" + to_string(seed) + "_N" + to_string(nfe) + ".runtime";
+        
+        printf("Reference set will be in %s.\n", output_file_name.c_str());
+        printf("Runtime files will be in %s.\n", runtime_file.c_str());
 
-	sprintf(output_directory, "%s%s", system_io.c_str(), DEFAULT_OUTPUT_DIR.c_str());
-	//Utils::createDir(string(output_directory));
-
-        // sprintf(output_file_name, "%sNC_output_MM_S%d_N%lu.set", output_directory, seed, nfe);
-        sprintf(output_file_name, "%sNC_output_MS_S%d_N%lu.set", output_directory, seed, nfe);
-        printf("Reference set will be in %s.\n", output_file_name);
-        // output path (make sure this exists)
-        // sprintf(runtime, "%sNC_runtime_MM_S%d_N%lu_M%%d.runtime", output_directory,
-        sprintf(runtime, "%sNC_runtime_MS_S%d_N%lu.runtime", output_directory,
-                seed, nfe); // runtime
-        printf("Runtime files will be in %s.\n", runtime);
-        // path (make sure this exists)
-
-        BORG_Algorithm_output_runtime(runtime);
+        BORG_Algorithm_output_runtime(runtime_file.c_str());
 
         int rank; // different seed on each processor
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);

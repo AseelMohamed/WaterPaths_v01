@@ -23,8 +23,9 @@
 #include "../SystemComponents/Bonds/FloatingInterestBalloonPaymentBond.h"
 #include <fstream>
 #include <algorithm>
-#include <climits>
-#include <unistd.h>
+// #include <climits>
+#include <sstream>
+// #include <unistd.h>
 #include <sys/stat.h>
 
 /**
@@ -52,8 +53,7 @@ vector<vector<double>> Utils::parse2DCsvFile(string file_name, unsigned long max
             string s;
             if (!getline(inputFile, s)) break;
 	    if (s.find(" ") != string::npos) {
-		char error[500];
-		sprintf(error, "File %s seems to be space-separated.", file_name.c_str());
+		string error = "File " + file_name + " seems to be space-separated.";
 	        throw std::invalid_argument(error);
 	    }
 
@@ -71,10 +71,9 @@ vector<vector<double>> Utils::parse2DCsvFile(string file_name, unsigned long max
                         break;
                     try {
                         record.push_back(stof(line));
-                    } catch (const std::invalid_argument e) {
+                    } catch (const std::invalid_argument& e) {
                         cout << "NaN found in file " << file_name << " line "
-                             << l << " column " << c << endl;
-                        e.what();
+                             << l << " column " << c << ": " << e.what() << endl;
                     }
                     c++;
                 }
@@ -83,9 +82,7 @@ vector<vector<double>> Utils::parse2DCsvFile(string file_name, unsigned long max
         }
     } else {
 	string error = "File " + file_name + " not found.";
-	char error_char[error.size() + 1];
-	strcpy(error_char, error.c_str());
-        throw invalid_argument(error_char);
+        throw invalid_argument(error);
     }
 
     if (rows_to_read.empty())
@@ -116,9 +113,8 @@ vector<double> Utils::parse1DCsvFile(string file_name, unsigned long max_lines,
             try {
                 record = stof(ss.str());
                 data.push_back(record);
-            } catch (const std::invalid_argument e) {
-                cout << "NaN found in file " << file_name << " line " << l << endl;
-                e.what();
+            } catch (const std::invalid_argument& e) {
+                cout << "NaN found in file " << file_name << " line " << l << ": " << e.what() << endl;
             }
             if (!rows_to_read.empty())// && rows_to_read[0] != NON_INITIALIZED) 
 		    rows_to_read.erase(rows_to_read.begin());
@@ -211,20 +207,20 @@ vector<WaterSource *> Utils::copyWaterSourceVector(
     return water_sources_new;
 }
 
-vector<Utility *> Utils::copyUtilityVector(vector<Utility *> utility_original,
+vector<WaterSupplySystems *> Utils::copyWSSVector(vector<WaterSupplySystems *> wss_original,
                                            bool clear_water_sources) {
-    vector<Utility *> utility_new;
+    vector<WaterSupplySystems *> wss_new;
 
-    for (Utility *u : utility_original) {
-        utility_new.push_back(new Utility(*u));
+    for (WaterSupplySystems *u : wss_original) {
+        wss_new.push_back(new WaterSupplySystems(*u));
     }
 
     if (clear_water_sources)
-        for (Utility *u : utility_new) {
+        for (WaterSupplySystems *u : wss_new) {
             u->clearWaterSources();
         }
 
-    return utility_new;
+    return wss_new;
 }
 
 vector<DroughtMitigationPolicy *>

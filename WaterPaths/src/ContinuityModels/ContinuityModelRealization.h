@@ -17,11 +17,11 @@ public:
     ContinuityModelRealization(
             vector<WaterSource *> &water_sources,
             const Graph &water_sources_graph,
-            const vector<vector<int>> &water_sources_to_utilities,
-            vector<Utility *> &utilities,
+            const vector<vector<int>> &water_sources_to_wss,
+            vector<WaterSupplySystems *> &wss,
             const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
             vector<MinEnvFlowControl *> &min_env_flow_control,
-            vector<double>& utilities_rdm,
+            vector<double>& wss_rdm,
             vector<double>& water_sources_rdm,
             vector<double>& policy_rdm,
             const unsigned int realization_index);

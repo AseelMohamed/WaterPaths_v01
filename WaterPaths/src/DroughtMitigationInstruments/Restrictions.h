@@ -6,7 +6,7 @@
 #define TRIANGLEMODEL_RESTRICTIONS_H
 
 
-#include "../SystemComponents/Utility/Utility.h"
+#include "../SystemComponents/Utility/WaterSupplySystems.h"
 #include "Base/DroughtMitigationPolicy.h"
 
 class Restrictions : public DroughtMitigationPolicy {
@@ -32,7 +32,7 @@ public:
 
     void applyPolicy(int week) override;
 
-    void addSystemComponents(vector<Utility *> systems_utilities,
+    void addSystemComponents(vector<WaterSupplySystems *> systems_wss,
                                  vector<WaterSource *> water_sources,
                                  vector<MinEnvFlowControl *> min_env_flow_controls) override;
 
@@ -45,7 +45,7 @@ public:
             const vector<vector<double>> *typesMonthlyWaterPrice,
             const vector<vector<double>> *priceMultipliers);
 
-    void setRealization(unsigned long realization_id, vector<double> &utilities_rdm,
+    void setRealization(unsigned long realization_id, vector<double> &wss_rdm,
                         vector<double> &water_sources_rdm, vector<double> &policy_rdm) override;
 };
 

@@ -3,11 +3,12 @@
 //
 
 #include <algorithm>
+#include <sstream>
 #include "TransfersDataCollector.h"
 
 TransfersDataCollector::TransfersDataCollector(Transfers *transfer_policy, unsigned long realization)
         : DataCollector(transfer_policy->id, nullptr, realization, TRANSFERS, NON_INITIALIZED),
-          utilities_ids(transfer_policy->getUtilities_ids()),
+          utilities_ids(transfer_policy->getWSS_ids()),
           transfer_policy(transfer_policy) {
 
     std::sort(utilities_ids.begin(),

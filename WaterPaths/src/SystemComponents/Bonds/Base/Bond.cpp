@@ -2,6 +2,7 @@
 // Created by bernardo on 4/12/18.
 //
 
+#include <stdexcept>
 #include "Bond.h"
 
 Bond::Bond(const int id, const double cost_of_capital, const int n_payments,
@@ -19,7 +20,7 @@ Bond::Bond(const int id, const double cost_of_capital, const int n_payments,
     if (std::isnan(cost_of_capital) || cost_of_capital < 0) {
         string error = "Invalid construction cost of capital for bond "
                        + to_string(id);
-        throw invalid_argument(error.c_str());
+        throw std::invalid_argument(error.c_str());
     }
 }
 
@@ -39,7 +40,7 @@ Bond::Bond(const int id, const double cost_of_capital, const int n_payments,
     if (std::isnan(cost_of_capital) || cost_of_capital < 0) {
         string error = "Invalid construction cost of capital for bond "
                        + to_string(id);
-        throw invalid_argument(error.c_str());
+        throw std::invalid_argument(error.c_str());
     }
 }
 

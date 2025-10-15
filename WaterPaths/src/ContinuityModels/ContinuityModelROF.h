@@ -21,19 +21,19 @@ private:
 protected:
     int beginning_tier = 0;
     vector<WaterSource *> realization_water_sources;
-    vector<Utility *> realization_utilities;
+    vector<WaterSupplySystems *> realization_wss;
     vector<Matrix2D<int>> ut_storage_to_rof_table;
 
     vector<vector<double>> table_storage_shift;
-    vector<double> utility_base_storage_capacity;;
-    vector<double> utility_base_delta_capacity_table;
+    vector<double> wss_base_storage_capacity;
+    vector<double> wss_base_delta_capacity_table;
     vector<double> current_and_base_storage_capacity_ratio;
     vector<double> current_storage_table_shift;
 
 public:
     ContinuityModelROF(vector<WaterSource *> water_sources, const Graph &water_sources_graph,
-                       const vector<vector<int>> &water_sources_to_utilities, vector<Utility *> utilities,
-                       vector<MinEnvFlowControl *> min_env_flow_controls, vector<double>& utilities_rdm,
+                       const vector<vector<int>> &water_sources_to_wss, vector<WaterSupplySystems *> wss,
+                       vector<MinEnvFlowControl *> min_env_flow_controls, vector<double>& wss_rdm,
                        vector<double>& water_sources_rdm, unsigned long total_weeks_simulation,
                        const int use_precomputed_rof_tables, const unsigned long realization_id);
 
@@ -47,11 +47,20 @@ public:
 
     vector<double> calculateLongTermROF(int week);
 
-    void resetUtilitiesAndReservoirs(int rof_type);
+    // WSS-level methods - return vector<vector<double>> where outer vector is wss, inner vector is WSS within each utility
+    vector<vector<double>> calculateShortTermROF_WSS(int week, int import_export_rof_tables);
+
+    vector<vector<double>> calculateShortTermROFFullCalcs_WSS(int week);
+
+    vector<vector<double>> calculateShortTermROFTable_WSS(int week);
+
+    vector<vector<double>> calculateLongTermROF_WSS(int week);
+
+    void resetWSSAndReservoirs(int rof_type);
 
     void connectRealizationWaterSources(const vector<WaterSource *> &realization_water_sources);
 
-    void connectRealizationUtilities(const vector<Utility *> &realization_utilities);
+    void connectRealizationWSS(const vector<WaterSupplySystems *> &realization_wss);
 
     virtual void updateOnlineInfrastructure(int week);
 

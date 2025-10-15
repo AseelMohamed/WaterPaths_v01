@@ -20,7 +20,7 @@ Restrictions::Restrictions(const int id, const vector<double> &stage_multipliers
         : DroughtMitigationPolicy(id, RESTRICTIONS),
           stage_multipliers(stage_multipliers),
           stage_triggers(stage_triggers) {
-    utilities_ids = vector<int>(1, id);
+    wss_ids = vector<int>(1, id);
 }
 
 Restrictions::Restrictions(
@@ -35,7 +35,7 @@ Restrictions::Restrictions(
     calculateWeeklyAverageWaterPrices(typesMonthlyDemandFraction,
                                       typesMonthlyWaterPrice,
                                       priceMultipliers);
-    utilities_ids = vector<int>(1, id);
+    wss_ids = vector<int>(1, id);
 }
 
 Restrictions::Restrictions(const Restrictions &restrictions) :
@@ -44,7 +44,7 @@ Restrictions::Restrictions(const Restrictions &restrictions) :
         stage_triggers(restrictions.stage_triggers),
         restricted_weekly_average_volumetric_price(
                 restrictions.restricted_weekly_average_volumetric_price) {
-    utilities_ids = restrictions.utilities_ids;
+    wss_ids = restrictions.wss_ids;
 }
 
 Restrictions::~Restrictions() {}
@@ -55,17 +55,19 @@ void Restrictions::applyPolicy(int week) {
     unsigned long stage = 0;
     /// Loop through restriction stage rof triggers to see which stage should be applied, if any.
     for (unsigned long i = 0; i < stage_triggers.size(); ++i) {
-        if (realization_utilities[0]->getRisk_of_failure() > stage_triggers[i]) {
+        if (realization_wss[0]->getRisk_of_failure() > stage_triggers[i]) {
             /// Demand multiplier to be applied, based on the rofs.
             current_multiplier = stage_multipliers[i];
             stage = i + 1;
         } else
             break;
     }
-    realization_utilities[0]->setDemand_multiplier(current_multiplier);
+    // Operational operations should use WSS
+    realization_wss[0]->setDemand_multiplier(current_multiplier);
     if (!restricted_weekly_average_volumetric_price.empty() && stage > 0) {
         int week_of_year = Utils::weekOfTheYear(week);
-        realization_utilities[0]->setRestricted_price(
+        // Financial operations should use owner utility
+        realization_wss[0]->getOwner()->setRestricted_price(
                 restricted_weekly_average_volumetric_price[stage - 1][week_of_year]);
     }
 }
@@ -74,20 +76,20 @@ double Restrictions::getCurrent_multiplier() const {
     return current_multiplier;
 }
 
-void Restrictions::addSystemComponents(vector<Utility *> systems_utilities,
+void Restrictions::addSystemComponents(vector<WaterSupplySystems *> systems_wss,
                                        vector<WaterSource *> water_sources,
                                        vector<MinEnvFlowControl *> min_env_flow_controls) {
-    /// Get utility whose IDs correspond to restriction policy ID.
-    for (Utility *u : systems_utilities) {
-        if (u->id == id) {
-            if (!realization_utilities.empty())
-                throw std::logic_error("This restriction policy already has a systems_utilities assigned to it.");
-            /// Link utility to policy.
-            this->realization_utilities.push_back(u);
+    /// Get WSS whose IDs correspond to restriction policy ID.
+    for (WaterSupplySystems *w : systems_wss) {
+        if (w->system_id == id) {
+            if (!realization_wss.empty())
+                throw std::logic_error("This restriction policy already has a WSS assigned to it.");
+            /// Link WSS to policy.
+            this->realization_wss.push_back(w);
         }
     }
-    if (systems_utilities.empty())
-        throw std::invalid_argument("Restriction policy ID must match systems_utilities's ID.");
+    if (systems_wss.empty())
+        throw std::invalid_argument("Restriction policy ID must match WSS's ID.");
 }
 
 /**
@@ -101,6 +103,17 @@ void Restrictions::calculateWeeklyAverageWaterPrices(
         vector<vector<double>> *priceMultipliers) {
 
     if (priceMultipliers) {
+        // Validate price multipliers to ensure they're >= 1.0 (prices shouldn't decrease during restrictions)
+        for (unsigned long s = 0; s < priceMultipliers->size(); ++s) {
+            for (unsigned long t = 0; t < priceMultipliers->at(s).size(); ++t) {
+                if ((*priceMultipliers)[s][t] < 1.0) {
+                    cerr << "WARNING: Price multiplier < 1.0 detected in restriction stage " << s 
+                         << ", tier " << t << ": " << (*priceMultipliers)[s][t] << endl;
+                    cerr << "This may cause restricted prices to be lower than unrestricted prices." << endl;
+                }
+            }
+        }
+
         unsigned long n_tiers = typesMonthlyWaterPrice->at(0).size();
         restricted_weekly_average_volumetric_price =
                 std::vector<std::vector<double>>();
@@ -127,7 +140,7 @@ void Restrictions::calculateWeeklyAverageWaterPrices(
     }
 }
 
-void Restrictions::setRealization(unsigned long realization_id, vector<double> &utilities_rdm,
+void Restrictions::setRealization(unsigned long realization_id, vector<double> &wss_rdm,
                                   vector<double> &water_sources_rdm, vector<double> &policy_rdm) {
     for (double& sm : stage_multipliers) {
         sm = min(1., (1 - (1 - sm) * policy_rdm.at((unsigned long) id)));

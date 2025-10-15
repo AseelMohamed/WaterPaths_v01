@@ -22,22 +22,22 @@ public:
                        double source_treatment_buffer,
                        double surcharge_percentage_fee,
                        const vector<double> &transfer_triggers,
-                       const vector<int> &utilities_ids);
+                       const vector<int> &wss_ids);
 
     TransfersBilateral(const TransfersBilateral &transfer_caesb);
 
     void applyPolicy(int week) override;
 
-    void addSystemComponents(vector<Utility *> utilities,
+    void addSystemComponents(vector<WaterSupplySystems *> wss,
                              vector<WaterSource *> water_sources,
                              vector<MinEnvFlowControl *> min_env_flow_controls) override;
 
     void
-    setRealization(unsigned long realization_id, vector<double> &utilities_rdm,
+    setRealization(unsigned long realization_id, vector<double> &wss_rdm,
                    vector<double> &water_sources_rdm,
                    vector<double> &policy_rdm) override;
 
-    double performTransfer(Utility *sender, Utility *receiver,
+    double performTransfer(WaterSupplySystems *sender, WaterSupplySystems *receiver,
                          double pumping_capacity,
                          int week) const;
 

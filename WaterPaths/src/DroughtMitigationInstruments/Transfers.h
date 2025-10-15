@@ -12,7 +12,7 @@
 class Transfers : public DroughtMitigationPolicy {
 private:
 
-    const int source_utility_id;
+    const int source_wss_id;
     const double source_treatment_buffer;
     double average_pipe_capacity = 0;
     int transfer_water_source_id;
@@ -23,7 +23,7 @@ private:
     vector<double> conveyed_volumes;
     vector<double> buyers_transfer_triggers;
     vector<double> flow_rates_and_allocations;
-    Utility *source_utility = nullptr;
+    WaterSupplySystems *source_wss = nullptr;
     WaterSource *transfer_water_source = nullptr;
     Matrix<double> H, Aeq, A;
     Vector<double> f, beq, b, allocations_aux, lb, ub;
@@ -31,7 +31,7 @@ private:
 public:
 
     Transfers(
-            const int id, const int source_utility_id,
+            const int id, const int source_wss_id,
             int transfer_water_source_id, const double source_treatment_buffer,
             const vector<int> &buyers_ids,
             const vector<double> &pipe_transfer_capacities,
@@ -47,7 +47,7 @@ public:
 
     void applyPolicy(int week) override;
 
-    void addSystemComponents(vector<Utility *> system_utilities,
+    void addSystemComponents(vector<WaterSupplySystems *> system_utilities,
                                  vector<WaterSource *> water_sources,
                                  vector<MinEnvFlowControl *> min_env_flow_controls) override;
 
@@ -55,7 +55,7 @@ public:
     solve_QP(vector<double> allocation_requests, double available_transfer_volume, double min_transfer_volume,
                  int week);
 
-    void setRealization(unsigned long realization_id, vector<double> &utilities_rdm,
+    void setRealization(unsigned long realization_id, vector<double> &wss_rdm,
                         vector<double> &water_sources_rdm, vector<double> &policy_rdm) override;
 
 };

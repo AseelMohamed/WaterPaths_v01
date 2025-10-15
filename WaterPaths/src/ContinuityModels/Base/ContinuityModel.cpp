@@ -2,62 +2,84 @@
 // Created by bernardo on 1/12/17.
 //
 
-#include <iostream>
+// #include <iostream>
 #include <cmath>
-#include <cstring>
+// #include <cstring>
 #include <algorithm>
 #include "ContinuityModel.h"
-#include "../../SystemComponents/WaterSources/SequentialJointTreatmentExpansion.h"
+// #include "../../SystemComponents/WaterSources/SequentialJointTreatmentExpansion.h"
 
-ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Utility *> &utilities,
+ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<WaterSupplySystems *> &wss,
                                  vector<MinEnvFlowControl *> &min_env_flow_controls,
                                  const Graph &water_sources_graph,
-                                 const vector<vector<int>> &water_sources_to_utilities,
-                                 vector<double> &utilities_rdm,
+                                 const vector<vector<int>> &water_sources_to_wss,
+                                 vector<double> &wss_rdm,
                                  vector<double> &water_sources_rdm,
                                  unsigned long realization_id) :
         continuity_water_sources(water_sources),
-        continuity_utilities(utilities),
+        continuity_wss(wss),
         min_env_flow_controls(min_env_flow_controls),
         water_sources_graph(water_sources_graph),
-        water_sources_to_utilities(water_sources_to_utilities),
+        water_sources_to_wss(water_sources_to_wss),
         sources_topological_order(water_sources_graph.getTopological_order()), /// Get topological order so that mass balance is ran from up to downstream.
-        utilities_rdm(utilities_rdm),
+        wss_rdm(wss_rdm),
         water_sources_rdm(water_sources_rdm),
-        n_utilities((int) utilities.size()),
+        n_wss((int) wss.size()),
         n_sources((int) water_sources.size()),
         realization_id(realization_id)
         {
 
     //FIXME: THERE IS A STUPID MISTAKE HERE IN THE SORT FUNCTION THAT IS PREVENTING IT FROM WORKING UNDER WINDOWS AND LINUX.
     std::sort(continuity_water_sources.begin(), continuity_water_sources.end(), WaterSource::compare);
-    std::sort(continuity_utilities.begin(), continuity_utilities.end(), Utility::compById);
+    std::sort(continuity_wss.begin(), continuity_wss.end(), 
+              [](WaterSupplySystems *a, WaterSupplySystems *b) { return a->system_id < b->system_id; });
 
-    // Link water sources to utilities by passing pointers of the former to
-    // the latter.
-    for (unsigned long u = 0; u < utilities.size(); ++u) {
-        for (unsigned long ws = 0; ws < water_sources_to_utilities[u].size(); ++ws) {
-            auto ws_id = water_sources_to_utilities[u][ws];
+    // CRITICAL: Reconnect infrastructure managers after WSS objects are copied
+    // When WSS objects are copied, their internal vectors get new addresses but 
+    // InfrastructureManager still points to the old addresses
+    for (auto* wss_ptr : continuity_wss) {
+        wss_ptr->reconnectInfrastructureManager();
+    }
+
+    // Link water sources to WSS within each utility by passing pointers of the former to each WSS.
+    // printf("DEBUG: water_sources_to_wss.size() = %zu\n", water_sources_to_wss.size());
+    for (unsigned long u = 0; u < wss.size(); ++u) {
+        // printf("DEBUG: Processing utility %lu, wss[%lu] = %p\n", u, u, continuity_wss[u]);
+        // printf("DEBUG: water_sources_to_wss[%lu].size() = %zu\n", u, water_sources_to_wss[u].size());
+        for (unsigned long ws = 0; ws < water_sources_to_wss[u].size(); ++ws) {
+            auto ws_id = water_sources_to_wss[u][ws];
+            // printf("DEBUG: Adding water source %d to utility %lu (wss = %p)\n", ws_id, u, continuity_wss[u]);
             if (ws_id >= continuity_water_sources.size()) {
-                char error[128];
-                sprintf(error, "Water source %d was not added to list of water "
-                               "sources passed to the continuity model.", ws_id);
+                string error = "Water source " + to_string(ws_id) + " was not added to list of water sources passed to the continuity model.";
                 throw invalid_argument(error);
             }
             WaterSource *water_source =
                     continuity_water_sources.at((unsigned int) ws_id);
-            this->continuity_utilities[u]->addWaterSource(water_source);
+            this->continuity_wss[u]->addWaterSource(water_source);
         }
     }
 
     // Create table showing which utilities draw water from each water source.
-    utilities_to_water_sources.assign(water_sources.size(), vector<int>(0));
-    water_sources_online_to_utilities.assign(water_sources.size(), vector<int>(0));
-    for (unsigned long u = 0; u < utilities.size(); ++u) {
-        for (const int &ws : water_sources_to_utilities[u]) {
-            utilities_to_water_sources[ws].push_back(u);
-            if (water_sources[ws]->isOnline())
-                water_sources_online_to_utilities[u].push_back(ws);
+    // printf("DEBUG: Creating wss_to_water_sources and water_sources_online_to_wss tables\n");
+    // printf("DEBUG: water_sources.size() = %zu, wss.size() = %zu\n", water_sources.size(), wss.size());
+    
+    wss_to_water_sources.assign(water_sources.size(), vector<int>(0));
+    water_sources_online_to_wss.assign(water_sources.size(), vector<int>(0));
+    
+    for (unsigned long u = 0; u < wss.size(); ++u) {
+        // printf("DEBUG: Processing utility %lu for table creation\n", u);
+        // printf("DEBUG: water_sources_to_wss[%lu].size() = %zu\n", u, water_sources_to_wss[u].size());
+        for (const int &ws : water_sources_to_wss[u]) {
+            // printf("DEBUG: Processing water source %d for utility %lu\n", ws, u);
+            if (ws >= 0 && ws < static_cast<int>(wss_to_water_sources.size())) {
+                wss_to_water_sources[ws].push_back(u);
+                if (ws < static_cast<int>(water_sources.size()) && water_sources[ws]->isOnline()) {
+                    // printf("DEBUG: Water source %d is online, adding to online list\n", ws);
+                    water_sources_online_to_wss[u].push_back(ws);
+                }
+            } else {
+                // printf("DEBUG: ERROR - Water source %d out of bounds (max = %zu)\n", ws, wss_to_water_sources.size());
+            }
         }
     }
 
@@ -66,7 +88,7 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Ut
     for (auto water_source : water_sources) {
         bool online = false;
 
-        for (unsigned long u = 0; u < utilities.size(); ++u) {
+        for (unsigned long u = 0; u < wss.size(); ++u) {
             if (water_source->isOnline())
                 online = true;
         }
@@ -79,16 +101,13 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Ut
         }
     }
 
-    // Populate vector with utilities capacities and check if all utilities
+    // Populate vector with wss capacities and check if all wss
     // have storage capacity.
-    for (Utility *u : continuity_utilities) {
-        utilities_capacities.push_back(u->getTotal_storage_capacity());
-        if (utilities_capacities.back() == 0) {
-            char error[1000];
-            sprintf(error, "Utility %d has no storage capacity (0 MGD), which "
-                           "would lead to an ROF value of 0/0. WaterPaths "
-                           "currently requires utilities to have non-zero "
-                           "storage capacity\n", u->id);
+    for (WaterSupplySystems *u : continuity_wss) {
+        wss_capacities.push_back(u->getTotal_storage_capacity());
+        if (wss_capacities.back() == 0) {
+            string error = "Water Supply System " + to_string(u->system_id) + " has no storage capacity (0 MGD), "
+            "which would lead to an ROF value of 0/0. WaterPaths currently requires wss to have non-zero storage capacity";
             throw invalid_argument(error);
         }
     }
@@ -102,19 +121,19 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Ut
         }
     }
 
-    // Add reference to water sources and utilities so that controls can
+    // Add reference to water sources and wss so that controls can
     // access their info.
     for (MinEnvFlowControl *mef : this->min_env_flow_controls) {
-        mef->addComponents(water_sources, utilities);
+        mef->addComponents(water_sources, wss);
     }
 
-    // Set realization id on utilities and water sources, so that they use the
+    // Set realization id on wss and water sources, so that they use the
     // right streamflow, evaporation and demand data.
-    setRealization(realization_id, utilities_rdm, water_sources_rdm);
+    setRealization(realization_id, wss_rdm, water_sources_rdm);
 
     demands = std::vector<vector<double>>(
             continuity_water_sources.size(),
-            vector<double>(continuity_utilities.size(), 0.));
+            vector<double>(continuity_wss.size(), 0.));
     
     // populate array delta_realization_weeks so that the rounding and casting don't
     // have to be done every time continuityStep is called, avoiding a bottleneck.
@@ -127,19 +146,25 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Ut
 }
 
 ContinuityModel::~ContinuityModel() {
-    /// Delete water sources
+    /// Delete water sources (with null check for shared objects)
     for (auto ws : continuity_water_sources) {
-        delete ws;
+        if (ws != nullptr) {
+            delete ws;
+        }
     }
 
-    /// Delete utilities
-    for (auto u : continuity_utilities) {
-        delete u;
+    /// Delete wss (with null check for shared objects)
+    for (auto u : continuity_wss) {
+        if (u != nullptr) {
+            delete u;
+        }
     }
 
-    /// Delete min env flow controls
+    /// Delete min env flow controls (with null check for shared objects)
     for (auto mef : min_env_flow_controls){
-        delete mef;
+        if (mef != nullptr) {
+            delete mef;
+        }
     }
 }
 
@@ -151,6 +176,22 @@ ContinuityModel::~ContinuityModel() {
  */
 void ContinuityModel::continuityStep(
         int week, int rof_realization, bool apply_demand_buffer) {
+    // For ROF calculations, we want to use PAST year data.
+    // For rof_realization = 0, use current week (no offset)
+    // For rof_realization = 1, use week - 52 (1 year ago)
+    // For rof_realization = 2, use week - 104 (2 years ago), etc.
+    int shifted_week;
+    if (rof_realization == NON_INITIALIZED) {
+        shifted_week = week; // Normal simulation, no offset
+    } else {
+        // ROF simulation: use past data (rof_realization years ago)
+        shifted_week = week - (rof_realization * WEEKS_IN_YEAR_ROUND);
+        if (shifted_week < 0) {
+            // If we don't have enough historical data, skip this step
+            return;
+        }
+    }
+
     double* upstream_spillage = new double[n_sources];
     fill_n(upstream_spillage, n_sources, 0.);
     double* wastewater_discharges = new double[n_sources];
@@ -172,7 +213,7 @@ void ContinuityModel::continuityStep(
      * with the total unrestricted_demand for that week for that water
      * source, and (2) sums the flow contributions of upstream reservoirs.
      */
-    for (Utility *u : continuity_utilities) {
+    for (WaterSupplySystems *u : continuity_wss) {
         u->calculateWastewater_releases(week_demand, wastewater_discharges);
         u->splitDemands(week_demand, demands, apply_demand_buffer);
     }
@@ -202,17 +243,29 @@ void ContinuityModel::continuityStep(
                             static_cast<unsigned long>(ws))->getTotal_outflow();
         }
 
-        // Mass balance. The value of rof_realization for a a non-ROF continuity
-	// step is -1 (NON_INITIALIZED), so adding 1 brings it to delta_realization_weeks[0]
-	// which is 0, while delta_realization_weeks[1] is 52, and so on.
+        // Mass balance. For ROF calculations, we want to use PAST year data.
+        // For rof_realization = 0, use current week (no offset)
+        // For rof_realization = 1, use week - 52 (1 year ago)
+        // For rof_realization = 2, use week - 104 (2 years ago), etc.
+        int week_with_rof_offset;
+        if (rof_realization == NON_INITIALIZED) {
+            week_with_rof_offset = week; // Normal simulation, no offset
+        } else {
+            // ROF simulation: use past data (rof_realization years ago)
+            week_with_rof_offset = week - (rof_realization * WEEKS_IN_YEAR_ROUND);
+            if (week_with_rof_offset < 0) {
+                // If we don't have enough historical data, skip this step
+                continue;
+            }
+        }
         continuity_water_sources[i]->continuityWaterSource(
-                week - delta_realization_weeks[rof_realization + 1],
+                week_with_rof_offset,
                 upstream_spillage[i], wastewater_discharges[i], demands[i]);
-        demands[i] = vector<double>(n_utilities, 0.);
+        demands[i] = vector<double>(n_wss, 0.);
     }
 
-    // updates combined storage for utilities.
-    for (Utility *u : continuity_utilities) {
+    // updates combined storage for Water Supply Systems.
+    for (WaterSupplySystems *u : continuity_wss) {
         u->updateTotalAvailableVolume();
     }
 
@@ -220,11 +273,11 @@ void ContinuityModel::continuityStep(
     delete[] wastewater_discharges;
 }
 
-void ContinuityModel::setRealization(unsigned long realization_id, vector<double> &utilities_rdm,
+void ContinuityModel::setRealization(unsigned long realization_id, vector<double> &wss_rdm,
                                      vector<double> &water_sources_rdm) {
     if (realization_id != (unsigned) NON_INITIALIZED) {
-        for (Utility *u : continuity_utilities)
-            u->setRealization(realization_id, utilities_rdm);
+        for (WaterSupplySystems *u : continuity_wss)
+            u->setRealization(realization_id, wss_rdm);
         for (WaterSource *ws : continuity_water_sources)
             ws->setRealization(realization_id, water_sources_rdm);
         for (MinEnvFlowControl *mef : min_env_flow_controls)
@@ -255,6 +308,6 @@ const vector<WaterSource *> &ContinuityModel::getContinuity_water_sources() cons
     return continuity_water_sources;
 }
 
-const vector<Utility *> &ContinuityModel::getContinuity_utilities() const {
-    return continuity_utilities;
+const vector<WaterSupplySystems *> &ContinuityModel::getContinuity_wss() const {
+    return continuity_wss;
 }

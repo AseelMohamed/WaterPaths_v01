@@ -2,7 +2,7 @@
 // Created by bernardo on 2/21/17.
 //
 
-#include <numeric>
+// #include <numeric>
 #include <algorithm>
 #include "Transfers.h"
 #include "../Utils/Utils.h"
@@ -15,7 +15,7 @@
  * by pipe conveyance capacities.
  *
  * @param id transfer policy ID.
- * @param source_utility_id ID of source utility.
+ * @param source_wss_id ID of source utility.
  * @param source_treatment_buffer treatment capacity to be left unused in source
  * utility.
  * @param buyers_ids
@@ -32,7 +32,7 @@
  * @todo calculation and charge of wheeling fees.
  */
 Transfers::Transfers(
-        const int id, const int source_utility_id,
+        const int id, const int source_wss_id,
         int transfer_water_source_id, const double source_treatment_buffer,
         const vector<int> &buyers_ids,
         const vector<double> &pipe_transfer_capacities,
@@ -40,27 +40,27 @@ Transfers::Transfers(
         const Graph utilities_graph, vector<double> conveyance_costs,
         vector<int> pipe_owner)
         : DroughtMitigationPolicy(id, TRANSFERS),
-          source_utility_id(source_utility_id),
+          source_wss_id(source_wss_id),
           source_treatment_buffer(source_treatment_buffer),
           transfer_water_source_id(transfer_water_source_id),
           buyers_ids(buyers_ids),
           buyers_transfer_triggers(buyers_transfer_triggers) {
 
     for (int i : buyers_ids)
-        if (i == source_utility_id)
+        if (i == source_wss_id)
             throw std::invalid_argument("Source utility cannot be a buyer "
                                                 "utility as well.");
 
-    utilities_ids = buyers_ids;
-    utilities_ids.push_back(source_utility_id);
-    allocations = vector<double>(utilities_ids.size(), 0);
+    wss_ids = buyers_ids;
+    wss_ids.push_back(source_wss_id);
+    allocations = vector<double>(wss_ids.size(), 0);
     for (const double &d : pipe_transfer_capacities)
         average_pipe_capacity += d;
 
     vector<vector<double>> continuity_matrix =
             utilities_graph.getContinuityMatrix();
-    continuity_matrix[source_utility_id][
-            continuity_matrix.size() + source_utility_id] = 1;
+    continuity_matrix[source_wss_id][
+            continuity_matrix.size() + source_wss_id] = 1;
 
     int max_buyer_id = *std::max_element(buyers_ids.begin(),
                                                   buyers_ids.end());
@@ -126,7 +126,7 @@ Transfers::Transfers(
  */
 Transfers::Transfers(const Transfers &transfers) :
         DroughtMitigationPolicy(transfers.id, TRANSFERS),
-        source_utility_id(transfers.source_utility_id),
+        source_wss_id(transfers.source_wss_id),
         source_treatment_buffer(transfers.source_treatment_buffer) {
 
     buyers_ids = transfers.buyers_ids;
@@ -142,7 +142,7 @@ Transfers::Transfers(const Transfers &transfers) :
     lb = transfers.lb;
     ub = transfers.ub;
     allocations_aux = transfers.allocations_aux;
-    utilities_ids = transfers.utilities_ids;
+    wss_ids = transfers.wss_ids;
     util_id_to_vertex_id = transfers.util_id_to_vertex_id;
     allocations = transfers.allocations;
     conveyed_volumes = transfers.conveyed_volumes;
@@ -153,28 +153,28 @@ Transfers::Transfers(const Transfers &transfers) :
  * Destructor
  */
 Transfers::~Transfers() {
-    source_utility = nullptr;
+    source_wss = nullptr;
     transfer_water_source = nullptr;
 }
 
 /**
  * Adds source and buying utility.
- * @param system_utilities Utility to be added.
+ * @param system_wss Utility to be added.
  */
-void Transfers::addSystemComponents(vector<Utility *> system_utilities,
+void Transfers::addSystemComponents(vector<WaterSupplySystems *> system_wss,
                                     vector<WaterSource *> water_sources,
                                     vector<MinEnvFlowControl *> min_env_flow_controls) {
 
-    if (!realization_utilities.empty())
-        throw std::invalid_argument("Utility were already assigned to "
+    if (!realization_wss.empty())
+        throw std::invalid_argument("Water supply systems were already assigned to "
                                             "transfer policy.");
 
     //FIXME: RIGHT NOW TRANSFERS CAN ONLY HAVE ONE SOURCE. THIS NEEDS TO BE EXPANDED.
-    for (Utility *u : system_utilities)
-        if (u->id == source_utility_id)
-            source_utility = u; // source of transfers
+    for (WaterSupplySystems *u : system_wss)
+        if (u->system_id == source_wss_id)
+            source_wss = u; // source of transfers
         else {
-            realization_utilities.push_back(u); //
+            realization_wss.push_back(u); //
         }
 
     if (transfer_water_source != nullptr)
@@ -201,8 +201,8 @@ void Transfers::applyPolicy(int week) {
     unsigned long vertex_id; // position of utility id in the buyers_transfer_triggers vector.
     double sum_rofs = 0;
     int utilities_requesting_transfers = 0;
-    for (auto u : realization_utilities) {
-        vertex_id = (unsigned long) util_id_to_vertex_id.at((unsigned long) u->id);
+    for (auto u : realization_wss) {
+        vertex_id = (unsigned long) util_id_to_vertex_id.at((unsigned long) u->system_id);
         if (u->getRisk_of_failure() > buyers_transfer_triggers.at(vertex_id)) {
             sum_rofs += u->getRisk_of_failure();
             requesting_utilities_rofs.at(vertex_id) = u->getRisk_of_failure();
@@ -216,11 +216,11 @@ void Transfers::applyPolicy(int week) {
 
         /// Total volume available for transfers in source utility.
         double available_transfer_volume = 0;
-        if (source_utility->getRisk_of_failure() == 0) {
+        if (source_wss->getRisk_of_failure() == 0) {
             available_transfer_volume =
-                    (source_utility->getTotal_treatment_capacity()
+                    (source_wss->getTotal_treatment_capacity()
                      - source_treatment_buffer) * PEAKING_FACTOR
-                    - source_utility->getUnrestrictedDemand();
+                    - source_wss->getUnrestrictedDemand();
         }
 
         if (available_transfer_volume > 0) {
@@ -248,13 +248,13 @@ void Transfers::applyPolicy(int week) {
                     flow_rates_and_allocations.begin() + n_pipes);
 
 //            allocations.clear();
-//            for (int id : utilities_ids)
+//            for (int id : wss_ids)
 //                allocations.push_back((double &&) flow_rates_and_allocations.at(
 //                        (unsigned long) (n_pipes + id)));
             allocations = vector<double>(flow_rates_and_allocations.begin() +
                                          n_pipes,
                                          flow_rates_and_allocations.end());
-            allocations[source_utility_id] = -allocations[source_utility_id];
+            allocations[source_wss_id] = -allocations[source_wss_id];
 
             /// Mitigate demands.
             double sum_allocations = 0;
@@ -262,9 +262,9 @@ void Transfers::applyPolicy(int week) {
 
 //            for (auto &u : util_id_to_vertex_id) {
 //                int id = u.first;
-//                realization_utilities[u.second]->setDemand_offset
+//                realization_wss[u.second]->setDemand_offset
 //                        (allocations[id],
-//                         source_utility->waterPrice(price_week));
+//                         source_wss->waterPrice(price_week));
 //                sum_allocations += allocations[id];
 //                transfer_water_source->removeWater(id,
 //                                                   allocations[id]);
@@ -272,17 +272,17 @@ void Transfers::applyPolicy(int week) {
             for (unsigned long id = 0; id < util_id_to_vertex_id.size(); ++id) {
                 int bid = util_id_to_vertex_id[id];
                 if (bid != NON_INITIALIZED) {
-                    realization_utilities[bid]->setDemand_offset
+                    realization_wss[bid]->setDemand_offset
                             (allocations[id],
-                             source_utility->waterPrice(price_week));
+                             source_wss->getOwner()->waterPrice(price_week));
                     sum_allocations += allocations[id];
                     transfer_water_source->removeWater(id,
                                                        allocations[id]);
                 }
             }
 
-            source_utility->setDemand_offset(allocations[source_utility_id],
-                                             2. * source_utility->waterPrice
+            source_wss->setDemand_offset(allocations[source_wss_id],
+                                             2. * source_wss->getOwner()->waterPrice
                                                      (price_week));
         }
     }
@@ -329,8 +329,8 @@ vector<double> Transfers::solve_QP(
                                               allocation_available);
 //            ub[n_pipes + buyers_ids[i]] = available_transfer_volume;
             ub[n_pipes + buyers_ids[i]] = min(
-                    realization_utilities[i]->getUnrestrictedDemand(week) *
-                    realization_utilities[i]->getDemand_multiplier(),
+                    realization_wss[i]->getUnrestrictedDemand(week) *
+                    realization_wss[i]->getDemand_multiplier(),
                     allocation_available);
         }
     }
@@ -339,7 +339,7 @@ vector<double> Transfers::solve_QP(
     /// available. This allows for a smaller transferred volume, in case
     /// pipes cannot convey full amount available, but sets the cap as total
     /// amount available.
-    ub[n_pipes + source_utility_id] = available_transfer_volume;
+    ub[n_pipes + source_wss_id] = available_transfer_volume;
 
     /// Prevent minimum allocation from being more than capacity of pipes
     /// connected to utility. If it happens, decrease it to half of the sum of
@@ -348,7 +348,7 @@ vector<double> Transfers::solve_QP(
     /// smaller than 1.
     double max_flow;
     for (unsigned long i = 0; i < n_allocations + 1; ++i) { // skip source
-        if (i != (unsigned long) source_utility_id) {
+        if (i != (unsigned long) source_wss_id) {
             max_flow = 0;
             for (unsigned long j = 0; j < n_pipes; ++j) {
                 max_flow += abs(Aeq[i][j] * ub[j]);
@@ -387,7 +387,7 @@ const vector<double> &Transfers::getAllocations() const {
     return allocations;
 }
 
-void Transfers::setRealization(unsigned long realization_id, vector<double> &utilities_rdm,
+void Transfers::setRealization(unsigned long realization_id, vector<double> &wss_rdm,
                                vector<double> &water_sources_rdm, vector<double> &policy_rdm) {
 
 }

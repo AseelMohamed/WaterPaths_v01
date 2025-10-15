@@ -297,8 +297,8 @@ Problem::setRofTables(unsigned long n_realizations, string rof_tables_directory)
     auto n_tiers = (int) data_r0_u0.at(0).size();
 
     if (n_tiers != NO_OF_INSURANCE_STORAGE_TIERS) {
-        char error[75];
-        sprintf(error, "Number of tiers in tables does not match number of tiers for this problem.");
+        string error = "Number of tiers in tables does not match number of tiers for this problem.";
+        throw invalid_argument(error);
     }
 
     n_utilities = 0;

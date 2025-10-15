@@ -34,6 +34,7 @@ public:
 
     double get_dependent_variable(int x, int week) override;
 
+    double get_WwtpDischargeRule(int source_id, int week) const;
 };
 
 

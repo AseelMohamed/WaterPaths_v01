@@ -4,11 +4,10 @@
 
 #include "Simulation.h"
 #include "../Utils/Utils.h"
-#include <ctime>
 #include <algorithm>
-#include <numeric>
 #include <omp.h>
 #include <set>
+#include <cstdio>
 
 #ifdef  PARALLEL
 #include <mpi.h>
@@ -216,6 +215,9 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
             }
     }
 
+    // Water source connections are handled by the WaterSupplySystems constructors
+    // and their infrastructure managers. No additional setup needed here.
+
     // Creates the data collector for the simulation.
     master_data_collector = new MasterDataCollector(realizations_to_run);
 }
@@ -236,23 +238,77 @@ Simulation &Simulation::operator=(const Simulation &simulation) {
 void Simulation::createContinuityModels(unsigned long realization,
                                         ContinuityModelRealization *&realization_model,
                                         ContinuityModelROF *&rof_model) {
-    // Create realization models by copying the water sources and utilities.
-    vector<WaterSource *> water_sources_realization =
-            Utils::copyWaterSourceVector(water_sources);
+    // Create realization models by copying the water supply systems but sharing water sources.
+    // Water sources should be shared across realizations, not duplicated.
+    vector<WaterSource *> water_sources_realization = water_sources; // Share, don't copy
     vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization =
             Utils::copyDroughtMitigationPolicyVector(
                     drought_mitigation_policies);
-    vector<Utility *> utilities_realization =
-            Utils::copyUtilityVector(utilities);
+    
+    // Extract water supply systems from utilities for realization model
+    vector<WaterSupplySystems *> wss_realization;
+    vector<vector<int>> water_sources_to_wss_mapping;
+    
+    // printf("DEBUG: Creating WSS mapping for %zu utilities\n", utilities.size());
+    
+    for (auto* utility : utilities) {
+        // printf("DEBUG: Processing utility %d with %zu WSS\n", utility->id, utility->getWaterSupplySystems().size());
+        for (const auto& wss : utility->getWaterSupplySystems()) {
+            // Create copies of WSS for this realization
+            wss_realization.push_back(new WaterSupplySystems(*wss));
+            
+            // Create mapping for this WSS - initially empty, will be populated by addWaterSource calls
+            water_sources_to_wss_mapping.push_back(vector<int>());
+            // printf("DEBUG: Added WSS %d to mapping, total WSS count: %zu\n", wss->getSystemId(), water_sources_to_wss_mapping.size());
+        }
+    }
+    
+    // printf("DEBUG: Final water_sources_to_wss_mapping.size() = %zu\n", water_sources_to_wss_mapping.size());
+    
+    // Now populate the water sources to WSS mapping based on utility-level mapping
+    for (int utility_id = 0; utility_id < utilities.size(); ++utility_id) {
+        auto* utility = utilities[utility_id];
+        int wss_start_index = 0;
+        
+        // Find the starting index for this utility's WSS in the flattened list
+        for (int u = 0; u < utility_id; ++u) {
+            wss_start_index += utilities[u]->getWaterSupplySystems().size();
+        }
+        
+        // printf("DEBUG: Utility %d starts at WSS index %d\n", utility_id, wss_start_index);
+        // printf("DEBUG: Utility %d has %zu water sources: ", utility_id, water_sources_to_utilities[utility_id].size());
+        // Removed debug printing of water source IDs
+        
+        // Distribute water sources from utility-level mapping to WSS-level mapping
+        for (int ws_id : water_sources_to_utilities[utility_id]) {            
+            int target_wss_index = wss_start_index; // Default to first WSS
+            
+            if (utility->getWaterSupplySystems().size() == 2) {
+                // CAESB case: 2 WSS within the utility
+                if (ws_id == 1 || ws_id == 3 || ws_id == 4) {
+                    target_wss_index = wss_start_index + 1; // TortoSM (second WSS)
+                } else {
+                    target_wss_index = wss_start_index; // Descoberto (first WSS)
+                }
+            }
+            
+            // printf("DEBUG: Assigning water source %d to WSS index %d\n", ws_id, target_wss_index);
+            water_sources_to_wss_mapping[target_wss_index].push_back(ws_id);
+        }
+    }
+    
+    // printf("DEBUG: Final mapping:\n");
+    // Removed debug printing of WSS water source assignments
+    
     vector<MinEnvFlowControl *> min_env_flow_controls_realization =
             Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
 
-    // Store realization models in vector
+    // Store realization models in vector - using WSS instead of utilities
     realization_model = new ContinuityModelRealization(
             water_sources_realization,
             water_sources_graph,
-            water_sources_to_utilities,
-            utilities_realization,
+            water_sources_to_wss_mapping,  // Now properly maps water sources to individual WSS
+            wss_realization,
             drought_mitigation_policies_realization,
             min_env_flow_controls_realization,
             utilities_rdm.at(realization),
@@ -260,19 +316,28 @@ void Simulation::createContinuityModels(unsigned long realization,
             policies_rdm.at(realization),
             (int) realization);
 
-    // Create rof models by copying the water utilities and sources.
-    vector<WaterSource *> water_sources_rof =
-            Utils::copyWaterSourceVector(water_sources);
-    vector<Utility *> utilities_rof = Utils::copyUtilityVector(utilities);
+    // Create rof models by copying the water supply systems but sharing water sources.
+    // Water sources should be shared across models, not duplicated.
+    vector<WaterSource *> water_sources_rof = water_sources; // Share, don't copy
+    
+    // Extract water supply systems from utilities for ROF model
+    vector<WaterSupplySystems *> wss_rof;
+    for (auto* utility : utilities) {
+        for (const auto& wss : utility->getWaterSupplySystems()) {
+            // Create copies of WSS for ROF model
+            wss_rof.push_back(new WaterSupplySystems(*wss));
+        }
+    }
+    
     vector<MinEnvFlowControl *> min_env_flow_controls_rof =
             Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
 
-    // Store realization models in vector
+    // Store realization models in vector - using WSS instead of utilities
     rof_model = new ContinuityModelROF(
             water_sources_rof,
             water_sources_graph,
-            water_sources_to_utilities,
-            utilities_rof,
+            water_sources_to_wss_mapping,  // Use the same WSS-level mapping as realization model
+            wss_rof,
             min_env_flow_controls_rof,
             utilities_rdm.at(realization),
             water_sources_rdm.at(realization),
@@ -282,7 +347,9 @@ void Simulation::createContinuityModels(unsigned long realization,
 
     // Initialize rof models by connecting it to realization water sources.
     rof_model->connectRealizationWaterSources(water_sources_realization);
-    rof_model->connectRealizationUtilities(utilities_realization);
+    
+    // Connect ROF model to realization WSS
+    rof_model->connectRealizationWSS(wss_realization);
 
     // Pass ROF tables to continuity model
     if (import_export_rof_tables == IMPORT_ROF_TABLES) {
@@ -323,10 +390,9 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
                                             realizations_to_run.end()) + 1;
         auto n_precomputed_tables = precomputed_rof_tables->size();
         if (n_precomputed_tables != max_realization) {
-            char error[256];
-            sprintf(error,
-                    "There are at least %lu potential realizations but %lu imported ROF tables.",
-                    max_realization, n_precomputed_tables);
+            string error = "There are at least " + to_string(max_realization) + 
+                          " potential realizations but " + to_string(n_precomputed_tables) + 
+                          " imported ROF tables.";
             throw invalid_argument(error);
         }
     }
@@ -354,24 +420,38 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
         createContinuityModels(realization, realization_model, rof_model);
 
         // Initialize data collector.
+        // For data collection, we still need utilities (for financial data)
+        // Extract utilities from WSS back-references
+        vector<Utility *> utilities_for_data_collection;
+        for (const auto& wss : realization_model->getContinuity_wss()) {
+            utilities_for_data_collection.push_back(wss->getOwner());
+        }
+        
         master_data_collector->addRealization(
                 realization_model->getContinuity_water_sources(),
                 realization_model->getDrought_mitigation_policies(),
-                realization_model->getContinuity_utilities(),
+                utilities_for_data_collection,
                 realization);
 
 //        try {
 //        double start = omp_get_wtime();
+            // printf("DEBUG: Starting simulation for realization %lu, total_simulation_time = %lu\n", 
+                //    realization, total_simulation_time);
             for (int w = 0; w < (int) total_simulation_time; ++w) {
+                if (w % 52 == 0) {  // Print every year
+                    // printf("DEBUG: Processing week %d (year %d)\n", w, w/52);
+                }
 //                printf("%d\n", w);
                 // DO NOT change the order of the steps. This would mess up
                 // important dependencies.
                 // Calculate long-term risk-of-failre if current week is first week of the year.
                 if (Utils::isFirstWeekOfTheYear(w)) {
+                    // printf("DEBUG: Calculating long-term ROF for week %d\n", w);
                     realization_model->setLongTermROFs(
                             rof_model->calculateLongTermROF(w), w);
                 }
                 // Calculate short-term risk-of-failure
+                // printf("DEBUG: Calculating short-term ROF for week %d\n", w);
                 realization_model->setShortTermROFs(
                         rof_model->calculateShortTermROF(w,
                                 import_export_rof_tables));
@@ -406,8 +486,10 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
 //            master_data_collector->removeRealization(realization);
 //        }
 
-        delete realization_model;
+        // Delete ROF model first since it only references shared objects
         delete rof_model;
+        // Delete realization model last since it owns the shared objects
+        delete realization_model;
     }
     // Handle exception from the OpenMP region and pass it up to the
     // problem class.

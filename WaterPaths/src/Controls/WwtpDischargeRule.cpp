@@ -3,6 +3,8 @@
 //
 
 #include <algorithm>
+#include <stdexcept>
+#include <exception>
 #include "WwtpDischargeRule.h"
 #include "../Utils/Constants.h"
 
@@ -25,7 +27,7 @@ WwtpDischargeRule::WwtpDischargeRule(
 
     for (auto &f : year_series_fraction_discharge) {
         if ((int) f.size() != (int) Constants::WEEKS_IN_YEAR + 1)
-            throw invalid_argument("Wastewater discharge rules but contain "
+            throw std::invalid_argument("Wastewater discharge rules but contain "
                                              "exactly 53 (for years with "
                                              "extra week) values.");
     }
@@ -33,7 +35,7 @@ WwtpDischargeRule::WwtpDischargeRule(
         printf("Number of series: %lu\nNumber of source IDs: %lu\n", 
             year_series_fraction_discharge.size(),
             discharge_to_source_ids.size());
-        throw invalid_argument("Number of wwtp discharge time series must be "
+        throw std::invalid_argument("Number of wwtp discharge time series must be "
                                           "the same as number of sources ids.");
     }
 }
@@ -65,22 +67,29 @@ double WwtpDischargeRule::get_dependent_variable(int water_source_id, int week) 
 }
 
 double WwtpDischargeRule::get_dependent_variable(double x, int week) {
-    throw_with_nested(invalid_argument("WWTP discharge rules need a water source ID (int)"
+    std::throw_with_nested(std::invalid_argument("WWTP discharge rules need a water source ID (int)"
                                      " and week number (int) to return the "
                                      "fraction of total_demand discharged to that "
                                      "source."));
+    return 0.0; // This will never be reached, but needed to avoid warning
 }
 
 double WwtpDischargeRule::get_dependent_variable(double x) {
-    throw_with_nested(invalid_argument("WWTP discharge rules need a water source ID (int)"
+    std::throw_with_nested(std::invalid_argument("WWTP discharge rules need a water source ID (int)"
                                      " and week number (int) to return the "
                                      "fraction of total_demand discharged to that "
                                      "source."));
+    return 0.0; // This will never be reached, but needed to avoid warning
 }
 
 double WwtpDischargeRule::get_dependent_variable(int x) {
-    throw_with_nested(invalid_argument("WWTP discharge rules need a water source ID (int)"
+    std::throw_with_nested(std::invalid_argument("WWTP discharge rules need a water source ID (int)"
                                      " and week number (int) to return the "
                                      "fraction of total_demand discharged to that "
                                      "source."));
+    return 0.0; // This will never be reached, but needed to avoid warning
+}
+
+double WwtpDischargeRule::get_WwtpDischargeRule(int source_id, int week) const {
+    return year_series_fraction_discharge[source_id_to_vector_index[source_id]][week];
 }

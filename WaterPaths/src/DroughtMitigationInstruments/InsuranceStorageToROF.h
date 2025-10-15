@@ -27,11 +27,11 @@ public:
 
     InsuranceStorageToROF(const int id, vector<WaterSource *> &water_sources,
                               const Graph &water_sources_graph,
-                              const vector<vector<int>> &water_sources_to_utilities,
-                              vector<Utility *> &utilities,
+                              const vector<vector<int>> &water_sources_to_wss,
+                              vector<WaterSupplySystems *> &wss,
                               vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                               vector<MinEnvFlowControl *> min_env_flow_controls,
-                              vector<vector<double>>& utilities_rdm,
+                              vector<vector<double>>& wss_rdm,
                               vector<vector<double>>& water_sources_rdm,
                               vector<vector<double>>& policy_rdm, vector<double> &rof_triggers,
                               const double insurance_premium, const vector<double> &fixed_payouts,
@@ -45,14 +45,14 @@ public:
 
     void applyPolicy(int week) override;
 
-    void addSystemComponents(vector<Utility *> utilities,
+    void addSystemComponents(vector<WaterSupplySystems *> wss,
                                  vector<WaterSource *> water_sources,
                                  vector<MinEnvFlowControl *> min_env_flow_controls) override;
 
-    void setRealization(unsigned long realization_id, vector<double> &utilities_rdm,
+    void setRealization(unsigned long realization_id, vector<double> &wss_rdm,
                         vector<double> &water_sources_rdm, vector<double> &policy_rdm) override;
 
-    vector<double> calculateShortTermROFTable(int week, const vector<Utility *> &utilities, const int &n_utilities);
+    vector<double> calculateShortTermROFTable(int week, const vector<WaterSupplySystems *> &wss, const int &n_wss);
 
     void updateOnlineInfrastructure(int week) override;
 };
