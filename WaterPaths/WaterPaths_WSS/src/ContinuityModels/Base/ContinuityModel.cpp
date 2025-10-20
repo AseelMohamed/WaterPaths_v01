@@ -31,8 +31,11 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
 
     //FIXME: THERE IS A STUPID MISTAKE HERE IN THE SORT FUNCTION THAT IS PREVENTING IT FROM WORKING UNDER WINDOWS AND LINUX.
     std::sort(continuity_water_sources.begin(), continuity_water_sources.end(), WaterSource::compare);
-    std::sort(continuity_wss.begin(), continuity_wss.end(), 
-              [](WaterSupplySystems *a, WaterSupplySystems *b) { return a->system_id < b->system_id; });
+    // NOTE: Do NOT sort continuity_wss here. The ordering of the water
+    // supply systems (WSS) must remain the same as the mapping passed in
+    // via water_sources_to_wss. Sorting the WSS vector breaks the
+    // correspondence between mapping indices and WSS entries and can lead
+    // to duplicate-add attempts when populating WSS with water sources.
 
     // CRITICAL: Reconnect infrastructure managers after WSS objects are copied
     // When WSS objects are copied, their internal vectors get new addresses but 
@@ -42,13 +45,13 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
     }
 
     // Link water sources to WSS within each utility by passing pointers of the former to each WSS.
-    // printf("DEBUG: water_sources_to_wss.size() = %zu\n", water_sources_to_wss.size());
+    //printf("debug: water_sources_to_wss.size() = %zu\n", water_sources_to_wss.size());
     for (unsigned long u = 0; u < wss.size(); ++u) {
-        // printf("DEBUG: Processing utility %lu, wss[%lu] = %p\n", u, u, continuity_wss[u]);
-        // printf("DEBUG: water_sources_to_wss[%lu].size() = %zu\n", u, water_sources_to_wss[u].size());
+        //printf("debug: Processing utility %lu, wss[%lu] = %p\n", u, u, continuity_wss[u]);
+        //printf("debug: water_sources_to_wss[%lu].size() = %zu\n", u, water_sources_to_wss[u].size());
         for (unsigned long ws = 0; ws < water_sources_to_wss[u].size(); ++ws) {
             auto ws_id = water_sources_to_wss[u][ws];
-            // printf("DEBUG: Adding water source %d to utility %lu (wss = %p)\n", ws_id, u, continuity_wss[u]);
+            //printf("debug: Adding water source %d to utility %lu (wss = %p)\n", ws_id, u, continuity_wss[u]);
             if (ws_id >= continuity_water_sources.size()) {
                 string error = "Water source " + to_string(ws_id) + " was not added to list of water sources passed to the continuity model.";
                 throw invalid_argument(error);
@@ -60,25 +63,25 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
     }
 
     // Create table showing which utilities draw water from each water source.
-    // printf("DEBUG: Creating wss_to_water_sources and water_sources_online_to_wss tables\n");
-    // printf("DEBUG: water_sources.size() = %zu, wss.size() = %zu\n", water_sources.size(), wss.size());
+    //printf("debug: Creating wss_to_water_sources and water_sources_online_to_wss tables\n");
+    //printf("debug: water_sources.size() = %zu, wss.size() = %zu\n", water_sources.size(), wss.size());
     
     wss_to_water_sources.assign(water_sources.size(), vector<int>(0));
     water_sources_online_to_wss.assign(water_sources.size(), vector<int>(0));
     
     for (unsigned long u = 0; u < wss.size(); ++u) {
-        // printf("DEBUG: Processing utility %lu for table creation\n", u);
-        // printf("DEBUG: water_sources_to_wss[%lu].size() = %zu\n", u, water_sources_to_wss[u].size());
+        //printf("debug: Processing utility %lu for table creation\n", u);
+        //printf("debug: water_sources_to_wss[%lu].size() = %zu\n", u, water_sources_to_wss[u].size());
         for (const int &ws : water_sources_to_wss[u]) {
-            // printf("DEBUG: Processing water source %d for utility %lu\n", ws, u);
+            //printf("debug: Processing water source %d for utility %lu\n", ws, u);
             if (ws >= 0 && ws < static_cast<int>(wss_to_water_sources.size())) {
                 wss_to_water_sources[ws].push_back(u);
                 if (ws < static_cast<int>(water_sources.size()) && water_sources[ws]->isOnline()) {
-                    // printf("DEBUG: Water source %d is online, adding to online list\n", ws);
+                    //printf("debug: Water source %d is online, adding to online list\n", ws);
                     water_sources_online_to_wss[u].push_back(ws);
                 }
             } else {
-                // printf("DEBUG: ERROR - Water source %d out of bounds (max = %zu)\n", ws, wss_to_water_sources.size());
+                //printf("debug: ERROR - Water source %d out of bounds (max = %zu)\n", ws, wss_to_water_sources.size());
             }
         }
     }
@@ -180,17 +183,17 @@ void ContinuityModel::continuityStep(
     // For rof_realization = 0, use current week (no offset)
     // For rof_realization = 1, use week - 52 (1 year ago)
     // For rof_realization = 2, use week - 104 (2 years ago), etc.
-    int shifted_week;
-    if (rof_realization == NON_INITIALIZED) {
-        shifted_week = week; // Normal simulation, no offset
-    } else {
-        // ROF simulation: use past data (rof_realization years ago)
-        shifted_week = week - (rof_realization * WEEKS_IN_YEAR_ROUND);
-        if (shifted_week < 0) {
-            // If we don't have enough historical data, skip this step
-            return;
-        }
-    }
+    // int shifted_week;
+    // if (rof_realization == NON_INITIALIZED) {
+    //     shifted_week = week; // Normal simulation, no offset
+    // } else {
+    //     // ROF simulation: use past data (rof_realization years ago)
+    //     shifted_week = week - (rof_realization * WEEKS_IN_YEAR_ROUND);
+    //     if (shifted_week < 0) {
+    //         // If we don't have enough historical data, skip this step
+    //         return;
+    //     }
+    // }
 
     double* upstream_spillage = new double[n_sources];
     fill_n(upstream_spillage, n_sources, 0.);
@@ -243,23 +246,23 @@ void ContinuityModel::continuityStep(
                             static_cast<unsigned long>(ws))->getTotal_outflow();
         }
 
-        // Mass balance. For ROF calculations, we want to use PAST year data.
-        // For rof_realization = 0, use current week (no offset)
-        // For rof_realization = 1, use week - 52 (1 year ago)
-        // For rof_realization = 2, use week - 104 (2 years ago), etc.
-        int week_with_rof_offset;
-        if (rof_realization == NON_INITIALIZED) {
-            week_with_rof_offset = week; // Normal simulation, no offset
-        } else {
-            // ROF simulation: use past data (rof_realization years ago)
-            week_with_rof_offset = week - (rof_realization * WEEKS_IN_YEAR_ROUND);
-            if (week_with_rof_offset < 0) {
-                // If we don't have enough historical data, skip this step
-                continue;
-            }
-        }
+        // // Mass balance. For ROF calculations, we want to use PAST year data.
+        // // For rof_realization = 0, use current week (no offset)
+        // // For rof_realization = 1, use week - 52 (1 year ago)
+        // // For rof_realization = 2, use week - 104 (2 years ago), etc.
+        // int week_with_rof_offset;
+        // if (rof_realization == NON_INITIALIZED) {
+        //     week_with_rof_offset = week; // Normal simulation, no offset
+        // } else {
+        //     // ROF simulation: use past data (rof_realization years ago)
+        //     week_with_rof_offset = week - (rof_realization * WEEKS_IN_YEAR_ROUND);
+        //     if (week_with_rof_offset < 0) {
+        //         // If we don't have enough historical data, skip this step
+        //         continue;
+        //     }
+        // }
         continuity_water_sources[i]->continuityWaterSource(
-                week_with_rof_offset,
+                week - delta_realization_weeks[rof_realization + 1],
                 upstream_spillage[i], wastewater_discharges[i], demands[i]);
         demands[i] = vector<double>(n_wss, 0.);
     }

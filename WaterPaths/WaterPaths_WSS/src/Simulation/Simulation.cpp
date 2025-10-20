@@ -238,9 +238,9 @@ Simulation &Simulation::operator=(const Simulation &simulation) {
 void Simulation::createContinuityModels(unsigned long realization,
                                         ContinuityModelRealization *&realization_model,
                                         ContinuityModelROF *&rof_model) {
-    // Create realization models by copying the water supply systems but sharing water sources.
-    // Water sources should be shared across realizations, not duplicated.
-    vector<WaterSource *> water_sources_realization = water_sources; // Share, don't copy
+    // Create realization models by copying the water sources and water supply systems.
+    vector<WaterSource *> water_sources_realization =
+            Utils::copyWaterSourceVector(water_sources);
     vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization =
             Utils::copyDroughtMitigationPolicyVector(
                     drought_mitigation_policies);
@@ -249,21 +249,21 @@ void Simulation::createContinuityModels(unsigned long realization,
     vector<WaterSupplySystems *> wss_realization;
     vector<vector<int>> water_sources_to_wss_mapping;
     
-    // printf("DEBUG: Creating WSS mapping for %zu utilities\n", utilities.size());
+    //printf("debug: Creating WSS mapping for %zu utilities\n", utilities.size());
     
     for (auto* utility : utilities) {
-        // printf("DEBUG: Processing utility %d with %zu WSS\n", utility->id, utility->getWaterSupplySystems().size());
+        //printf("debug: Processing utility %d with %zu WSS\n", utility->id, utility->getWaterSupplySystems().size());
         for (const auto& wss : utility->getWaterSupplySystems()) {
             // Create copies of WSS for this realization
             wss_realization.push_back(new WaterSupplySystems(*wss));
             
             // Create mapping for this WSS - initially empty, will be populated by addWaterSource calls
             water_sources_to_wss_mapping.push_back(vector<int>());
-            // printf("DEBUG: Added WSS %d to mapping, total WSS count: %zu\n", wss->getSystemId(), water_sources_to_wss_mapping.size());
+            //printf("debug: Added WSS %d to mapping, total WSS count: %zu\n", wss->getSystemId(), water_sources_to_wss_mapping.size());
         }
     }
     
-    // printf("DEBUG: Final water_sources_to_wss_mapping.size() = %zu\n", water_sources_to_wss_mapping.size());
+    //printf("debug: Final water_sources_to_wss_mapping.size() = %zu\n", water_sources_to_wss_mapping.size());
     
     // Now populate the water sources to WSS mapping based on utility-level mapping
     for (int utility_id = 0; utility_id < utilities.size(); ++utility_id) {
@@ -275,8 +275,8 @@ void Simulation::createContinuityModels(unsigned long realization,
             wss_start_index += utilities[u]->getWaterSupplySystems().size();
         }
         
-        // printf("DEBUG: Utility %d starts at WSS index %d\n", utility_id, wss_start_index);
-        // printf("DEBUG: Utility %d has %zu water sources: ", utility_id, water_sources_to_utilities[utility_id].size());
+        //printf("debug: Utility %d starts at WSS index %d\n", utility_id, wss_start_index);
+        //printf("debug: Utility %d has %zu water sources: ", utility_id, water_sources_to_utilities[utility_id].size());
         // Removed debug printing of water source IDs
         
         // Distribute water sources from utility-level mapping to WSS-level mapping
@@ -292,12 +292,12 @@ void Simulation::createContinuityModels(unsigned long realization,
                 }
             }
             
-            // printf("DEBUG: Assigning water source %d to WSS index %d\n", ws_id, target_wss_index);
+            //printf("debug: Assigning water source %d to WSS index %d\n", ws_id, target_wss_index);
             water_sources_to_wss_mapping[target_wss_index].push_back(ws_id);
         }
     }
     
-    // printf("DEBUG: Final mapping:\n");
+    //printf("debug: Final mapping:\n");
     // Removed debug printing of WSS water source assignments
     
     vector<MinEnvFlowControl *> min_env_flow_controls_realization =
@@ -316,15 +316,15 @@ void Simulation::createContinuityModels(unsigned long realization,
             policies_rdm.at(realization),
             (int) realization);
 
-    // Create rof models by copying the water supply systems but sharing water sources.
-    // Water sources should be shared across models, not duplicated.
-    vector<WaterSource *> water_sources_rof = water_sources; // Share, don't copy
+    // Create rof models by copying the water sources and WSS.
+    // ROF model needs its own copies for independent ROF calculations
+    vector<WaterSource *> water_sources_rof =
+            Utils::copyWaterSourceVector(water_sources);
     
-    // Extract water supply systems from utilities for ROF model
+    // Create fresh WSS copies for ROF model (from original utilities, not realization)
     vector<WaterSupplySystems *> wss_rof;
     for (auto* utility : utilities) {
         for (const auto& wss : utility->getWaterSupplySystems()) {
-            // Create copies of WSS for ROF model
             wss_rof.push_back(new WaterSupplySystems(*wss));
         }
     }
@@ -345,10 +345,10 @@ void Simulation::createContinuityModels(unsigned long realization,
             import_export_rof_tables,
             realization);
 
-    // Initialize rof models by connecting it to realization water sources.
+    // Initialize rof models by connecting it to realization water sources and WSS for observation
     rof_model->connectRealizationWaterSources(water_sources_realization);
     
-    // Connect ROF model to realization WSS
+    // Connect ROF model to realization WSS so it can observe infrastructure changes
     rof_model->connectRealizationWSS(wss_realization);
 
     // Pass ROF tables to continuity model
@@ -435,23 +435,23 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
 
 //        try {
 //        double start = omp_get_wtime();
-            // printf("DEBUG: Starting simulation for realization %lu, total_simulation_time = %lu\n", 
+            //printf("debug: Starting simulation for realization %lu, total_simulation_time = %lu\n", 
                 //    realization, total_simulation_time);
             for (int w = 0; w < (int) total_simulation_time; ++w) {
                 if (w % 52 == 0) {  // Print every year
-                    // printf("DEBUG: Processing week %d (year %d)\n", w, w/52);
+                    //printf("debug: Processing week %d (year %d)\n", w, w/52);
                 }
 //                printf("%d\n", w);
                 // DO NOT change the order of the steps. This would mess up
                 // important dependencies.
                 // Calculate long-term risk-of-failre if current week is first week of the year.
                 if (Utils::isFirstWeekOfTheYear(w)) {
-                    // printf("DEBUG: Calculating long-term ROF for week %d\n", w);
+                    //printf("debug: Calculating long-term ROF for week %d\n", w);
                     realization_model->setLongTermROFs(
                             rof_model->calculateLongTermROF(w), w);
                 }
                 // Calculate short-term risk-of-failure
-                // printf("DEBUG: Calculating short-term ROF for week %d\n", w);
+                //printf("debug: Calculating short-term ROF for week %d\n", w);
                 realization_model->setShortTermROFs(
                         rof_model->calculateShortTermROF(w,
                                 import_export_rof_tables));

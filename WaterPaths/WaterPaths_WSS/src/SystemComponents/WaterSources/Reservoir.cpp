@@ -28,7 +28,8 @@ Reservoir::Reservoir(
         fixed_area(false), evaporation_series(evaporation_series) {
 
     if (storage_area_curve && storage_area_curve->getSeries_x().back() != capacity) {
-    	string error = "Error Reservoir " + to_string(id) + ": Last storage of data series must be equal to reservoir capacity.";
+	char error[1024];
+    	sprintf(error, "Error Reservoir %d: Last storage of data series must be equal to reservoir capacity.", id);
         throw invalid_argument(error);
     }
 }
@@ -75,7 +76,8 @@ Reservoir::Reservoir(const char *name, const int id, const vector<Catchment *> &
         evaporation_series(evaporation_series) {
 
     if (storage_area_curve && storage_area_curve->getSeries_x().back() != capacity) {
-    	string error = "Error Reservoir " + to_string(id) + ": Last storage of data series must be equal to reservoir capacity.";
+	char error[1024];
+    	sprintf(error, "Error Reservoir %d: Last storage of data series must be equal to reservoir capacity.", id);
         throw invalid_argument(error);
     }
 }
@@ -307,8 +309,8 @@ void Reservoir::applyContinuity(int week, double upstream_source_inflow,
 void Reservoir::setOnline() {
     WaterSource::setOnline();
 
-    /// start at full capacity to ensure valid continuity calculations.
-    available_volume = capacity;
+    /// start at empty reservoir.
+    available_volume = NONE;
 }
 
 void Reservoir::setRealization(unsigned long r, vector<double> &rdm_factors) {

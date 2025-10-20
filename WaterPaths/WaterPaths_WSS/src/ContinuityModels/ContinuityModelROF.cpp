@@ -69,22 +69,17 @@ ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
 }
 
 ContinuityModelROF::~ContinuityModelROF() {
-    // Prevent base class destructor from deleting shared objects
-    // by nullifying pointers to shared resources
-    for (auto& ws : continuity_water_sources) {
-        ws = nullptr;  // Null out pointers to prevent deletion
+    // The ROF model owns its own water sources and WSS (continuity_water_sources and continuity_wss)
+    // which will be deleted by the base class destructor.
+    // 
+    // The realization_water_sources and realization_wss are just observation pointers
+    // to objects owned by the realization model - we must NOT delete them.
+    // Nullify these observation pointers to prevent accidental deletion.
+    for (auto& ws : realization_water_sources) {
+        ws = nullptr;  // Just an observation pointer, don't delete
     }
-    for (auto& u : continuity_wss) {
-        u = nullptr;   // Null out pointers to prevent deletion  
-    }
-    for (auto& mef : min_env_flow_controls) {
-        mef = nullptr; // Null out pointers to prevent deletion
-    }
-    
-    // CRITICAL: Also null out realization_wss to prevent double deletion
-    // These WSS objects are owned by the realization model
     for (auto& wss : realization_wss) {
-        wss = nullptr; // Null out pointers to prevent deletion
+        wss = nullptr; // Just an observation pointer, don't delete
     }
     
     delete[] storage_wout_downstream;
@@ -352,23 +347,23 @@ void ContinuityModelROF::updateStorageToROFTable(
 
         // Checks for wss failures.
         int count_fails = 0;
-        // printf("DEBUG: Starting WSS failure checks, n_wss = %d, realization_wss.size() = %lu\n", 
+        //printf("debug: Starting WSS failure checks, n_wss = %d, realization_wss.size() = %lu\n", 
             //    n_wss, realization_wss.size());
         for (int u = 0; u < n_wss; ++u) {
-            // printf("DEBUG: Processing WSS %d\n", u);
+            //printf("debug: Processing WSS %d\n", u);
             double utility_storage = 0;
             // Calculate combined stored volume for each utility based on
             // shifted storages.
-            // printf("DEBUG: water_sources_online_to_wss[%d].size() = %lu\n", u, water_sources_online_to_wss[u].size());
+            //printf("debug: water_sources_online_to_wss[%d].size() = %lu\n", u, water_sources_online_to_wss[u].size());
             for (int ws : water_sources_online_to_wss[u]) {
-                // printf("DEBUG: Processing water source %d for WSS %d\n", ws, u);
+                //printf("debug: Processing water source %d for WSS %d\n", ws, u);
                 bool has_treatment = realization_wss[u]->hasTreatmentConnected(ws);
                 utility_storage += available_volumes_shifted[ws] *
                                    continuity_water_sources[ws]->getSupplyAllocatedFraction(
                                            u) *
                                    (has_treatment && realization_water_sources[ws]->isOnline());
             }
-            // printf("DEBUG: Completed WSS %d\n", u);
+            //printf("debug: Completed WSS %d\n", u);
 
             // Register failure in the table for each utility meeting
             // failure criteria. The treatment capacity criterion is INTENTIONALLY

@@ -115,8 +115,8 @@ WaterSupplySystems::WaterSupplySystems(
     unrollWaterSourceToWtpVector(water_source_to_wtp,
                                 wss_owned_wtp_capacities);
     
-    // printf("DEBUG: WSS Constructor - about to connect water sources vectors\n");
-    // printf("DEBUG: water_sources vector address = %p, size = %zu\n", (void*)&water_sources, water_sources.size());
+    //printf("debug: WSS Constructor - about to connect water sources vectors\n");
+    //printf("debug: water_sources vector address = %p, size = %zu\n", (void*)&water_sources, water_sources.size());
     
     // Connect water sources vectors to the infrastructure manager
     infrastructure_construction_manager.connectWaterSourcesVectorsToUtilities(
@@ -124,7 +124,7 @@ WaterSupplySystems::WaterSupplySystems(
             priority_draw_water_source,
             non_priority_draw_water_source);
             
-    // printf("DEBUG: WSS Constructor - connected water sources vectors\n");
+    //printf("debug: WSS Constructor - connected water sources vectors\n");
 }
 
 /**
@@ -248,8 +248,8 @@ void WaterSupplySystems::unrollWaterSourceToWtpVector(
 }
 
 void WaterSupplySystems::reconnectInfrastructureManager() {
-    // printf("DEBUG: reconnectInfrastructureManager called\n");
-    // printf("DEBUG: Reconnecting with water_sources vector address = %p, size = %zu\n", 
+    //printf("debug: reconnectInfrastructureManager called\n");
+    //printf("debug: Reconnecting with water_sources vector address = %p, size = %zu\n", 
         //    (void*)&water_sources, water_sources.size());
     
     // Reconnect the infrastructure manager to the current water sources vectors
@@ -258,7 +258,7 @@ void WaterSupplySystems::reconnectInfrastructureManager() {
             priority_draw_water_source,
             non_priority_draw_water_source);
     
-    // printf("DEBUG: Reconnection complete\n");
+    //printf("debug: Reconnection complete\n");
 }
 
 void WaterSupplySystems::updateTreatmentAndNumberOfStorageSources() {
@@ -308,21 +308,21 @@ void WaterSupplySystems::clearWaterSources() {
  * @param water_source
  */
 void WaterSupplySystems::addWaterSource(WaterSource* water_source) {
-    // printf("DEBUG: addWaterSource called for water_source id=%d\n", water_source->id);
-    // printf("DEBUG: current water_sources vector address = %p, size = %zu\n", (void*)&water_sources, water_sources.size());
+    //printf("debug: addWaterSource called for water_source id=%d\n", water_source->id);
+    //printf("debug: current water_sources vector address = %p, size = %zu\n", (void*)&water_sources, water_sources.size());
     
     checkErrorsAddWaterSourceOnline(water_source);
 
     // Add water sources with their IDs matching the water sources vector
     // indexes.
     if (water_source->id > (int) water_sources.size() - 1) {
-        // printf("DEBUG: Resizing water_sources from %zu to %d\n", water_sources.size(), water_source->id + 1);
+        //printf("debug: Resizing water_sources from %zu to %d\n", water_sources.size(), water_source->id + 1);
         water_sources.resize((unsigned int) water_source->id + 1);
     }
 
     // Add water source
     water_sources[water_source->id] = water_source;
-    // printf("DEBUG: Added water source to vector, new size = %zu\n", water_sources.size());
+    //printf("debug: Added water source to vector, new size = %zu\n", water_sources.size());
 
     // Add water source to infrastructure construction manager.
     infrastructure_construction_manager.addWaterSource(water_source);
@@ -334,7 +334,7 @@ void WaterSupplySystems::addWaterSource(WaterSource* water_source) {
         water_source_to_wtp[water_source->id] != NON_INITIALIZED &&
         water_source_to_wtp[water_source->id] < wss_owned_wtp_capacities.size() &&
         wss_owned_wtp_capacities[water_source_to_wtp[water_source->id]] > 0) {
-        // printf("DEBUG: Water source is online and has WTP capacity, calling addWaterSourceToOnlineLists\n");
+        //printf("debug: Water source is online and has WTP capacity, calling addWaterSourceToOnlineLists\n");
         infrastructure_construction_manager.addWaterSourceToOnlineLists(
                 water_source->id, total_storage_capacity,
                 total_available_volume,

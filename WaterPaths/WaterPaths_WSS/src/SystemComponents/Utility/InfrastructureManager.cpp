@@ -144,23 +144,23 @@ void InfrastructureManager::addWaterSourceToOnlineLists(int source_id,
                                                         double &total_available_volume,
                                                         double &total_stored_volume) {
     // Add comprehensive debugging and bounds checking
-    // printf("DEBUG: addWaterSourceToOnlineLists called with source_id=%d\n", source_id);
-    // printf("DEBUG: water_sources pointer = %p\n", (void*)water_sources);
+    //printf("debug: addWaterSourceToOnlineLists called with source_id=%d\n", source_id);
+    //printf("debug: water_sources pointer = %p\n", (void*)water_sources);
     
     if (water_sources == nullptr) {
-        // printf("DEBUG: water_sources is null!\n");
+        //printf("debug: water_sources is null!\n");
         throw std::runtime_error("InfrastructureManager: water_sources pointer is null");
     }
     
-    // printf("DEBUG: water_sources pointer is not null, trying to access size...\n");
+    //printf("debug: water_sources pointer is not null, trying to access size...\n");
     
     // Check if the pointer itself is valid by trying to access size safely
     size_t sources_size;
     try {
         sources_size = water_sources->size();
-        // printf("DEBUG: water_sources->size() = %zu\n", sources_size);
+        //printf("debug: water_sources->size() = %zu\n", sources_size);
     } catch (...) {
-        // printf("DEBUG: Exception when accessing water_sources->size()\n");
+        //printf("debug: Exception when accessing water_sources->size()\n");
         throw std::runtime_error("InfrastructureManager: water_sources pointer is invalid - cannot access size()");
     }
     
@@ -534,14 +534,14 @@ void InfrastructureManager::connectWaterSourcesVectorsToUtilities(
         vector<WaterSource *> &water_sources,
         vector<int> &priority_draw_water_source,
         vector<int> &non_priority_draw_water_source) {
-    // printf("DEBUG: connectWaterSourcesVectorsToUtilities called\n");
-    // printf("DEBUG: water_sources vector address = %p, size = %zu\n", (void*)&water_sources, water_sources.size());
+    //printf("debug: connectWaterSourcesVectorsToUtilities called\n");
+    //printf("debug: water_sources vector address = %p, size = %zu\n", (void*)&water_sources, water_sources.size());
     
     this->water_sources = &water_sources;
     this->priority_draw_water_source = &priority_draw_water_source;
     this->non_priority_draw_water_source = &non_priority_draw_water_source;
     
-    // printf("DEBUG: Stored water_sources pointer = %p\n", (void*)this->water_sources);
+    //printf("debug: Stored water_sources pointer = %p\n", (void*)this->water_sources);
 }
 
 const vector<int> &

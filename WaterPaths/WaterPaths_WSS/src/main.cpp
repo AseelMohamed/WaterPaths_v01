@@ -306,7 +306,8 @@ int main(int argc, char *argv[]) {
                 problem.setSol_number((unsigned long) s);
                 problem_ptr->functionEvaluation(solutions[s].data(), c_obj, c_constr);
                 vector<double> objectives = problem_ptr->calculateAndPrintObjectives(false);
-                problem.printTimeSeriesAndPathways(plotting);
+                // problem.printTimeSeriesAndPathways(plotting);
+                problem.printTimeSeriesAndPathways(true);
                 problem_ptr->destroyDataCollector();
                 string line;
                 for (double &o : objectives) {
