@@ -381,9 +381,18 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
 
     // Check if number of imported tables corresponds to model.
     if (import_export_rof_tables == IMPORT_ROF_TABLES) {
-        if (precomputed_rof_tables->at(0).size() != utilities.size()) {
-            throw invalid_argument(
-                    "Different number of utilities in model and imported ROF tables.");
+        // Count total number of WSS across all utilities
+        size_t total_wss = 0;
+        for (const auto* utility : utilities) {
+            total_wss += utility->getWaterSupplySystems().size();
+        }
+        
+        if (precomputed_rof_tables->at(0).size() != total_wss) {
+            char error[512];
+            sprintf(error, 
+                    "Different number of WSS in model (%zu) and imported ROF tables (%zu).",
+                    total_wss, precomputed_rof_tables->at(0).size());
+            throw invalid_argument(error);
         }
 
         auto max_realization = *max_element(realizations_to_run.begin(),
