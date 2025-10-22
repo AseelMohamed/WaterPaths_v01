@@ -263,7 +263,7 @@ void WaterSupplySystems::reconnectInfrastructureManager() {
 
 void WaterSupplySystems::updateTreatmentAndNumberOfStorageSources() {
     n_storage_sources = non_priority_draw_water_source.size();
-    delete[] available_treated_flow_rate;
+    // delete[] available_treated_flow_rate;
     available_treated_flow_rate = new double[non_priority_draw_water_source.size()];
     for (int i = 0; i < n_storage_sources; ++i) {
         auto ws = water_sources[non_priority_draw_water_source[i]];

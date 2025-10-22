@@ -248,12 +248,12 @@ void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow
                             upstream_catchment_inflow - evaporated_volume -
                             total_outflow - available_volume) - abs(continuity_error);
 
-    printf("DEBUG [%s] Week %d: cont_error=%.4f, avail_vol_old=%.4f, direct_demand=%.4f, "
-           "total_upstream_inflow=%.4f, upstream_catchment_inflow=%.4f, evaporated_volume=%.4f, "
-           "total_outflow=%.4f, available_volume=%.4f, continuity_error=%.4f\n",
-           name, week, cont_error, available_volume_old, direct_demand, 
-           total_upstream_inflow, upstream_catchment_inflow, evaporated_volume,
-           total_outflow, available_volume, continuity_error);
+    // printf("DEBUG [%s] Week %d: cont_error=%.4f, avail_vol_old=%.4f, direct_demand=%.4f, "
+    //        "total_upstream_inflow=%.4f, upstream_catchment_inflow=%.4f, evaporated_volume=%.4f, "
+    //        "total_outflow=%.4f, available_volume=%.4f, continuity_error=%.4f\n",
+    //        name, week, cont_error, available_volume_old, direct_demand, 
+    //        total_upstream_inflow, upstream_catchment_inflow, evaporated_volume,
+    //        total_outflow, available_volume, continuity_error);
 
     if (continuity_error > 0) {
         printf("Warning: continuity error of %f in allocated reservoir %d.\n", continuity_error, id);
