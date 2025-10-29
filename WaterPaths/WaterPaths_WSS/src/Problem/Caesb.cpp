@@ -155,9 +155,9 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     // ==================== SET UP RDM FACTORS ============================
     // RDM factors são os fatores de grande incerteza (DU factors)
-    if (utilities_rdm.empty()) {
+    if (wss_rdm.empty()) {
         /// All matrices below have dimensions n_realizations x nr_rdm_factors
-        utilities_rdm = std::vector<vector<double>>(
+        wss_rdm = std::vector<vector<double>>(
                 n_realizations, vector<double>(5, 1.));
         water_sources_rdm = std::vector<vector<double>>(
                 n_realizations, vector<double>(27,
@@ -430,7 +430,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                    17330.0};
     DataSeries corumba_storage_area(&corumba_storage, &corumba_area);
 
-    vector<int> cIV_allocations_ids = {0,  // CAESB utility id (single utility)
+    vector<int> cIV_allocations_ids = {0,  // Descoberto system id (system that uses Corumba)
                                        WATER_QUALITY_ALLOCATION}; //0 é a id da CAESB (single utility managing both systems)
     vector<double> cIV_allocation_fractions = {
             cIV_supply_caesb_capacity / cIV_storage_capacity,
@@ -456,8 +456,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double lp_wq_capacity = 423.524 *
                             table_gen_storage_multiplier; //volume destinado a qualidade da água do lago em hm³
     double lp_storage_capacity = lp_wq_capacity + lp_supply_capacity;
-    vector<int> lp_allocations_ids = {0,  // CAESB utility id (single utility)
-                                      WATER_QUALITY_ALLOCATION}; //0 é a id da CAESB (single utility managing both systems)
+    vector<int> lp_allocations_ids = {1,  // TortoSM system id (system that uses Paranoa)
+                                      WATER_QUALITY_ALLOCATION}; //1 é a id da companhia do TortoSM
     vector<double> lp_allocation_fractions = {
             lp_supply_capacity / lp_storage_capacity,
             lp_wq_capacity / lp_storage_capacity};
@@ -720,7 +720,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     Utility caesb((char *) "CAESB", 0,
                   demand_caesb_descoberto, // Placeholder, will be managed by WSS
                   demand_n_weeks,
-                  (caesb_descoberto_annual_payment + caesb_tortoSM_annual_payment) / 2.0,
+                  (caesb_descoberto_annual_payment + caesb_tortoSM_annual_payment),
                   caesbDescobertoDemandClassesFractions, // Placeholder
                   caesbDescobertoUserClassesWaterPrices, // Placeholder
                   wwtp_discharge_caesb_descoberto, // Placeholder
@@ -747,17 +747,17 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     vector<Utility *> utilities; //vetor que contém a única companhia CAESB
     utilities.push_back(&caesb);
 
-    // Water-source-utility connectivity matrix (single utility with two water supply systems)
-    // Row represents the single CAESB utility (id=0)
-    // Water sources are distributed between the two systems within the utility
-    vector<vector<int>> reservoir_utility_connectivity_matrix = {
-            {0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13}  // All sources belong to single CAESB utility
+    // Water-source-WSS connectivity matrix (each row corresponds to a WSS and numbers are water
+    // sources IDs.
+    vector<vector<int>> reservoir_wss_connectivity_matrix = {
+            {0, 2, 6, 7, 8, 12, 13},  // Sources managed by Descoberto WSS (system_id=0)
+            {1, 3, 4, 9, 10, 11}      // Sources managed by TortoSM WSS (system_id=1)
     };
 
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
 //    // O que table_storage_shift representa? O que são esses números (2000, 5000...) [3] [17]
-    // Update table storage shift for single utility
-    auto table_storage_shift = vector<vector<double>>(1,  // Single utility instead of 2
+    // Update table storage shift to match WSS structure (2 WSS within single utility)
+    auto table_storage_shift = vector<vector<double>>(2,  // Two WSS instead of 1
                                                       vector<double>(14, 0.));
     table_storage_shift[0][13] = 30;
 //    table_storage_shift[3][17] = 2000.; //tem a ver com a RdF
@@ -857,11 +857,11 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     if (import_export_rof_tables == EXPORT_ROF_TABLES) {
         s = new Simulation(water_sources,
                            g,
-                           reservoir_utility_connectivity_matrix,
+                           reservoir_wss_connectivity_matrix,
                            utilities,
                            drought_mitigation_policies,
                            min_env_flow_controls,
-                           utilities_rdm,
+                           wss_rdm,
                            water_sources_rdm,
                            policies_rdm,
                            n_weeks,
@@ -872,11 +872,11 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     } else if (import_export_rof_tables == IMPORT_ROF_TABLES) {
         s = new Simulation(water_sources,
                            g,
-                           reservoir_utility_connectivity_matrix,
+                           reservoir_wss_connectivity_matrix,
                            utilities,
                            drought_mitigation_policies,
                            min_env_flow_controls,
-                           utilities_rdm,
+                           wss_rdm,
                            water_sources_rdm,
                            policies_rdm,
                            n_weeks,
@@ -889,11 +889,11 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     } else {
         s = new Simulation(water_sources,
                            g,
-                           reservoir_utility_connectivity_matrix,
+                           reservoir_wss_connectivity_matrix,
                            utilities,
                            drought_mitigation_policies,
                            min_env_flow_controls,
-                           utilities_rdm,
+                           wss_rdm,
                            water_sources_rdm,
                            policies_rdm,
                            n_weeks,

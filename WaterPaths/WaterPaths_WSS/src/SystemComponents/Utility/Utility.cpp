@@ -147,7 +147,7 @@ Utility::Utility(const char *name, int id,
 
     // Initialize water supply systems
     water_supply_systems.emplace_back(std::make_unique<WaterSupplySystems>(
-        name, id, id, this, wwtp_discharge_rule));
+        name, id, id, this, demands_all_realizations, wwtp_discharge_rule));
         
     // Delegate to water supply systems
     water_supply_systems[0]->unrollWaterSourceToWtpVector(water_source_to_wtp,
@@ -224,7 +224,7 @@ Utility::Utility(const char *name, int id,
 
     // Initialize water supply systems (create one default system)
     water_supply_systems.emplace_back(std::make_unique<WaterSupplySystems>(
-        name, id, id, this, wwtp_discharge_rule));
+        name, id, id, this, demands_all_realizations, wwtp_discharge_rule));
         
     // Delegate to water supply systems
     water_supply_systems[0]->unrollWaterSourceToWtpVector(water_source_to_wtp,
@@ -288,7 +288,7 @@ Utility::Utility(Utility &utility) :
     // Initialize water supply systems like in other constructors
     if (!utility.water_supply_systems.empty()) {
         water_supply_systems.emplace_back(std::make_unique<WaterSupplySystems>(
-            utility.name, utility.id, utility.id, this, utility.wwtp_discharge_rule));
+            utility.name, utility.id, utility.id, this, demands_all_realizations, utility.wwtp_discharge_rule));
         
         // Copy the water source connections from the original utility's water supply system
         if (!utility.water_supply_systems.empty()) {
@@ -313,7 +313,7 @@ Utility &Utility::operator=(const Utility &utility) {
     water_supply_systems.clear();
     if (!utility.water_supply_systems.empty()) {
         water_supply_systems.emplace_back(std::make_unique<WaterSupplySystems>(
-            utility.name, utility.id, utility.id, this, utility.wwtp_discharge_rule));
+            utility.name, utility.id, utility.id, this, demands_all_realizations, utility.wwtp_discharge_rule));
         
         // Copy the water source connections from the original utility's water supply system
         if (!utility.water_supply_systems.empty()) {
@@ -469,7 +469,7 @@ void Utility::clearWaterSupplySystems() {
 ////////////////////////////////////////////////
 
 void Utility::updateContingencyFundAndDebtService(
-        double utility_restricted_demand, double demand_multiplier,
+        double utility_unrestricted_demand, double demand_multiplier,
         double demand_offset, double utility_unfulfilled_demand, int week) {
     int week_of_year = Utils::weekOfTheYear(week);
     double unrestricted_price = weekly_average_volumetric_price[week_of_year];
@@ -495,7 +495,7 @@ void Utility::updateContingencyFundAndDebtService(
 
     // calculate fund contributions if there were no shortage.
     double projected_fund_contribution = percent_contingency_fund_contribution *
-                                         utility_restricted_demand *
+                                         utility_unrestricted_demand *
                                          unrestricted_price;
 
     // Calculate actual gross revenue.
@@ -503,7 +503,7 @@ void Utility::updateContingencyFundAndDebtService(
 
     // Calculate losses due to restrictions and transfers.
     double lost_demand_vol_sales =
-            (utility_restricted_demand * (1 - demand_multiplier) +
+            (utility_unrestricted_demand * (1 - demand_multiplier) +
              utility_unfulfilled_demand);
     double revenue_losses = lost_demand_vol_sales * unrestricted_price;
     double transfer_costs = demand_offset * (offset_rate_per_volume -

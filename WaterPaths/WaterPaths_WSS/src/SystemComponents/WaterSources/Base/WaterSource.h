@@ -35,7 +35,7 @@ protected:
     vector<double> allocated_fractions;
     vector<double> supply_allocated_fractions;
 
-    vector<int> *utilities_with_allocations = nullptr;
+    vector<int> *wss_with_allocations = nullptr;
     int wq_pool_id = NON_INITIALIZED;
     double total_allocated_fraction = NON_INITIALIZED;
     bool online;
@@ -65,7 +65,7 @@ public:
     WaterSource(const char *name, const int id, const vector<Catchment *> &catchments,
                 const double capacity, double treatment_capacity, vector<int> connected_sources,
                 const int source_type, vector<double> *allocated_treatment_fractions,
-                vector<double> *allocated_fractions, vector<int> *utilities_with_allocations);
+                vector<double> *allocated_fractions, vector<int> *wss_with_allocations);
 
     WaterSource(const char *name, const int id, const vector<Catchment *> &catchments,
                 const double capacity, double treatment_capacity, vector<int> connected_sources,
@@ -79,7 +79,7 @@ public:
     WaterSource(const char *name, const int id, const vector<Catchment *> &catchments,
                     const double capacity, double treatment_capacity, vector<int> built_in_sequence,
                     const int source_type, vector<double> *allocated_treatment_fractions,
-                    vector<double> *allocated_fractions, vector<int> *utilities_with_allocations,
+                    vector<double> *allocated_fractions, vector<int> *wss_with_allocations,
                     const vector<double> construction_time_range, double permitting_period,
                 Bond &bond);
 
@@ -99,7 +99,7 @@ public:
                                    double wastewater_inflow,
                                    vector<double> &demand_outflow);
 
-    virtual void addTreatmentCapacity(const double added_treatment_capacity, int utility_id);
+    virtual void addTreatmentCapacity(const double added_treatment_capacity, int system_id);
 
     virtual void removeWater(int allocation_id, double volume);
 
@@ -109,7 +109,7 @@ public:
 
     virtual bool skipConstruction(int utility_id) const;
 
-    virtual double getAvailableAllocatedVolume(int utility_id);
+    virtual double getAvailableAllocatedVolume(int system_id);
 
     double getMin_environmental_outflow() const;
 
@@ -139,18 +139,18 @@ public:
 
     virtual void setRealization(unsigned long r, vector<double> &rdm_factors);
 
-    virtual double getAllocatedCapacity(int utility_id);
+    virtual double getAllocatedCapacity(int system_id);
 
-    virtual double getAllocatedFraction(int utility_id);
+    virtual double getAllocatedFraction(int system_id);
 
     double getEvaporated_volume() const;
 
-    virtual double getAllocatedTreatmentCapacity(int utility_id) const;
+    virtual double getAllocatedTreatmentCapacity(int system_id) const;
 
     double getTotal_treatment_capacity() const;
 
     void setAllocations(
-            vector<int> *utilities_with_allocations,
+            vector<int> *wss_with_allocations,
             vector<double> *allocated_fractions,
             vector<double> *allocated_treatment_fractions);
 
@@ -161,7 +161,7 @@ public:
 
     vector<double> getAvailable_allocated_volumes() const;
 
-    vector<int> *getUtilities_with_allocations() const;
+    vector<int> *getwss_with_allocations() const;
 
     double getWastewater_inflow() const;
 
@@ -169,9 +169,9 @@ public:
 
     double getAvailableSupplyVolume() const;
 
-    double getAllocatedInflow(int utility_id) const;
+    double getAllocatedInflow(int system_id) const;
 
-    virtual double getSupplyAllocatedFraction(int utility_id);
+    virtual double getSupplyAllocatedFraction(int system_id);
 
     Bond &getBond(int utility_id);
 

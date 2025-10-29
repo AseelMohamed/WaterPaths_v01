@@ -1,0 +1,28 @@
+# Valgrind Configuration for WaterPaths Memory Diagnostics
+# Save as: .valgrindrc in project root
+
+# General options
+--tool=memcheck
+--leak-check=full
+--show-leak-kinds=all
+--track-origins=yes
+--verbose
+--track-fds=yes
+--gen-suppressions=all
+
+# Output options
+--log-file=valgrind_output_%p.log
+--xml=yes
+--xml-file=valgrind_output_%p.xml
+
+# Memory error detection
+--malloc-fill=0x42
+--free-fill=0x69
+--redzone-size=16
+
+# Performance vs accuracy trade-offs
+--num-callers=50
+--expensive-definedness-checks=yes
+
+# Suppress known false positives (add as needed)
+--suppressions=valgrind_suppressions.supp

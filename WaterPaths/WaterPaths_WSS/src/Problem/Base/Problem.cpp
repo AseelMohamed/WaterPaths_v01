@@ -120,19 +120,19 @@ void Problem::setIODirectory(const string &io_directory) {
     this->io_directory = io_directory;
 }
 
-void Problem::setRDMOptimization(vector<vector<double>> &utilities_rdm,
+void Problem::setRDMOptimization(vector<vector<double>> &wss_rdm,
                                  vector<vector<double>> &water_sources_rdm,
                                  vector<vector<double>> &policies_rdm) {
-    this->utilities_rdm = utilities_rdm;
+    this->wss_rdm = wss_rdm;
     this->water_sources_rdm = water_sources_rdm;
     this->policies_rdm = policies_rdm;
 }
 
-void Problem::setRDMReevaluation(int rdm_no, vector<vector<double>> &utilities_rdm,
+void Problem::setRDMReevaluation(int rdm_no, vector<vector<double>> &wss_rdm,
                                  vector<vector<double>> &water_sources_rdm,
                                  vector<vector<double>> &policies_rdm) {
     this->rdm_no = rdm_no;
-    this->utilities_rdm = utilities_rdm;
+    this->wss_rdm = wss_rdm;
     this->water_sources_rdm = water_sources_rdm;
     this->policies_rdm = policies_rdm;
 }
@@ -216,12 +216,12 @@ Problem::Problem(unsigned long n_weeks) : n_weeks(n_weeks) {
 //
 //    //FIXME: FIGURE OUT NUMBER OF UTILITIES BY CHECKING IF TABLES_R0_U0, TABLES_R0_U1, AND SO ON EXIST.
 //    char table_file_name[150];
-//    for (n_utilities = 0; n_utilities < MAX_NUMBER_OF_UTILITIES; ++n_utilities) {
+//    for (n_wss = 0; n_wss < MAX_NUMBER_OF_UTILITIES; ++n_wss) {
 //        sprintf(table_file_name, "%s%stables_r%lu_u%d",
-//                rof_tables_directory.c_str(), BAR.c_str(), table_data_id, n_utilities);
+//                rof_tables_directory.c_str(), BAR.c_str(), table_data_id, n_wss);
 //        ifstream f(table_file_name);
 //        if (!f.good()) {
-//            if (n_utilities == 0) {
+//            if (n_wss == 0) {
 //                char error[200];
 //                sprintf(error, "Table %s not found.", table_file_name);
 //                throw invalid_argument(error);
@@ -236,14 +236,14 @@ Problem::Problem(unsigned long n_weeks) : n_weeks(n_weeks) {
 //    // Create empty tables
 //    rof_tables = vector<vector<Matrix2D<double>>>(
 //            n_realizations,
-//            vector<Matrix2D<double>>((unsigned long) n_utilities,
+//            vector<Matrix2D<double>>((unsigned long) n_wss,
 //                                     Matrix2D<double>(n_weeks_in_table / n_tiers, n_tiers)));
 //
 //    this->rof_tables_directory = rof_tables_directory;
 //
 //    // Load ROF tables
 //    for (auto r : realizations_to_run_load_tables) {
-//        for (int u = 0; u < n_utilities; ++u) {
+//        for (int u = 0; u < n_wss; ++u) {
 //            file_name = rof_tables_directory + BAR + "tables_r" + to_string(r) + "_u" + to_string(u);
 //            ifstream in_file(file_name, ios_base::binary);
 //            if (!in.good()) {
@@ -291,40 +291,40 @@ Problem::setRofTables(unsigned long n_realizations, string rof_tables_directory)
 
 //    double start_time = omp_get_wtime();
     printf("Reading ROF tables.\n");
-    string file_name = rof_tables_directory + "tables_r0_u0.csv";
-    auto data_r0_u0 = Utils::parse2DCsvFile(file_name);
-    auto n_weeks_in_table = (int) data_r0_u0.size();
-    auto n_tiers = (int) data_r0_u0.at(0).size();
+    string file_name = rof_tables_directory + "tables_r0_wss0.csv";
+    auto data_r0_wss0 = Utils::parse2DCsvFile(file_name);
+    auto n_weeks_in_table = (int) data_r0_wss0.size();
+    auto n_tiers = (int) data_r0_wss0.at(0).size();
 
     if (n_tiers != NO_OF_INSURANCE_STORAGE_TIERS) {
         string error = "Number of tiers in tables does not match number of tiers for this problem.";
         throw invalid_argument(error);
     }
 
-    n_utilities = 0;
-    string fname = rof_tables_directory + "tables_r0_u0.csv";
+    n_wss = 0;
+    string fname = rof_tables_directory + "tables_r0_wss0.csv";
     fstream f;
     std::ifstream ifile(fname.c_str());
     while ((bool) ifile) {
-        n_utilities += 1;
-        fname = rof_tables_directory + "tables_r0_u" + to_string(n_utilities) + ".csv";
+        n_wss += 1;
+        fname = rof_tables_directory + "tables_r0_wss" + to_string(n_wss) + ".csv";
         ifile = std::ifstream(fname.c_str());
     }
 
     rof_tables = vector<vector<Matrix2D<int>>>(
             n_realizations,
-            vector<Matrix2D<int>>((unsigned long) n_utilities,
+            vector<Matrix2D<int>>((unsigned long) n_wss,
                                      Matrix2D<int>(n_weeks_in_table, n_tiers)));
 
     for (unsigned long r = 0; r < n_realizations; ++r) {
 //        printf("Reading tables for realization %lu.\n", r);
-        for (int u = 0; u < n_utilities; ++u) {
-            string file_name = rof_tables_directory + "tables_r" + to_string(r) + "_u" + to_string(u) + ".csv";
+        for (int u = 0; u < n_wss; ++u) {
+            string file_name = rof_tables_directory + "tables_r" + to_string(r) + "_wss" + to_string(u) + ".csv";
             auto tables_utility_week = Utils::parse2DCsvFile(file_name);
 
             for (int w = 0; w < n_weeks; ++w) {
                 auto tables_int = vector<int>(tables_utility_week[w].begin(), tables_utility_week[w].end());
-                rof_tables[r][u].setPartialData(w, tables_int.data(), tables_utility_week[w].size());
+                rof_tables[r][u].setPartialData((int)w, tables_int.data(), tables_utility_week[w].size());
             }
 //        u = 1;
 //        file_name = rof_tables_directory + "tables_r" + to_string(r) + "_u" + to_string(u) + ".csv";

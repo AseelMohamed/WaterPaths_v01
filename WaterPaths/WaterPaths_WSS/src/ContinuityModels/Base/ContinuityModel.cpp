@@ -45,13 +45,9 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
     }
 
     // Link water sources to WSS within each utility by passing pointers of the former to each WSS.
-    //printf("debug: water_sources_to_wss.size() = %zu\n", water_sources_to_wss.size());
     for (unsigned long u = 0; u < wss.size(); ++u) {
-        //printf("debug: Processing utility %lu, wss[%lu] = %p\n", u, u, continuity_wss[u]);
-        //printf("debug: water_sources_to_wss[%lu].size() = %zu\n", u, water_sources_to_wss[u].size());
         for (unsigned long ws = 0; ws < water_sources_to_wss[u].size(); ++ws) {
             auto ws_id = water_sources_to_wss[u][ws];
-            //printf("debug: Adding water source %d to utility %lu (wss = %p)\n", ws_id, u, continuity_wss[u]);
             if (ws_id >= continuity_water_sources.size()) {
                 string error = "Water source " + to_string(ws_id) + " was not added to list of water sources passed to the continuity model.";
                 throw invalid_argument(error);
@@ -60,28 +56,17 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
                     continuity_water_sources.at((unsigned int) ws_id);
             this->continuity_wss[u]->addWaterSource(water_source);
         }
-    }
-
-    // Create table showing which utilities draw water from each water source.
-    //printf("debug: Creating wss_to_water_sources and water_sources_online_to_wss tables\n");
-    //printf("debug: water_sources.size() = %zu, wss.size() = %zu\n", water_sources.size(), wss.size());
-    
+    }   
     wss_to_water_sources.assign(water_sources.size(), vector<int>(0));
     water_sources_online_to_wss.assign(water_sources.size(), vector<int>(0));
     
     for (unsigned long u = 0; u < wss.size(); ++u) {
-        //printf("debug: Processing utility %lu for table creation\n", u);
-        //printf("debug: water_sources_to_wss[%lu].size() = %zu\n", u, water_sources_to_wss[u].size());
         for (const int &ws : water_sources_to_wss[u]) {
-            //printf("debug: Processing water source %d for utility %lu\n", ws, u);
             if (ws >= 0 && ws < static_cast<int>(wss_to_water_sources.size())) {
                 wss_to_water_sources[ws].push_back(u);
                 if (ws < static_cast<int>(water_sources.size()) && water_sources[ws]->isOnline()) {
-                    //printf("debug: Water source %d is online, adding to online list\n", ws);
                     water_sources_online_to_wss[u].push_back(ws);
                 }
-            } else {
-                //printf("debug: ERROR - Water source %d out of bounds (max = %zu)\n", ws, wss_to_water_sources.size());
             }
         }
     }

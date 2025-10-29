@@ -28,6 +28,7 @@ public:
                       int system_id,
                       int utility_id, 
                       Utility* owner_utility,
+                      vector<vector<double>>& demands_all_realizations,
                       const WwtpDischargeRule& wwtp_rule);
 
     WaterSupplySystems(const string& name,
@@ -55,6 +56,9 @@ public:
                       const vector<int> &rof_infra_construction_order,
                       const vector<int> &demand_infra_construction_order,
                       const vector<double> &infra_construction_triggers);
+
+    // Copy constructor for proper deep copying
+    WaterSupplySystems(const WaterSupplySystems& other);
 
     ~WaterSupplySystems();
     

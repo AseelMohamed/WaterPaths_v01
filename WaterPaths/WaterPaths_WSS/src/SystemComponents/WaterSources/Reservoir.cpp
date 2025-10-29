@@ -122,9 +122,9 @@ Reservoir::Reservoir(
         DataSeries *storage_area_curve,
         vector<double> *allocated_treatment_fractions,
         vector<double> *allocated_fractions,
-        vector<int> *utilities_with_allocations, int source_type) :
+        vector<int> *wss_with_allocations, int source_type) :
         WaterSource(name, id, catchments, capacity, max_treatment_capacity, vector<int>(), source_type,
-                    allocated_treatment_fractions, allocated_fractions, utilities_with_allocations),
+                    allocated_treatment_fractions, allocated_fractions, wss_with_allocations),
         storage_area_curve(storage_area_curve), fixed_area(false),
         evaporation_series(evaporation_series) {
 
@@ -151,9 +151,9 @@ Reservoir::Reservoir(
         EvaporationSeries &evaporation_series, double storage_area,
         vector<double> *allocated_treatment_fractions,
         vector<double> *allocated_fractions,
-        vector<int> *utilities_with_allocations, int source_type) :
+        vector<int> *wss_with_allocations, int source_type) :
         WaterSource(name, id, catchments, capacity, max_treatment_capacity, vector<int>(), source_type,
-                    allocated_treatment_fractions, allocated_fractions, utilities_with_allocations),
+                    allocated_treatment_fractions, allocated_fractions, wss_with_allocations),
         storage_area_curve(nullptr), area(storage_area) , fixed_area(true),
         evaporation_series(evaporation_series) {}
 
@@ -173,11 +173,11 @@ Reservoir::Reservoir(
 Reservoir::Reservoir(const char *name, const int id, const vector<Catchment *> &catchments, const double capacity,
                      const double max_treatment_capacity, EvaporationSeries &evaporation_series,
                      DataSeries *storage_area_curve, vector<double> *allocated_treatment_fractions,
-                     vector<double> *allocated_fractions, vector<int> *utilities_with_allocations,
+                     vector<double> *allocated_fractions, vector<int> *wss_with_allocations,
                      const vector<double> &construction_time_range, double permitting_period,
                      Bond &bond, int source_type) :
         WaterSource(name, id, catchments, capacity, max_treatment_capacity, vector<int>(), source_type,
-                    allocated_treatment_fractions, allocated_fractions, utilities_with_allocations,
+                    allocated_treatment_fractions, allocated_fractions, wss_with_allocations,
                     construction_time_range, permitting_period, bond),
         storage_area_curve(storage_area_curve), fixed_area(false),
         evaporation_series(evaporation_series) {
@@ -204,11 +204,11 @@ Reservoir::Reservoir(const char *name, const int id, const vector<Catchment *> &
 Reservoir::Reservoir(const char *name, const int id, const vector<Catchment *> &catchments, const double capacity,
                      const double max_treatment_capacity, EvaporationSeries &evaporation_series,
                      double storage_area, vector<double> *allocated_treatment_fractions,
-                     vector<double> *allocated_fractions, vector<int> *utilities_with_allocations,
+                     vector<double> *allocated_fractions, vector<int> *wss_with_allocations,
                      const vector<double> &construction_time_range, double permitting_period,
                      Bond &bond, int source_type) :
         WaterSource(name, id, catchments, capacity, max_treatment_capacity, vector<int>(), source_type,
-                    allocated_treatment_fractions, allocated_fractions, utilities_with_allocations,
+                    allocated_treatment_fractions, allocated_fractions, wss_with_allocations,
                     construction_time_range, permitting_period, bond),
         storage_area_curve(nullptr), area(storage_area), fixed_area(true),
         evaporation_series(evaporation_series) {}

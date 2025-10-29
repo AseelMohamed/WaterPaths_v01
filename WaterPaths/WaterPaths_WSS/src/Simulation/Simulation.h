@@ -27,11 +27,11 @@ private:
     unsigned long n_realizations;
     vector<WaterSource *> &water_sources;
     Graph &water_sources_graph;
-    const vector<vector<int>> &water_sources_to_utilities;
+    const vector<vector<int>> &water_sources_to_wss;
     vector<Utility *> &utilities;
     const vector<DroughtMitigationPolicy *> &drought_mitigation_policies;
     vector<MinEnvFlowControl *> &min_env_flow_controls;
-    vector<vector<double>>& utilities_rdm;
+    vector<vector<double>>& wss_rdm;
     vector<vector<double>>& water_sources_rdm;
     vector<vector<double>>& policies_rdm;
 
@@ -46,22 +46,22 @@ public:
 
     Simulation(
             vector<WaterSource *> &water_sources, Graph &water_sources_graph,
-            const vector<vector<int>> &water_sources_to_utilities,
+            const vector<vector<int>> &water_sources_to_wss,
             vector<Utility *> &utilities,
             const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
             vector<MinEnvFlowControl *> &min_env_flow_controls,
-            vector<vector<double>>& utilities_rdm,
+            vector<vector<double>>& wss_rdm,
             vector<vector<double>>& water_sources_rdm,
             vector<vector<double>>& policies_rdm,
             const unsigned long total_simulation_time,
             vector<unsigned long> &realizations_to_run);
 
     Simulation(vector<WaterSource *> &water_sources, Graph &water_sources_graph,
-               const vector<vector<int>> &water_sources_to_utilities,
+               const vector<vector<int>> &water_sources_to_wss,
                vector<Utility *> &utilities,
                const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                vector<MinEnvFlowControl *> &min_env_flow_controls,
-               vector<vector<double>> &utilities_rdm,
+               vector<vector<double>> &wss_rdm,
                vector<vector<double>> &water_sources_rdm,
                vector<vector<double>> &policies_rdm,
                const unsigned long total_simulation_time,
@@ -71,11 +71,11 @@ public:
                string &rof_tables_folder);
 
     Simulation(vector<WaterSource *> &water_sources, Graph &water_sources_graph,
-               const vector<vector<int>> &water_sources_to_utilities,
+               const vector<vector<int>> &water_sources_to_wss,
                vector<Utility *> &utilities,
                const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                vector<MinEnvFlowControl *> &min_env_flow_controls,
-               vector<vector<double>> &utilities_rdm,
+               vector<vector<double>> &wss_rdm,
                vector<vector<double>> &water_sources_rdm,
                vector<vector<double>> &policies_rdm,
                const unsigned long total_simulation_time,
@@ -89,10 +89,10 @@ public:
     MasterDataCollector *runFullSimulation(unsigned long n_threads, double *vars);
 
     void setupSimulation(vector<WaterSource *> &water_sources, Graph &water_sources_graph,
-                             const vector<vector<int>> &water_sources_to_utilities, vector<Utility *> &utilities,
+                             const vector<vector<int>> &water_sources_to_wss, vector<Utility *> &utilities,
                              const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                              vector<MinEnvFlowControl *> &min_env_flow_controls,
-                             vector<vector<double>> &utilities_rdm, vector<vector<double>> &water_sources_rdm,
+                             vector<vector<double>> &wss_rdm, vector<vector<double>> &water_sources_rdm,
                              vector<vector<double>> &policies_rdm, vector<unsigned long> &realizations_to_run);
 
     void createContinuityModels(unsigned long realization, ContinuityModelRealization *&realization_model,

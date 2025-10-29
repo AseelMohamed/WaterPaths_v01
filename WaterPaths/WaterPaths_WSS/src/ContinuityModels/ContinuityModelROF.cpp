@@ -35,7 +35,7 @@ ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
 
     for (int u = 0; u < n_wss; ++u) {
         if (use_precomputed_rof_tables != IMPORT_ROF_TABLES) {
-            ut_storage_to_rof_table.emplace_back(
+            wss_storage_to_rof_table.emplace_back(
                     total_weeks_simulation,
                     (unsigned long) NUMBER_REALIZATIONS_ROF);
         }
@@ -68,20 +68,7 @@ ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
     }
 }
 
-ContinuityModelROF::~ContinuityModelROF() {
-    // The ROF model owns its own water sources and WSS (continuity_water_sources and continuity_wss)
-    // which will be deleted by the base class destructor.
-    // 
-    // The realization_water_sources and realization_wss are just observation pointers
-    // to objects owned by the realization model - we must NOT delete them.
-    // Nullify these observation pointers to prevent accidental deletion.
-    for (auto& ws : realization_water_sources) {
-        ws = nullptr;  // Just an observation pointer, don't delete
-    }
-    for (auto& wss : realization_wss) {
-        wss = nullptr; // Just an observation pointer, don't delete
-    }
-    
+ContinuityModelROF::~ContinuityModelROF() {    
     delete[] storage_wout_downstream;
 }
 
@@ -183,7 +170,7 @@ vector<double> ContinuityModelROF::calculateShortTermROFTable(int week) {
     double m;
     for (int u = 0; u < n_wss; ++u) {
         // Get current stored volume for utility u.
-        double utility_storage =
+        double wss_storage =
                 realization_wss[u]->getTotal_stored_volume();
         // Ratio of current and status-quo utility storage capacities
         //        double m = current_and_base_storage_capacity_ratio[u];
@@ -193,7 +180,7 @@ vector<double> ContinuityModelROF::calculateShortTermROFTable(int week) {
         // shifting the table around based on new infrastructure -- the
         // shift is made by the part (m - 1) * STORAGE_CAPACITY_RATIO_FAIL *
         // wss_base_storage_capacity[u] - current_storage_table_shift[u]
-        double storage_convert = utility_storage +
+        double storage_convert = wss_storage +
                                  STORAGE_CAPACITY_RATIO_FAIL *
                                          wss_base_storage_capacity[u] *
                                  (1. - m) + current_storage_table_shift[u];
@@ -204,10 +191,10 @@ vector<double> ContinuityModelROF::calculateShortTermROFTable(int week) {
 
         //TODO: Make this more efficient if profiling shows the need.
         for (int r = 0; r < NUMBER_REALIZATIONS_ROF; ++r) {
-            if (realization_wss[u]->getUnrestrictedDemand(week) > 0.9 * realization_wss[u]->getTotal_treatment_capacity()) {
+            if (realization_wss[u]->getUnrestrictedDemand(week) > 0.9 * continuity_wss[u]->getTotal_treatment_capacity()) {
                 risk_of_failure[u] = 1.;
             } else {
-                auto x = ut_storage_to_rof_table[u](week, r);
+                auto x = wss_storage_to_rof_table[u](week, r);
                 if (tier < (double) NO_OF_INSURANCE_STORAGE_TIERS - x) {
                     risk_of_failure[u] += 0.5 / NUMBER_REALIZATIONS_ROF;
                 }
@@ -347,30 +334,24 @@ void ContinuityModelROF::updateStorageToROFTable(
 
         // Checks for wss failures.
         int count_fails = 0;
-        //printf("debug: Starting WSS failure checks, n_wss = %d, realization_wss.size() = %lu\n", 
-            //    n_wss, realization_wss.size());
         for (int u = 0; u < n_wss; ++u) {
-            //printf("debug: Processing WSS %d\n", u);
-            double utility_storage = 0;
+            double wss_storage = 0;
             // Calculate combined stored volume for each utility based on
             // shifted storages.
-            //printf("debug: water_sources_online_to_wss[%d].size() = %lu\n", u, water_sources_online_to_wss[u].size());
             for (int ws : water_sources_online_to_wss[u]) {
-                //printf("debug: Processing water source %d for WSS %d\n", ws, u);
                 bool has_treatment = realization_wss[u]->hasTreatmentConnected(ws);
-                utility_storage += available_volumes_shifted[ws] *
+                wss_storage += available_volumes_shifted[ws] *
                                    continuity_water_sources[ws]->getSupplyAllocatedFraction(
                                            u) *
                                    (has_treatment && realization_water_sources[ws]->isOnline());
             }
-            //printf("debug: Completed WSS %d\n", u);
 
             // Register failure in the table for each utility meeting
             // failure criteria. The treatment capacity criterion is INTENTIONALLY
             // missing, as it will be accounted for when using the tables--the
             // tables can theoretically only account for storage risk.
-            if (utility_storage / wss_capacities[u] < STORAGE_CAPACITY_RATIO_FAIL) {
-                auto p = ut_storage_to_rof_table[u].getPointerToElement(
+            if (wss_storage / wss_capacities[u] < STORAGE_CAPACITY_RATIO_FAIL) {
+                auto p = wss_storage_to_rof_table[u].getPointerToElement(
                         week,
                         rof_realization_number
                         );
@@ -382,10 +363,10 @@ void ContinuityModelROF::updateStorageToROFTable(
                 count_fails++;
             }
         }
-        delete[] delta_storage;
-        delete[] available_volumes_shifted;
+        // delete[] delta_storage;
+        // delete[] available_volumes_shifted;
     }
-    delete[] available_volumes;
+    // delete[] available_volumes;
 }
 
 //FIXME: MAKE THIS MORE EFFICIENT. THIS METHOD IS THE MOST EXPENSIVE ONE IN THE CODE.
@@ -441,13 +422,13 @@ void ContinuityModelROF::printROFTable(const string &folder) {
     for (int u = 0; u < n_wss; ++u) {
 
         string file_name =
-                folder + "tables_r" + to_string(realization_id) + "_u" +
+                folder + "tables_r" + to_string(realization_id) + "_wss" +
                 to_string(u) + ".csv";
         ofstream output_file(file_name);
 
-        auto num_weeks = ut_storage_to_rof_table[u].get_i();
+        auto num_weeks = wss_storage_to_rof_table[u].get_i();
         for (int w = 0; w < num_weeks; ++w) {
-            auto data = ut_storage_to_rof_table[u].getPointerToElement(w, 0);
+            auto data = wss_storage_to_rof_table[u].getPointerToElement(w, 0);
             std::ostringstream week_table;
             week_table << std::fixed;
             week_table << std::setprecision(0);
@@ -575,13 +556,13 @@ void ContinuityModelROF::updateOnlineInfrastructure(int week) {
 void ContinuityModelROF::setROFTablesAndShifts(
         const vector<Matrix2D<int>> &storage_to_rof_table,
         const vector<vector<double>> &table_storage_shift) {
-    this->ut_storage_to_rof_table = storage_to_rof_table;
+    this->wss_storage_to_rof_table = storage_to_rof_table;
     this->table_storage_shift = table_storage_shift;
 }
 
 
-vector<Matrix2D<int>> &ContinuityModelROF::getUt_storage_to_rof_table() {
-    return ut_storage_to_rof_table;
+vector<Matrix2D<int>> &ContinuityModelROF::getWSS_storage_to_rof_table() {
+    return wss_storage_to_rof_table;
 }
 
 /**

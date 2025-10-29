@@ -33,7 +33,7 @@ protected:
     unsigned long  n_weeks;
     unsigned long  solution_no;
     unsigned long n_threads;
-    int n_utilities = NON_INITIALIZED;
+    int n_wss = NON_INITIALIZED;
     string io_directory;
     string fname_sufix;
     string evap_inflows_suffix;
@@ -47,7 +47,7 @@ protected:
     int rdm_no = NON_INITIALIZED;
     int import_export_rof_tables;
     double table_gen_storage_multiplier;
-    vector<vector<double>> utilities_rdm;
+    vector<vector<double>> wss_rdm;
     vector<vector<double>> water_sources_rdm;
     vector<vector<double>> policies_rdm;
     vector<vector<Matrix2D<int>>> rof_tables;
@@ -74,10 +74,10 @@ public:
 
     vector<double> calculateAndPrintObjectives(bool print_files);
 
-    void setRDMOptimization(vector<vector<double>> &utilities_rdm, vector<vector<double>> &water_sources_rdm,
+    void setRDMOptimization(vector<vector<double>> &wss_rdm, vector<vector<double>> &water_sources_rdm,
                             vector<vector<double>> &policies_rdm);
 
-    void setRDMReevaluation(int rdm_no, vector<vector<double>> &utilities_rdm,
+    void setRDMReevaluation(int rdm_no, vector<vector<double>> &wss_rdm,
                                 vector<vector<double>> &water_sources_rdm, vector<vector<double>> &policies_rdm);
 
     void setN_threads(unsigned long n_threads);

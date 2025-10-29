@@ -11,8 +11,8 @@ AllocatedReservoirDataCollector::AllocatedReservoirDataCollector(AllocatedReserv
         : ReservoirDataCollector(allocated_reservoir, ALLOCATED_RESERVOIR, (7 + (int) allocated_reservoir->
                 getAvailable_allocated_volumes().size()) * COLUMN_WIDTH, realization),
           allocated_reservoir(allocated_reservoir),
-          utilities_with_allocations
-                  (*allocated_reservoir->getUtilities_with_allocations()) {
+          wss_with_allocations
+                  (*allocated_reservoir->getwss_with_allocations()) {
 }
 
 string AllocatedReservoirDataCollector::printTabularString(int week) {
@@ -22,7 +22,7 @@ string AllocatedReservoirDataCollector::printTabularString(int week) {
 
     out_stream << output;
 
-    for (int u : utilities_with_allocations)
+    for (int u : wss_with_allocations)
         out_stream << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
                    << allocated_stored_volumes[week][u];
 
@@ -36,7 +36,7 @@ string AllocatedReservoirDataCollector::printCompactString(int week) {
 
     out_stream << output;
 
-    for (int u : utilities_with_allocations) {
+    for (int u : wss_with_allocations) {
         out_stream << allocated_stored_volumes[week][u] << ",";
         out_stream << allocated_treatment_cap[week][u] << ",";
     }
@@ -51,7 +51,7 @@ string AllocatedReservoirDataCollector::printTabularStringHeaderLine1() {
 
     out_stream << output;
 
-    for (unsigned long u = 0; u <allocated_reservoir->getUtilities_with_allocations()->size(); ++u)
+    for (unsigned long u = 0; u <allocated_reservoir->getwss_with_allocations()->size(); ++u)
         out_stream << setw(COLUMN_WIDTH) << "Stored V.";
 
     return out_stream.str();
@@ -64,7 +64,7 @@ string AllocatedReservoirDataCollector::printTabularStringHeaderLine2() {
 
     out_stream << output;
 
-    for (int u : *(allocated_reservoir->getUtilities_with_allocations()))
+    for (int u : *(allocated_reservoir->getwss_with_allocations()))
         out_stream << setw(COLUMN_WIDTH) << "Alloc. " + to_string(u);
 
     return out_stream.str();
@@ -74,7 +74,7 @@ string AllocatedReservoirDataCollector::printCompactStringHeader() {
 
     stringstream out_stream;
 
-    for (int u : utilities_with_allocations) {
+    for (int u : wss_with_allocations) {
         out_stream << id << "valloc_" + to_string(u) << ",";
         out_stream << id << "talloc_" + to_string(u) << ",";
     }

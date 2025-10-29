@@ -22,7 +22,7 @@ protected:
     int beginning_tier = 0;
     vector<WaterSource *> realization_water_sources;
     vector<WaterSupplySystems *> realization_wss;
-    vector<Matrix2D<int>> ut_storage_to_rof_table;
+    vector<Matrix2D<int>> wss_storage_to_rof_table;
 
     vector<vector<double>> table_storage_shift;
     vector<double> wss_base_storage_capacity;
@@ -70,7 +70,7 @@ public:
                                  int week,
                                  const double *to_full_toposort, int rof_realization_number);
 
-    vector<Matrix2D<int>> &getUt_storage_to_rof_table();
+    vector<Matrix2D<int>> &getWSS_storage_to_rof_table();
 
     void shiftStorages(double *available_volumes_shifted, const double
     *delta_storage);

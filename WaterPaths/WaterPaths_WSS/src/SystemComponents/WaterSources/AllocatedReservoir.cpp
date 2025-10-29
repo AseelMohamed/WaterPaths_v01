@@ -12,7 +12,7 @@ AllocatedReservoir::AllocatedReservoir(
         const char *name, const int id, const vector<Catchment *> &catchments,
         const double capacity, const double max_treatment_capacity,
         EvaporationSeries &evaporation_series, DataSeries *storage_area_curve,
-        vector<int> *utilities_with_allocations,
+        vector<int> *wss_with_allocations,
         vector<double> *allocated_fractions, vector<double> *allocated_treatment_fractions)
         : Reservoir(name,
                     id,
@@ -23,7 +23,7 @@ AllocatedReservoir::AllocatedReservoir(
                     storage_area_curve,
                     allocated_treatment_fractions,
                     allocated_fractions,
-                    utilities_with_allocations,
+                    wss_with_allocations,
                     ALLOCATED_RESERVOIR),
           has_water_quality_pool(wq_pool_id != NON_INITIALIZED) {
 }
@@ -32,11 +32,11 @@ AllocatedReservoir::AllocatedReservoir(const char *name, const int id, const vec
                                        const double capacity, const double max_treatment_capacity,
                                        EvaporationSeries &evaporation_series, DataSeries *storage_area_curve,
                                        const vector<double> &construction_time_range, double permitting_period,
-                                       Bond &bond, vector<int> *utilities_with_allocations,
+                                       Bond &bond, vector<int> *wss_with_allocations,
                                        vector<double> *allocated_fractions,
                                        vector<double> *allocated_treatment_fractions)
         : Reservoir(name, id, catchments, capacity, max_treatment_capacity, evaporation_series, storage_area_curve,
-                    allocated_treatment_fractions, allocated_fractions, utilities_with_allocations,
+                    allocated_treatment_fractions, allocated_fractions, wss_with_allocations,
                     construction_time_range, permitting_period, bond, ALLOCATED_RESERVOIR),
           has_water_quality_pool(wq_pool_id != NON_INITIALIZED) {
 }
@@ -45,7 +45,7 @@ AllocatedReservoir::AllocatedReservoir(
         const char *name, const int id, const vector<Catchment *> &catchments,
         const double capacity, const double max_treatment_capacity,
         EvaporationSeries &evaporation_series, double storage_area,
-        vector<int> *utilities_with_allocations,
+        vector<int> *wss_with_allocations,
         vector<double> *allocated_fractions, vector<double>
         *allocated_treatment_fractions)
         : Reservoir(name,
@@ -57,7 +57,7 @@ AllocatedReservoir::AllocatedReservoir(
                     storage_area,
                     allocated_treatment_fractions,
                     allocated_fractions,
-                    utilities_with_allocations,
+                    wss_with_allocations,
                     ALLOCATED_RESERVOIR),
           has_water_quality_pool(wq_pool_id != NON_INITIALIZED) {
 }
@@ -66,11 +66,11 @@ AllocatedReservoir::AllocatedReservoir(const char *name, const int id, const vec
                                        const double capacity, const double max_treatment_capacity,
                                        EvaporationSeries &evaporation_series, double storage_area,
                                        const vector<double> &construction_time_range, double permitting_period,
-                                       Bond &bond, vector<int> *utilities_with_allocations,
+                                       Bond &bond, vector<int> *wss_with_allocations,
                                        vector<double> *allocated_fractions,
                                        vector<double> *allocated_treatment_fractions)
         : Reservoir(name, id, catchments, capacity, max_treatment_capacity, evaporation_series, storage_area,
-                    allocated_treatment_fractions, allocated_fractions, utilities_with_allocations,
+                    allocated_treatment_fractions, allocated_fractions, wss_with_allocations,
                     construction_time_range, permitting_period, bond, ALLOCATED_RESERVOIR),
           has_water_quality_pool(wq_pool_id != NON_INITIALIZED) {
 }
@@ -144,7 +144,7 @@ void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow
     // calculate spillage and set all allocations to full. Otherwise,
     // distributed inflows and outflows among respective allocations.
     if (available_volume_new > capacity) {
-        for (int u : *utilities_with_allocations)
+        for (int u : *wss_with_allocations)
             available_allocated_volumes[u] = this->capacity *
                                              allocated_fractions[u];
         total_outflow = outflow_new + available_volume_new - capacity;
@@ -174,7 +174,7 @@ void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow
             if (overallocation) {
                 // Calculate combined excess allocation and combined allocation
                 // fraction.
-                for (int u : *utilities_with_allocations) {
+                for (int u : *wss_with_allocations) {
                     // Calculation of amount exceeding all individual allocations
                     if (available_allocated_volumes[u] >=
                         allocated_capacities[u]) {
@@ -191,7 +191,7 @@ void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow
                 double rellocation_excess = 0;
                 while (excess_allocated_water > 0 &&
                        fraction_needing_water > 0) {
-                    for (int u : *utilities_with_allocations) {
+                    for (int u : *wss_with_allocations) {
                         // Redistribute excess based on allocations fractions.
                         if (available_allocated_volumes[u] <
                             allocated_capacities[u]) {
@@ -217,7 +217,7 @@ void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow
                     excess_allocated_water = rellocation_excess;
                     rellocation_excess = 0;
                     fraction_needing_water = 0;
-                    for (int u : *utilities_with_allocations) {
+                    for (int u : *wss_with_allocations) {
                         if (available_allocated_volumes[u] <
                             allocated_capacities[u])
                             fraction_needing_water += allocated_fractions[u];
@@ -226,7 +226,7 @@ void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow
 
                 // If there's still an excess but all allocations are at capacity,
                 // release the rest as environmental flows.
-                for (int u : *utilities_with_allocations) {
+                for (int u : *wss_with_allocations) {
                     if (available_allocated_volumes[u] >
                         allocated_capacities[u]) {
                         total_outflow += available_allocated_volumes[u] -
@@ -247,14 +247,6 @@ void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow
     double cont_error = abs(available_volume_old - direct_demand + total_upstream_inflow +
                             upstream_catchment_inflow - evaporated_volume -
                             total_outflow - available_volume) - abs(continuity_error);
-
-    // Debug output - print continuity variables
-    // printf("DEBUG [%s] Week %d: cont_error=%.4f, avail_vol_old=%.4f, direct_demand=%.4f, "
-    //        "total_upstream_inflow=%.4f, upstream_catchment_inflow=%.4f, evaporated_volume=%.4f, "
-    //        "total_outflow=%.4f, available_volume=%.4f, continuity_error=%.4f\n",
-    //        name, week, cont_error, available_volume_old, direct_demand, 
-    //        total_upstream_inflow, upstream_catchment_inflow, evaporated_volume,
-    //        total_outflow, available_volume, continuity_error);
 
     if (continuity_error > 0) {
         printf("Warning: continuity error of %f in allocated reservoir %d.\n", continuity_error, id);
@@ -297,7 +289,7 @@ void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow
 void AllocatedReservoir::addCapacity(double capacity) {
     WaterSource::addCapacity(capacity);
 
-    for (int i : *utilities_with_allocations)
+    for (int i : *wss_with_allocations)
         allocated_capacities[i] += capacity * allocated_fractions[i];
 }
 
@@ -308,18 +300,18 @@ void AllocatedReservoir::addCapacity(double capacity) {
  * have one utility only building an exclusive plant, the fraction will be 1.
  * @param added_plant_treatment_capacity
  * @param allocated_fraction_of_total_capacity
- * @param utility_id
+ * @param system_id
  */
-void AllocatedReservoir::addTreatmentCapacity(const double added_plant_treatment_capacity, int utility_id) {
-    WaterSource::addTreatmentCapacity(added_plant_treatment_capacity, utility_id);
+void AllocatedReservoir::addTreatmentCapacity(const double added_plant_treatment_capacity, int system_id) {
+    WaterSource::addTreatmentCapacity(added_plant_treatment_capacity, system_id);
 
     // Add capacity to respective treatment allocation.
-    allocated_treatment_capacities[utility_id] +=
+    allocated_treatment_capacities[system_id] +=
             added_plant_treatment_capacity;
 
     // Update treatment allocation fractions based on new allocated amounts
     // and new total treatment capacity.
-    for (int i = 0; i < (int) utilities_with_allocations->size(); ++i) {
+    for (int i = 0; i < (int) wss_with_allocations->size(); ++i) {
         allocated_treatment_fractions[i] = allocated_treatment_capacities[i]
                                            / total_treatment_capacity;
     }
@@ -331,8 +323,8 @@ bool AllocatedReservoir::mass_balance_with_wq_pool(double net_inflow,
     bool overallocation = false;
     int u;
     double negative_utility_allocation = 0;
-    for (int i = 0; i < (int) utilities_with_allocations->size() - 1; ++i) {
-        u = (*utilities_with_allocations)[i];
+    for (int i = 0; i < (int) wss_with_allocations->size() - 1; ++i) {
+        u = (*wss_with_allocations)[i];
         // Split inflows and evaporation among allocations and
         // subtract demands.
         available_allocated_volumes[u] +=
@@ -357,7 +349,7 @@ bool AllocatedReservoir::mass_balance_with_wq_pool(double net_inflow,
 
     // the water quality pool has no demand but provides the
     // minimum environmental flows.
-    u = utilities_with_allocations->back();
+    u = wss_with_allocations->back();
     available_allocated_volumes[u] +=
             net_inflow * allocated_fractions[u] -
             min_environmental_outflow + negative_utility_allocation;
@@ -388,7 +380,7 @@ bool AllocatedReservoir::mass_balance_without_wq_pool(double net_inflow,
                                                    &demand_outflow) {
     bool overallocation = false;
     net_inflow -= min_environmental_outflow;
-    for (int u : *utilities_with_allocations) {
+    for (int u : *wss_with_allocations) {
         // Split inflows, min environmental outflows and evaporation among
         // allocations and subtract demands.
         available_allocated_volumes[u] +=
@@ -407,49 +399,73 @@ bool AllocatedReservoir::mass_balance_without_wq_pool(double net_inflow,
 void AllocatedReservoir::setOnline() {
     Reservoir::setOnline();
 
-    // start at full capacity to ensure valid continuity calculations.
-    available_volume = capacity;
-    //set all allocated volumes to their full capacity proportionally
-    for (int u : *utilities_with_allocations) {
-        available_allocated_volumes[u] = capacity * allocated_fractions[u];
+    // start empty and gradually fill as inflows start coming in.
+    available_volume = 0;
+    //set all allocated volumes to zero
+    for (int u : *wss_with_allocations) {
+        available_allocated_volumes[u] = 0;
     }
 }
 
-double AllocatedReservoir::getAvailableAllocatedVolume(int utility_id) {
-    return available_allocated_volumes[utility_id];
+double AllocatedReservoir::getAvailableAllocatedVolume(int system_id) {
+    // Bounds check: if this WSS doesn't have allocations from this reservoir, return 0
+    if (system_id < 0 || system_id >= (int)available_allocated_volumes.size()) {
+        return 0.0;
+    }
+    return available_allocated_volumes[system_id];
 }
 
 void AllocatedReservoir::removeWater(int allocation_id, double volume) {
+    // Bounds check: if this WSS doesn't have allocations from this reservoir, ignore
+    if (allocation_id < 0 || allocation_id >= (int)available_allocated_volumes.size()) {
+        return;
+    }
     available_allocated_volumes[allocation_id] -= volume;
     available_volume -= volume;
     total_demand += volume;
     policy_added_demand += volume;
 }
 
-double AllocatedReservoir::getAllocatedCapacity(int utility_id) {
-    return allocated_capacities[utility_id];
+double AllocatedReservoir::getAllocatedCapacity(int system_id) {
+    return allocated_capacities[system_id];
 }
 
 void AllocatedReservoir::setFull() {
     WaterSource::setFull();
-    for (int u : *utilities_with_allocations)
+    for (int u : *wss_with_allocations)
         available_allocated_volumes[u] = allocated_capacities[u];
 }
 
-double AllocatedReservoir::getAllocatedFraction(int utility_id) {
-    return allocated_fractions[utility_id];
+double AllocatedReservoir::getAllocatedFraction(int system_id) {
+    // Bounds check: if this WSS doesn't have allocations from this reservoir, return 0
+    if (system_id < 0 || system_id >= (int)allocated_fractions.size()) {
+        return 0.0;
+    }
+    return allocated_fractions[system_id];
 }
 
-double AllocatedReservoir::getAllocatedTreatmentCapacity(int utility_id) const {
-    if (utility_id == WATER_QUALITY_ALLOCATION)
+double AllocatedReservoir::getAllocatedTreatmentCapacity(int system_id) const {
+    if (system_id == WATER_QUALITY_ALLOCATION)
         throw invalid_argument("Water quality pool does not have allocated treatment "
                                      "capacity.");
-    return allocated_treatment_capacities[utility_id];
+    
+    // Bounds check: if this WSS doesn't have allocations from this reservoir, return 0
+    if (system_id < 0 || system_id >= (int)allocated_treatment_capacities.size()) {
+        return 0.0;
+    }
+    
+    return allocated_treatment_capacities[system_id];
 }
 
-double AllocatedReservoir::getSupplyAllocatedFraction(int utility_id) {
-    if (utility_id == WATER_QUALITY_ALLOCATION)
+double AllocatedReservoir::getSupplyAllocatedFraction(int system_id) {
+    if (system_id == WATER_QUALITY_ALLOCATION)
         throw invalid_argument("Water quality pool allocation fraction cannot "
                                          "be used for supply.");
-    return supply_allocated_fractions[utility_id];
+    
+    // Bounds check: if this WSS doesn't have allocations from this reservoir, return 0
+    if (system_id < 0 || system_id >= (int)supply_allocated_fractions.size()) {
+        return 0.0;
+    }
+    
+    return supply_allocated_fractions[system_id];
 }

@@ -8,6 +8,7 @@
 #include <omp.h>
 #include <set>
 #include <cstdio>
+#include <cassert>
 
 #ifdef  PARALLEL
 #include <mpi.h>
@@ -19,11 +20,11 @@
 
 Simulation::Simulation(
         vector<WaterSource *> &water_sources, Graph &water_sources_graph,
-        const vector<vector<int>> &water_sources_to_utilities,
+        const vector<vector<int>> &water_sources_to_wss,
         vector<Utility *> &utilities,
         const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
         vector<MinEnvFlowControl *> &min_env_flow_controls,
-        vector<vector<double>> &utilities_rdm,
+        vector<vector<double>> &wss_rdm,
         vector<vector<double>> &water_sources_rdm,
         vector<vector<double>> &policies_rdm,
         const unsigned long total_simulation_time,
@@ -34,29 +35,29 @@ Simulation::Simulation(
         n_realizations(realizations_to_run.size()),
         water_sources(water_sources),
         water_sources_graph(water_sources_graph),
-        water_sources_to_utilities(water_sources_to_utilities),
+        water_sources_to_wss(water_sources_to_wss),
         utilities(utilities),
         drought_mitigation_policies(drought_mitigation_policies),
         min_env_flow_controls(min_env_flow_controls),
-        utilities_rdm(utilities_rdm),
+        wss_rdm(wss_rdm),
         water_sources_rdm(water_sources_rdm),
         policies_rdm(policies_rdm) {
     setupSimulation(
             water_sources, water_sources_graph,
-            water_sources_to_utilities, utilities, drought_mitigation_policies,
+            water_sources_to_wss, utilities, drought_mitigation_policies,
             min_env_flow_controls,
-            utilities_rdm, water_sources_rdm,
+            wss_rdm, water_sources_rdm,
             policies_rdm,
             realizations_to_run);
 }
 
 Simulation::Simulation(
         vector<WaterSource *> &water_sources, Graph &water_sources_graph,
-        const vector<vector<int>> &water_sources_to_utilities,
+        const vector<vector<int>> &water_sources_to_wss,
         vector<Utility *> &utilities,
         const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
         vector<MinEnvFlowControl *> &min_env_flow_controls,
-        vector<vector<double>> &utilities_rdm,
+        vector<vector<double>> &wss_rdm,
         vector<vector<double>> &water_sources_rdm,
         vector<vector<double>> &policies_rdm,
         const unsigned long total_simulation_time,
@@ -70,11 +71,11 @@ Simulation::Simulation(
         n_realizations(realizations_to_run.size()),
         water_sources(water_sources),
         water_sources_graph(water_sources_graph),
-        water_sources_to_utilities(water_sources_to_utilities),
+        water_sources_to_wss(water_sources_to_wss),
         utilities(utilities),
         drought_mitigation_policies(drought_mitigation_policies),
         min_env_flow_controls(min_env_flow_controls),
-        utilities_rdm(utilities_rdm),
+        wss_rdm(wss_rdm),
         water_sources_rdm(water_sources_rdm),
         policies_rdm(policies_rdm),
         precomputed_rof_tables(&precomputed_rof_tables),
@@ -83,9 +84,9 @@ Simulation::Simulation(
 
     setupSimulation(
             water_sources, water_sources_graph,
-            water_sources_to_utilities, utilities, drought_mitigation_policies,
+            water_sources_to_wss, utilities, drought_mitigation_policies,
             min_env_flow_controls,
-            utilities_rdm, water_sources_rdm,
+            wss_rdm, water_sources_rdm,
             policies_rdm,
             realizations_to_run);
 }
@@ -93,11 +94,11 @@ Simulation::Simulation(
 Simulation::Simulation(
         vector<WaterSource *> &water_sources,
         Graph &water_sources_graph,
-        const vector<vector<int>> &water_sources_to_utilities,
+        const vector<vector<int>> &water_sources_to_wss,
         vector<Utility *> &utilities,
         const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
         vector<MinEnvFlowControl *> &min_env_flow_controls,
-        vector<vector<double>> &utilities_rdm,
+        vector<vector<double>> &wss_rdm,
         vector<vector<double>> &water_sources_rdm,
         vector<vector<double>> &policies_rdm,
         const unsigned long total_simulation_time,
@@ -109,11 +110,11 @@ Simulation::Simulation(
         n_realizations(realizations_to_run.size()),
         water_sources(water_sources),
         water_sources_graph(water_sources_graph),
-        water_sources_to_utilities(water_sources_to_utilities),
+        water_sources_to_wss(water_sources_to_wss),
         utilities(utilities),
         drought_mitigation_policies(drought_mitigation_policies),
         min_env_flow_controls(min_env_flow_controls),
-        utilities_rdm(utilities_rdm),
+        wss_rdm(wss_rdm),
         water_sources_rdm(water_sources_rdm),
         policies_rdm(policies_rdm) {
     setRof_tables_folder(rof_tables_folder);
@@ -121,11 +122,11 @@ Simulation::Simulation(
     setupSimulation(
             water_sources,
             water_sources_graph,
-            water_sources_to_utilities,
+            water_sources_to_wss,
             utilities,
             drought_mitigation_policies,
             min_env_flow_controls,
-            utilities_rdm,
+            wss_rdm,
             water_sources_rdm,
             policies_rdm,
             realizations_to_run);
@@ -133,11 +134,11 @@ Simulation::Simulation(
 
 void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
                                  Graph &water_sources_graph,
-                                 const vector<vector<int>> &water_sources_to_utilities,
+                                 const vector<vector<int>> &water_sources_to_wss,
                                  vector<Utility *> &utilities,
                                  const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                                  vector<MinEnvFlowControl *> &min_env_flow_controls,
-                                 vector<vector<double>> &utilities_rdm,
+                                 vector<vector<double>> &wss_rdm,
                                  vector<vector<double>> &water_sources_rdm,
                                  vector<vector<double>> &policies_rdm,
                                  vector<unsigned long> &realizations_to_run) {
@@ -185,10 +186,10 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
         // declared as belonging to utility u.
         for (int ws :
                 demand_rof_infra_order)
-            if (std::find(water_sources_to_utilities[u].begin(),
-                          water_sources_to_utilities[u].end(),
+            if (std::find(water_sources_to_wss[u].begin(),
+                          water_sources_to_wss[u].end(),
                           ws)
-                == water_sources_to_utilities[u].end()) {
+                == water_sources_to_wss[u].end()) {
                 cout << "Water source #" << ws << " is listed in the "
                                                   "construction order for utility "
                      << utilities[u]->id
@@ -199,7 +200,7 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
                                        "owned sources mismatch.");
             }
 
-        for (int ws : water_sources_to_utilities[u])
+        for (int ws : water_sources_to_wss[u])
             if (find_if(water_sources.begin(),
                         water_sources.end(),
                         [&ws](
@@ -247,58 +248,18 @@ void Simulation::createContinuityModels(unsigned long realization,
     
     // Extract water supply systems from utilities for realization model
     vector<WaterSupplySystems *> wss_realization;
-    vector<vector<int>> water_sources_to_wss_mapping;
-    
-    //printf("debug: Creating WSS mapping for %zu utilities\n", utilities.size());
-    
+
     for (auto* utility : utilities) {
-        //printf("debug: Processing utility %d with %zu WSS\n", utility->id, utility->getWaterSupplySystems().size());
         for (const auto& wss : utility->getWaterSupplySystems()) {
             // Create copies of WSS for this realization
             wss_realization.push_back(new WaterSupplySystems(*wss));
-            
-            // Create mapping for this WSS - initially empty, will be populated by addWaterSource calls
-            water_sources_to_wss_mapping.push_back(vector<int>());
-            //printf("debug: Added WSS %d to mapping, total WSS count: %zu\n", wss->getSystemId(), water_sources_to_wss_mapping.size());
         }
     }
     
-    //printf("debug: Final water_sources_to_wss_mapping.size() = %zu\n", water_sources_to_wss_mapping.size());
-    
-    // Now populate the water sources to WSS mapping based on utility-level mapping
-    for (int utility_id = 0; utility_id < utilities.size(); ++utility_id) {
-        auto* utility = utilities[utility_id];
-        int wss_start_index = 0;
-        
-        // Find the starting index for this utility's WSS in the flattened list
-        for (int u = 0; u < utility_id; ++u) {
-            wss_start_index += utilities[u]->getWaterSupplySystems().size();
-        }
-        
-        //printf("debug: Utility %d starts at WSS index %d\n", utility_id, wss_start_index);
-        //printf("debug: Utility %d has %zu water sources: ", utility_id, water_sources_to_utilities[utility_id].size());
-        // Removed debug printing of water source IDs
-        
-        // Distribute water sources from utility-level mapping to WSS-level mapping
-        for (int ws_id : water_sources_to_utilities[utility_id]) {            
-            int target_wss_index = wss_start_index; // Default to first WSS
-            
-            if (utility->getWaterSupplySystems().size() == 2) {
-                // CAESB case: 2 WSS within the utility
-                if (ws_id == 1 || ws_id == 3 || ws_id == 4) {
-                    target_wss_index = wss_start_index + 1; // TortoSM (second WSS)
-                } else {
-                    target_wss_index = wss_start_index; // Descoberto (first WSS)
-                }
-            }
-            
-            //printf("debug: Assigning water source %d to WSS index %d\n", ws_id, target_wss_index);
-            water_sources_to_wss_mapping[target_wss_index].push_back(ws_id);
-        }
-    }
-    
-    //printf("debug: Final mapping:\n");
-    // Removed debug printing of WSS water source assignments
+    // Directly use the WSS connectivity matrix (water_sources_to_wss)
+    // Each row corresponds to a WSS, and contains the water source IDs for that WSS
+    vector<vector<int>> water_sources_to_wss_mapping = water_sources_to_wss;
+
     
     vector<MinEnvFlowControl *> min_env_flow_controls_realization =
             Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
@@ -311,10 +272,10 @@ void Simulation::createContinuityModels(unsigned long realization,
             wss_realization,
             drought_mitigation_policies_realization,
             min_env_flow_controls_realization,
-            utilities_rdm.at(realization),
+            wss_rdm.at(realization),
             water_sources_rdm.at(realization),
             policies_rdm.at(realization),
-            (int) realization);
+            realization);
 
     // Create rof models by copying the water sources and WSS.
     // ROF model needs its own copies for independent ROF calculations
@@ -339,7 +300,7 @@ void Simulation::createContinuityModels(unsigned long realization,
             water_sources_to_wss_mapping,  // Use the same WSS-level mapping as realization model
             wss_rof,
             min_env_flow_controls_rof,
-            utilities_rdm.at(realization),
+            wss_rdm.at(realization),
             water_sources_rdm.at(realization),
             total_simulation_time,
             import_export_rof_tables,
@@ -361,7 +322,7 @@ void Simulation::createContinuityModels(unsigned long realization,
     for (DroughtMitigationPolicy *dmp :
             realization_model->getDrought_mitigation_policies())
         dmp->setStorage_to_rof_table_(
-                rof_model->getUt_storage_to_rof_table(),
+                rof_model->getWSS_storage_to_rof_table(),
                 import_export_rof_tables);
 }
 
@@ -442,25 +403,18 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
                 utilities_for_data_collection,
                 realization);
 
-//        try {
-//        double start = omp_get_wtime();
-            //printf("debug: Starting simulation for realization %lu, total_simulation_time = %lu\n", 
-                //    realization, total_simulation_time);
             for (int w = 0; w < (int) total_simulation_time; ++w) {
                 if (w % 52 == 0) {  // Print every year
-                    //printf("debug: Processing week %d (year %d)\n", w, w/52);
                 }
 //                printf("%d\n", w);
                 // DO NOT change the order of the steps. This would mess up
                 // important dependencies.
                 // Calculate long-term risk-of-failre if current week is first week of the year.
                 if (Utils::isFirstWeekOfTheYear(w)) {
-                    //printf("debug: Calculating long-term ROF for week %d\n", w);
                     realization_model->setLongTermROFs(
                             rof_model->calculateLongTermROF(w), w);
                 }
                 // Calculate short-term risk-of-failure
-                //printf("debug: Calculating short-term ROF for week %d\n", w);
                 realization_model->setShortTermROFs(
                         rof_model->calculateShortTermROF(w,
                                 import_export_rof_tables));

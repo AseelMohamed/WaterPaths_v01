@@ -13,6 +13,7 @@
  * @param system_id Numeric ID assigned to that water supply system.
  * @param utility_id Numeric ID of the parent utility that owns this WSS.
  * @param owner_utility Pointer to the parent utility object.
+ * @param demands_all_realizations Demands vector (externally provided)
  * @param wwtp_rule 53 weeks long time series according to which
  * fractions of sewage is discharged in different water sources (normally one
  * for each WWTP).
@@ -22,6 +23,7 @@ WaterSupplySystems::WaterSupplySystems(
         int system_id,
         int utility_id,
         Utility* owner_utility,
+        vector<vector<double>>& demands_all_realizations,
         const WwtpDischargeRule& wwtp_rule) :
         system_id(system_id),
         utility_id(utility_id),
@@ -39,6 +41,10 @@ WaterSupplySystems::WaterSupplySystems(
     total_treatment_capacity = 0.0;
     n_sources = 0;
     max_capacity = 0.0;
+    
+    // Initialize demand_series_realization as empty vector to prevent crashes
+    // This will be properly set when setRealization() is called
+    demand_series_realization = vector<double>();
     
     // Initialize infrastructure construction manager (basic constructor with no infrastructure)
     infrastructure_construction_manager = InfrastructureManager(
@@ -114,17 +120,13 @@ WaterSupplySystems::WaterSupplySystems(
     // Setup water source to WTP mapping, following Utility pattern
     unrollWaterSourceToWtpVector(water_source_to_wtp,
                                 wss_owned_wtp_capacities);
-    
-    //printf("debug: WSS Constructor - about to connect water sources vectors\n");
-    //printf("debug: water_sources vector address = %p, size = %zu\n", (void*)&water_sources, water_sources.size());
+ 
     
     // Connect water sources vectors to the infrastructure manager
     infrastructure_construction_manager.connectWaterSourcesVectorsToUtilities(
             water_sources,
             priority_draw_water_source,
             non_priority_draw_water_source);
-            
-    //printf("debug: WSS Constructor - connected water sources vectors\n");
 }
 
 /**
@@ -166,7 +168,7 @@ WaterSupplySystems::WaterSupplySystems(
         name(name.c_str()),
         owner(owner_utility),
         wwtp_discharge_rule(wwtp_discharge_rule),
-        demands_all_realizations(demands_all_realizations) {
+        demands_all_realizations(demands_all_realizations) {  // Reference to externally-owned demands
     
     // Initialize default values
     total_storage_capacity = 0.0;
@@ -218,8 +220,87 @@ WaterSupplySystems::WaterSupplySystems(
     }
 }
 
+/**
+ * Copy constructor - Performs deep copy of WaterSupplySystems object.
+ * This is critical because Simulation.cpp creates copies for realization and ROF models.
+ * Without proper copy constructor, C++ does shallow copy which causes double-delete crashes.
+ *
+ * @param other The WaterSupplySystems object to copy from
+ */
+WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
+        system_id(other.system_id),
+        utility_id(other.utility_id),
+        demand_buffer(other.demand_buffer),
+        number_of_week_demands(other.number_of_week_demands),
+        name(other.name),  // Shallow copy of const char* is OK (points to string literal)
+        owner(other.owner),  // Shallow copy of Utility pointer is OK (not owned by WSS)
+        wwtp_discharge_rule(const_cast<WwtpDischargeRule&>(other.wwtp_discharge_rule)),  // Copy via copy constructor
+        demands_all_realizations(const_cast<vector<vector<double>>&>(other.demands_all_realizations)) {  // Reference to same externally-owned vector
+
+    
+    // Validate that the copied owner is not null
+    if (owner == nullptr) {
+        throw std::invalid_argument("WaterSupplySystems copy constructor: copied owner cannot be null");
+    }
+    
+    // Copy all simple member variables
+    short_term_risk_of_failure = other.short_term_risk_of_failure;
+    long_term_risk_of_failure = other.long_term_risk_of_failure;
+    total_storage_capacity = other.total_storage_capacity;
+    total_available_volume = other.total_available_volume;
+    total_stored_volume = other.total_stored_volume;
+    total_treatment_capacity = other.total_treatment_capacity;
+    total_storage_treatment_capacity = other.total_storage_treatment_capacity;
+    waste_water_discharge = other.waste_water_discharge;
+    unfulfilled_demand = other.unfulfilled_demand;
+    net_stream_inflow = other.net_stream_inflow;
+    used_for_realization = other.used_for_realization;
+    n_storage_sources = other.n_storage_sources;
+    demand_multiplier = other.demand_multiplier;
+    demand_offset = other.demand_offset;
+    offset_rate_per_volume = other.offset_rate_per_volume;
+    restricted_demand = other.restricted_demand;
+    unrestricted_demand = other.unrestricted_demand;
+    n_sources = other.n_sources;
+    max_capacity = other.max_capacity;
+    
+    // Deep copy all vectors (these are value types, so std::vector handles deep copy)
+    priority_draw_water_source = other.priority_draw_water_source;
+    non_priority_draw_water_source = other.non_priority_draw_water_source;
+    weekly_peaking_factor = other.weekly_peaking_factor;
+    demand_series_realization = other.demand_series_realization;
+    wss_owned_wtp_capacities = other.wss_owned_wtp_capacities;
+    water_source_to_wtp = other.water_source_to_wtp;
+    
+    // CRITICAL: Initialize empty water_sources vector
+    // The actual water source pointers will be set later via addWaterSource() calls
+    // in ContinuityModel constructor. DO NOT copy pointers directly as they're owned
+    // by ContinuityModel and will be different copies for realization vs ROF models.
+    water_sources.clear();
+    water_sources.resize(other.water_sources.size(), nullptr);
+    
+    // Deep copy the infrastructure manager
+    infrastructure_construction_manager = other.infrastructure_construction_manager;
+    
+    // Deep copy the dynamically allocated array for available_treated_flow_rate
+    if (n_storage_sources > 0) {
+        available_treated_flow_rate = new double[n_storage_sources];
+        for (int i = 0; i < n_storage_sources; ++i) {
+            available_treated_flow_rate[i] = other.available_treated_flow_rate[i];
+        }
+    } else {
+        available_treated_flow_rate = new double[0];
+    }
+}
+
 WaterSupplySystems::~WaterSupplySystems() {
     water_sources.clear();
+    
+    // Clean up the dynamically allocated array
+    if (available_treated_flow_rate != nullptr) {
+        delete[] available_treated_flow_rate;
+        available_treated_flow_rate = nullptr;
+    }
 }
 
 ///////////   =============================================== ///////////
@@ -248,17 +329,12 @@ void WaterSupplySystems::unrollWaterSourceToWtpVector(
 }
 
 void WaterSupplySystems::reconnectInfrastructureManager() {
-    //printf("debug: reconnectInfrastructureManager called\n");
-    //printf("debug: Reconnecting with water_sources vector address = %p, size = %zu\n", 
-        //    (void*)&water_sources, water_sources.size());
     
     // Reconnect the infrastructure manager to the current water sources vectors
     infrastructure_construction_manager.connectWaterSourcesVectorsToUtilities(
             water_sources,
             priority_draw_water_source,
             non_priority_draw_water_source);
-    
-    //printf("debug: Reconnection complete\n");
 }
 
 void WaterSupplySystems::updateTreatmentAndNumberOfStorageSources() {
@@ -308,21 +384,17 @@ void WaterSupplySystems::clearWaterSources() {
  * @param water_source
  */
 void WaterSupplySystems::addWaterSource(WaterSource* water_source) {
-    //printf("debug: addWaterSource called for water_source id=%d\n", water_source->id);
-    //printf("debug: current water_sources vector address = %p, size = %zu\n", (void*)&water_sources, water_sources.size());
     
     checkErrorsAddWaterSourceOnline(water_source);
 
     // Add water sources with their IDs matching the water sources vector
     // indexes.
     if (water_source->id > (int) water_sources.size() - 1) {
-        //printf("debug: Resizing water_sources from %zu to %d\n", water_sources.size(), water_source->id + 1);
         water_sources.resize((unsigned int) water_source->id + 1);
     }
 
     // Add water source
     water_sources[water_source->id] = water_source;
-    //printf("debug: Added water source to vector, new size = %zu\n", water_sources.size());
 
     // Add water source to infrastructure construction manager.
     infrastructure_construction_manager.addWaterSource(water_source);
@@ -334,8 +406,7 @@ void WaterSupplySystems::addWaterSource(WaterSource* water_source) {
         water_source_to_wtp[water_source->id] != NON_INITIALIZED &&
         water_source_to_wtp[water_source->id] < wss_owned_wtp_capacities.size() &&
         wss_owned_wtp_capacities[water_source_to_wtp[water_source->id]] > 0) {
-        //printf("debug: Water source is online and has WTP capacity, calling addWaterSourceToOnlineLists\n");
-        infrastructure_construction_manager.addWaterSourceToOnlineLists(
+            infrastructure_construction_manager.addWaterSourceToOnlineLists(
                 water_source->id, total_storage_capacity,
                 total_available_volume,
                 total_stored_volume);

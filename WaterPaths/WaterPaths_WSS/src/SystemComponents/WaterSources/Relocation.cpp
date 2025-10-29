@@ -6,14 +6,14 @@
 #include "Relocation.h"
 
 Relocation::Relocation(const char *name, const int id, unsigned long parent_reservoir_ID,
-                       vector<double> *allocated_fractions, vector<int> *utilities_with_allocations,
+                       vector<double> *allocated_fractions, vector<int> *wss_with_allocationss,
                        const vector<double> &construction_time_range, double permitting_period,
                        Bond &bond)
         : WaterSource(name, id, vector<Catchment *>(), NONE, NONE, vector<int>(), SOURCE_RELOCATION,
                       construction_time_range, permitting_period, bond),
           parent_reservoir_ID(parent_reservoir_ID), new_allocated_fractions
                   (allocated_fractions),
-          utilities_with_allocations(utilities_with_allocations) {}
+          wss_with_allocations(wss_with_allocations) {}
 
 /**
  * Copy constructor.
@@ -23,7 +23,7 @@ Relocation::Relocation(const Relocation &relocation) :
         WaterSource(relocation),
         parent_reservoir_ID(relocation.parent_reservoir_ID),
         new_allocated_fractions(relocation.new_allocated_fractions),
-        utilities_with_allocations(relocation.utilities_with_allocations) {}
+        wss_with_allocations(relocation.wss_with_allocations) {}
 
 
 void Relocation::applyContinuity(int week, double upstream_source_inflow,
