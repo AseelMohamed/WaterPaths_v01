@@ -289,7 +289,7 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
             available_treated_flow_rate[i] = other.available_treated_flow_rate[i];
         }
     } else {
-        available_treated_flow_rate = new double[0];
+        available_treated_flow_rate = nullptr;  // No allocation needed for empty array
     }
 }
 

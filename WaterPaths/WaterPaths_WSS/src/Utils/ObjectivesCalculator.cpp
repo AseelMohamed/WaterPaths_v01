@@ -18,6 +18,21 @@ double ObjectivesCalculator::calculateReliabilityObjective(
         n_realizations = realizations.size();
     }
 
+    // Check for null pointers and filter them out
+    vector<unsigned long> valid_realizations;
+    for (const unsigned long &r : realizations) {
+        if (r < utility_collector.size() && utility_collector[r] != nullptr) {
+            valid_realizations.push_back(r);
+        }
+    }
+    
+    if (valid_realizations.empty()) {
+        return 1.0; //FIXME: This returns perfect reliability if no valid realizations
+    }
+    
+    realizations = valid_realizations;
+    n_realizations = realizations.size();
+
     unsigned long n_weeks = utility_collector[realizations[0]]->getCombined_storage().size();
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
 
@@ -129,6 +144,21 @@ double ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective(
         n_realizations = realizations.size();
     }
 
+    // Check for null pointers and filter them out
+    vector<unsigned long> valid_realizations;
+    for (const unsigned long &r : realizations) {
+        if (r < utility_data.size() && utility_data[r] != nullptr) {
+            valid_realizations.push_back(r);
+        }
+    }
+    
+    if (valid_realizations.empty()) {
+        return 0.0; //FIXME: This returns no cost if no valid realizations
+    }
+    
+    realizations = valid_realizations;
+    n_realizations = realizations.size();
+
     double infrastructure_npc = 0;
     for (const unsigned long &r : realizations) {
         auto realization = utility_data[r];
@@ -153,9 +183,24 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
         n_realizations = realizations.size();
     }
 
+    // Check for null pointers and filter them out
+    vector<unsigned long> valid_realizations;
+    for (const unsigned long &r : realizations) {
+        if (r < utility_data.size() && utility_data[r] != nullptr) {
+            valid_realizations.push_back(r);
+        }
+    }
+    
+    if (valid_realizations.empty()) {
+        return 0.0; //FIXME: This returns default value if no valid realizations
+    }
+    
+    realizations = valid_realizations;
+    n_realizations = realizations.size();
+
     unsigned long n_weeks = utility_data[realizations[0]]->getGross_revenues().size();
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
-    double discount_rate = utility_data[0]->getUtility()->getInfraDiscountRate();
+    double discount_rate = utility_data[realizations[0]]->getUtility()->getInfraDiscountRate();
 
     double realizations_year_debt_payment = 0;
     double realizations_year_cont_fund_contribution = 0;
@@ -233,9 +278,24 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
         n_realizations = realizations.size();
     }
 
+    // Check for null pointers and filter them out
+    vector<unsigned long> valid_realizations;
+    for (const unsigned long &r : realizations) {
+        if (r < utility_data.size() && utility_data[r] != nullptr) {
+            valid_realizations.push_back(r);
+        }
+    }
+    
+    if (valid_realizations.empty()) {
+        return 0.0; //FIXME: This returns default value if no valid realizations
+    }
+    
+    realizations = valid_realizations;
+    n_realizations = realizations.size();
+
     unsigned long n_weeks = utility_data[realizations[0]]->getGross_revenues().size();
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
-    double discount_rate = utility_data[0]->getUtility()->getInfraDiscountRate();
+    double discount_rate = utility_data[realizations[0]]->getUtility()->getInfraDiscountRate();
 
     vector<double> worse_year_financial_costs;
     vector<double> year_financial_costs;

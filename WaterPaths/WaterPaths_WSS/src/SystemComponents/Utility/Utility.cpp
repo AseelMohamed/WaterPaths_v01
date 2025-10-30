@@ -370,8 +370,9 @@ void Utility::calculateWeeklyAverageWaterPrices(
     // Create weekly price table from monthly prices.
     bool issued_high_tariff_warning = false;
     for (int w = 0; w < (int) (WEEKS_IN_YEAR + 1); ++w) {
+        int month_index = min((int) (w / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
         weekly_average_volumetric_price[w] =
-                monthly_average_price[(int) (w / WEEKS_IN_MONTH)] /
+                monthly_average_price[month_index] /
                 WEEKS_IN_MONTH;
     }
 }

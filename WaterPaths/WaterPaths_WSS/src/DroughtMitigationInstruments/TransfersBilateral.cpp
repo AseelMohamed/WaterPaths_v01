@@ -16,9 +16,12 @@ TransfersBilateral::TransfersBilateral(const int id,
           surcharge_percentage_fee(surcharge_percentage_fee),
           pipe_transfer_capacities(pipe_transfer_capacities),
           transfer_overhead(surcharge_percentage_fee),
-          transfer_triggers(vector<double>(max(wss_ids[0], wss_ids[1]) + 1, NON_INITIALIZED)) {
+          transfer_triggers(vector<double>(wss_ids.size(), NON_INITIALIZED)) {
         this->transfer_triggers[wss_ids[0]] = transfer_triggers[0];
-        this->transfer_triggers[wss_ids[1]] = transfer_triggers[1];
+        // Only set second trigger if we have a second system
+        if (wss_ids.size() > 1 && transfer_triggers.size() > 1) {
+            this->transfer_triggers[wss_ids[1]] = transfer_triggers[1];
+        }
     this->wss_ids = wss_ids;
 
 }

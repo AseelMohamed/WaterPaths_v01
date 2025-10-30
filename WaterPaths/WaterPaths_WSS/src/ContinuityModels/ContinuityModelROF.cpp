@@ -363,10 +363,10 @@ void ContinuityModelROF::updateStorageToROFTable(
                 count_fails++;
             }
         }
-        // delete[] delta_storage;
-        // delete[] available_volumes_shifted;
+        delete[] delta_storage;
+        delete[] available_volumes_shifted;
     }
-    // delete[] available_volumes;
+    delete[] available_volumes;
 }
 
 //FIXME: MAKE THIS MORE EFFICIENT. THIS METHOD IS THE MOST EXPENSIVE ONE IN THE CODE.

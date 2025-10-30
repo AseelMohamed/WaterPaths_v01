@@ -754,6 +754,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             {1, 3, 4, 9, 10, 11}      // Sources managed by TortoSM WSS (system_id=1)
     };
 
+
+    
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
 //    // O que table_storage_shift representa? O que são esses números (2000, 5000...) [3] [17]
     // Update table storage shift to match WSS structure (2 WSS within single utility)
