@@ -121,12 +121,8 @@ WaterSupplySystems::WaterSupplySystems(
     unrollWaterSourceToWtpVector(water_source_to_wtp,
                                 wss_owned_wtp_capacities);
  
-    
-    // Connect water sources vectors to the infrastructure manager
-    infrastructure_construction_manager.connectWaterSourcesVectorsToUtilities(
-            water_sources,
-            priority_draw_water_source,
-            non_priority_draw_water_source);
+    // NOTE: Do not connect infrastructure manager here with empty water_sources vector.
+    // The connection will happen automatically when water sources are added via addWaterSource()
 }
 
 /**
@@ -197,11 +193,8 @@ WaterSupplySystems::WaterSupplySystems(
     unrollWaterSourceToWtpVector(water_source_to_wtp,
                                 wss_owned_wtp_capacities);
     
-    // Connect water sources vectors to the infrastructure manager
-    infrastructure_construction_manager.connectWaterSourcesVectorsToUtilities(
-            water_sources,
-            priority_draw_water_source,
-            non_priority_draw_water_source);
+    // NOTE: Do not connect infrastructure manager here with empty water_sources vector.
+    // The connection will happen automatically when water sources are added via addWaterSource()
     
     // Validation checks for infrastructure orders
     if (rof_infra_construction_order.empty() &&
@@ -329,20 +322,26 @@ void WaterSupplySystems::unrollWaterSourceToWtpVector(
 }
 
 void WaterSupplySystems::reconnectInfrastructureManager() {
-    
-    // Reconnect the infrastructure manager to the current water sources vectors
-    infrastructure_construction_manager.connectWaterSourcesVectorsToUtilities(
-            water_sources,
-            priority_draw_water_source,
-            non_priority_draw_water_source);
+    // Infrastructure manager connection now happens automatically in addWaterSource()
+    // when the first water source is added, similar to how Original model works.
+    // No explicit reconnection needed here.
 }
 
 void WaterSupplySystems::updateTreatmentAndNumberOfStorageSources() {
-    n_storage_sources = non_priority_draw_water_source.size();
+    // Count actual storage sources by checking which water sources exist and are storage sources
+    vector<int> actual_storage_sources;
+    for (int i = 0; i < non_priority_draw_water_source.size(); ++i) {
+        int ws_id = non_priority_draw_water_source[i];
+        if (ws_id < water_sources.size() && water_sources[ws_id] != nullptr) {
+            actual_storage_sources.push_back(ws_id);
+        }
+    }
+    
+    n_storage_sources = actual_storage_sources.size();
     // delete[] available_treated_flow_rate;
-    available_treated_flow_rate = new double[non_priority_draw_water_source.size()];
+    available_treated_flow_rate = new double[n_storage_sources];
     for (int i = 0; i < n_storage_sources; ++i) {
-        auto ws = water_sources[non_priority_draw_water_source[i]];
+        auto ws = water_sources[actual_storage_sources[i]];
         available_treated_flow_rate[i] = wss_owned_wtp_capacities[water_source_to_wtp[ws->id]];
         total_storage_treatment_capacity += available_treated_flow_rate[i];
     }
@@ -358,20 +357,21 @@ void WaterSupplySystems::updateTotalAvailableVolume() {
     net_stream_inflow = 0.0;
 
     for (int ws : priority_draw_water_source) {
-        total_available_volume +=
-                max(1.0e-6,
-                    water_sources[ws]->getAvailableAllocatedVolume(system_id));
-        net_stream_inflow += water_sources[ws]->getAllocatedInflow(system_id);
+        if (ws < water_sources.size() && water_sources[ws] != nullptr) {
+            total_available_volume += max(1.0e-6, water_sources[ws]->getAvailableAllocatedVolume(system_id));
+            net_stream_inflow += water_sources[ws]->getAllocatedInflow(system_id);
+        }
     }
 
     for (int i = 0; i < non_priority_draw_water_source.size(); ++i) {
-        auto ws = water_sources[non_priority_draw_water_source[i]];
-        double stored_volume = max(1.0e-6,
-                                   ws->getAvailableAllocatedVolume(system_id));
-        total_available_volume += stored_volume;
-        total_stored_volume += stored_volume;
-        net_stream_inflow += ws->getAllocatedInflow(system_id);
-        available_treated_flow_rate[i] = wss_owned_wtp_capacities[water_source_to_wtp[ws->id]];
+        int ws_id = non_priority_draw_water_source[i];
+        if (ws_id < water_sources.size() && water_sources[ws_id] != nullptr) {
+            auto ws = water_sources[ws_id];
+            double stored_volume = max(1.0e-6, ws->getAvailableAllocatedVolume(system_id));
+            total_available_volume += stored_volume;
+            total_stored_volume += stored_volume;
+            net_stream_inflow += ws->getAllocatedInflow(system_id);
+        }
     }
 }
 
@@ -395,6 +395,20 @@ void WaterSupplySystems::addWaterSource(WaterSource* water_source) {
 
     // Add water source
     water_sources[water_source->id] = water_source;
+
+    // Connect infrastructure manager to water sources vectors when first water source is added
+    // Check if this is the first water source by counting non-null entries
+    int non_null_count = 0;
+    for (auto* ws : water_sources) {
+        if (ws != nullptr) non_null_count++;
+    }
+    
+    if (non_null_count == 1) {  // This is the first water source
+        infrastructure_construction_manager.connectWaterSourcesVectorsToWSS(
+                water_sources,
+                priority_draw_water_source,
+                non_priority_draw_water_source);
+    }
 
     // Add water source to infrastructure construction manager.
     infrastructure_construction_manager.addWaterSource(water_source);
@@ -483,15 +497,39 @@ bool WaterSupplySystems::idealDemandSplitConstrained(
 void WaterSupplySystems::splitDemands(
     int week, vector<vector<double>> &demands,
     bool apply_demand_buffer) {
+           
     auto wss_owned_wtp_capacities = this->wss_owned_wtp_capacities;
+    
+    // Bounds check for demand_series_realization access
+    if (week < 0 || week >= (int)demand_series_realization.size()) {
+        char error_msg[512];
+        sprintf(error_msg, "WSS %d: Week %d out of bounds for demand_series_realization (size=%zu)", 
+                system_id, week, demand_series_realization.size());
+        printf("ERROR: %s\n", error_msg);
+        throw std::out_of_range(error_msg);
+    }
+    
+    // Bounds check for weekly_peaking_factor access
+    int week_of_year = Utils::weekOfTheYear(week);
+    if (week_of_year < 0 || week_of_year >= (int)weekly_peaking_factor.size()) {
+        char error_msg[512];
+        sprintf(error_msg, "WSS %d: WeekOfYear %d (from week %d) out of bounds for weekly_peaking_factor (size=%zu)", 
+                system_id, week_of_year, week, weekly_peaking_factor.size());
+        printf("ERROR: %s\n", error_msg);
+        throw std::out_of_range(error_msg);
+    }
+    
     unrestricted_demand = demand_series_realization[week] +
                           apply_demand_buffer * demand_buffer *
-                          weekly_peaking_factor[Utils::weekOfTheYear(week)];
+                          weekly_peaking_factor[week_of_year];
+           
     restricted_demand = unrestricted_demand * demand_multiplier - demand_offset;
+           
     unfulfilled_demand = max(max(restricted_demand - total_available_volume,
                                  restricted_demand - total_treatment_capacity),
                              0.);
     restricted_demand -= unfulfilled_demand;
+    
     double demand_non_priority_sources = restricted_demand;
     double total_serviced_demand = 0;
 
@@ -600,6 +638,10 @@ void WaterSupplySystems::splitDemands(
         delete[] has_spare_flow_rate_array;
         delete[] over_allocated_array;
     }
+    
+    // Note: Financial calculations are handled at utility level, not WSS level
+    // This follows the Original model architecture where Utility aggregates all WSS data
+    // for financial calculations in Utility::updateFinancialCalculations()
 }
 
 void WaterSupplySystems::setWaterSourceOnline(unsigned int source_id, int week) {
@@ -612,45 +654,10 @@ void WaterSupplySystems::setWaterSourceOnline(unsigned int source_id, int week) 
 }
 
 /**
- * Check if new infrastructure is to be triggered based on long-term risk of failure and, if so, handle
- * the beginning of construction, issue corresponding bonds and update debt.
- * @param long_term_rof
- * @param week
- * @return
+ * Calculate wastewater releases for the Water Supply System.
+ * @param week Week for which to calculate discharges
+ * @param discharges Array to store discharge values for each source
  */
-int WaterSupplySystems::infrastructureConstructionHandler(double long_term_rof, int week) {
-    double past_year_average_demand = 0;
-    if (week >= (int) WEEKS_IN_YEAR) {
-        //     past_year_average_demand =
-        //            std::accumulate(demand_series_realization.begin() + week - (int) WEEKS_IN_YEAR,
-        //                            demand_series_realization.begin() + week, 0.0) / WEEKS_IN_YEAR;
-
-        for (int w = week - (int) WEEKS_IN_YEAR; w < week; ++w) {
-            past_year_average_demand += demand_series_realization.at(w);
-        }
-    }
-
-    long_term_risk_of_failure = long_term_rof;
-
-    // Check if new infrastructure is to be triggered and, if so, trigger it.
-    int new_infra_triggered = infrastructure_construction_manager.infrastructureConstructionHandler(
-            long_term_rof, week,
-            past_year_average_demand,
-            wss_owned_wtp_capacities,
-            water_source_to_wtp,
-            total_storage_capacity,
-            total_available_volume,
-            total_stored_volume);
-
-    // Issue and add bond of triggered water source to list of outstanding bonds, and update total new
-    // infrastructure NPV.
-    // issueBond(new_infra_triggered, week);
-
-    updateTreatmentAndNumberOfStorageSources();
-
-    return new_infra_triggered;
-}
-
 void WaterSupplySystems::calculateWastewater_releases(int week, double* discharges) {
     double discharge;
     waste_water_discharge = 0;
@@ -675,6 +682,7 @@ void WaterSupplySystems::setDemand_offset(double demand_offset, double offset_ra
  * @param r
  */
 void WaterSupplySystems::setRealization(unsigned long r, vector<double> &rdm_factors) {
+    // Simple, clean implementation like the original
     unsigned long n_weeks = demands_all_realizations.at(r).size();
     demand_series_realization = vector<double>(n_weeks);
 
@@ -732,7 +740,7 @@ double WaterSupplySystems::getStorageToCapacityRatio() const {
 }
 
 double WaterSupplySystems::getTotal_available_volume() const {
-     return total_available_volume; 
+    return total_available_volume; 
 }
 
 double WaterSupplySystems::getTotal_stored_volume() const { 
@@ -745,6 +753,10 @@ double WaterSupplySystems::getTotal_storage_capacity() const {
 
 double WaterSupplySystems::getRisk_of_failure() const { 
     return short_term_risk_of_failure; 
+}
+
+void WaterSupplySystems::setTotal_available_volume(double volume) {
+    total_available_volume = volume;
 }
 
 void WaterSupplySystems::setRisk_of_failure(double risk_of_failure) {
@@ -763,6 +775,14 @@ double WaterSupplySystems::getUnrestrictedDemand(int week) const {
     if (week == -1) {
         return unrestricted_demand;
     } else {
+        // Bounds check for demand_series_realization access
+        if (week < 0 || week >= (int)demand_series_realization.size()) {
+            char error_msg[512];
+            sprintf(error_msg, "WSS %d: Week %d out of bounds for demand_series_realization (size=%zu) in getUnrestrictedDemand", 
+                    system_id, week, demand_series_realization.size());
+            printf("ERROR: %s\n", error_msg);
+            throw std::out_of_range(error_msg);
+        }
         return demand_series_realization[week];
     }
 }
@@ -791,7 +811,7 @@ void WaterSupplySystems::resetTotal_storage_capacity() {
     WaterSupplySystems::total_storage_capacity = 0;
 }
 
-double WaterSupplySystems::getUnfulfilled_demand() const { 
+double WaterSupplySystems::getUnfulfilled_demand() const {
     return unfulfilled_demand; 
 }
 
@@ -809,4 +829,132 @@ double WaterSupplySystems::getNet_stream_inflow() const {
 
 double WaterSupplySystems::getDemand_offset() const {
     return demand_offset;
+}
+
+/**
+ * WSS-level infrastructure construction handler.
+ * Each WSS makes infrastructure decisions based on its individual ROF and demand conditions.
+ * This is the correct location for infrastructure decision-making, not at the Utility level.
+ * 
+ * @param long_term_rof WSS-specific risk of failure
+ * @param week Current simulation week
+ * @return Infrastructure ID if new infrastructure is triggered, NON_INITIALIZED otherwise
+ */
+int WaterSupplySystems::infrastructureConstructionHandler(double long_term_rof, int week) {
+    // Calculate WSS-specific past year average demand
+    double past_year_average_demand = 0;
+    if (week >= (int) WEEKS_IN_YEAR) {
+        for (int w = week - (int) WEEKS_IN_YEAR; w < week; ++w) {
+            past_year_average_demand += demand_series_realization.at(w);
+        }
+    }
+
+    long_term_risk_of_failure = long_term_rof;
+
+    // WSS makes infrastructure decision based on its specific conditions
+    int new_infra_triggered = infrastructure_construction_manager.infrastructureConstructionHandler(
+            long_term_rof, week,
+            past_year_average_demand,
+            wss_owned_wtp_capacities,
+            water_source_to_wtp,
+            total_storage_capacity,
+            total_available_volume,
+            total_stored_volume);
+
+    // CRITICAL FIX: Handle bond issuance immediately here since WSS has the infrastructure sources
+    if (new_infra_triggered != NON_INITIALIZED) {
+        printf("DEBUG [WSS] Infrastructure %d triggered in WSS %d, issuing bond immediately\n", 
+               new_infra_triggered, system_id);
+        
+        // THREAD-SAFE: Only issue bonds for realization models, not ROF models
+        // ROF models should not issue actual bonds as they're just calculating risks
+        if (used_for_realization && owner) {
+            // Find the infrastructure source in this WSS
+            WaterSource* target_source = nullptr;
+            for (const auto& source : water_sources) {
+                if (source && source->id == new_infra_triggered) {
+                    target_source = source;
+                    break;
+                }
+            }
+            
+            if (target_source) {
+                // Check if bond has already been issued for this source in this WSS
+                try {
+                    Bond &bond = target_source->getBond(system_id);
+                    if (!bond.isIssued()) {
+                        // Issue bond directly on the infrastructure source using utility's method
+                        // but searching only in this WSS (which has the source)
+                        owner->issueBond(new_infra_triggered, week, this);
+                        printf("DEBUG [WSS] Bond issued for infrastructure %d in WSS %d\n", 
+                               new_infra_triggered, system_id);
+                    } else {
+                        printf("DEBUG [WSS] Bond already issued for infrastructure %d in WSS %d\n", 
+                               new_infra_triggered, system_id);
+                    }
+                } catch (const std::exception& e) {
+                    printf("ERROR [WSS] Failed to access bond for infrastructure %d in WSS %d: %s\n", 
+                           new_infra_triggered, system_id, e.what());
+                }
+            } else {
+                printf("ERROR [WSS] Infrastructure %d triggered but not found in WSS %d\n", 
+                       new_infra_triggered, system_id);
+            }
+        } else {
+            printf("DEBUG [WSS] WSS %d: Skipping bond issuance (ROF model or owner null)\n", system_id);
+        }
+    }
+
+    updateTreatmentAndNumberOfStorageSources();
+    printf("DEBUG: WSS %d week %d: Infrastructure construction handler checked. New infra ID: %d\n",
+           system_id, week, new_infra_triggered);
+
+    return new_infra_triggered;
+}
+
+/**
+ * Get the ROF-based infrastructure construction order for this WSS.
+ * Used by ContinuityModel to coordinate shared infrastructure decisions.
+ * 
+ * @return Reference to the ROF infrastructure construction order vector
+ */
+const vector<int>& WaterSupplySystems::getRof_infra_construction_order() const {
+    return infrastructure_construction_manager.getRof_infra_construction_order();
+}
+
+/**
+ * Set infrastructure parameters for this WSS after creation.
+ * This recreates the infrastructure manager with the provided parameters.
+ * 
+ * @param rof_infra_construction_order Infrastructure construction order based on ROF
+ * @param demand_infra_construction_order Infrastructure construction order based on demand 
+ * @param infra_construction_triggers Infrastructure trigger thresholds
+ */
+void WaterSupplySystems::setInfrastructureParameters(const vector<int>& rof_infra_construction_order,
+                                                     const vector<int>& demand_infra_construction_order, 
+                                                     const vector<double>& infra_construction_triggers) {
+    // Recreate the infrastructure manager with the provided parameters
+    infrastructure_construction_manager = InfrastructureManager(
+        system_id, 
+        infra_construction_triggers,
+        vector<vector<int>>(),  // empty infra_if_built_remove (WSS doesn't handle complex financial rules)
+        0.0,  // no discount rate (handled by utility)
+        0.0,  // no bond term (handled by utility)
+        0.0,  // no bond interest rate (handled by utility)
+        rof_infra_construction_order,
+        demand_infra_construction_order
+    );
+    
+    // Reconnect water sources vectors to the new infrastructure manager
+    infrastructure_construction_manager.connectWaterSourcesVectorsToWSS(
+            water_sources,
+            priority_draw_water_source,
+            non_priority_draw_water_source);
+    
+    // Re-add all existing water sources to the new infrastructure manager
+    for (WaterSource* water_source : water_sources) {
+        if (water_source != nullptr) {
+            infrastructure_construction_manager.addWaterSource(water_source);
+        }
+    }
 }

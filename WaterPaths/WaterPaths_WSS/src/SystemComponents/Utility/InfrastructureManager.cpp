@@ -169,6 +169,7 @@ void InfrastructureManager::addWaterSourceToOnlineLists(int source_id,
     total_storage_capacity +=
             ws->getAllocatedCapacity(id);
     total_available_volume = total_storage_capacity;
+    // total_available_volume += ws->getAvailableAllocatedVolume(id);
 
     /// Add source to the corresponding list of online water sources.
     if ((ws->source_type == INTAKE ||
@@ -348,6 +349,7 @@ int InfrastructureManager::infrastructureConstructionHandler(
     /// Checks whether the long-term ROF has been exceeded for the next
     /// infrastructure option in the list and, if not already under
     /// construction, starts building it.
+    
     if (!rof_infra_construction_order.empty() && !under_construction_any) {
         // if there is anything to be built
 
@@ -364,12 +366,12 @@ int InfrastructureManager::infrastructureConstructionHandler(
 
         /// Checks if ROF threshold for next infrastructure in line has been
         /// reached and if there is already infrastructure being built.
-        if (next_construction != NON_INITIALIZED &&
-            long_term_rof > infra_construction_triggers[next_construction]) {
-            new_infra_triggered = next_construction;
-
-            /// Begin construction.
-            beginConstruction(week, next_construction);
+        if (next_construction != NON_INITIALIZED) {
+            if (long_term_rof > infra_construction_triggers[next_construction]) {
+                new_infra_triggered = next_construction;
+                /// Begin construction.
+                beginConstruction(week, next_construction);
+            }
         }
     }
 
@@ -511,17 +513,37 @@ void InfrastructureManager::beginConstruction(int week, int infra_id) {
     /// Make water utility as under construction and determine construction
     /// end date (I wish that was how it worked in real constructions...)
     try {
+        // Validate infrastructure ID is within bounds
+        if (infra_id < 0 || infra_id >= static_cast<int>(under_construction.size())) {
+            throw std::out_of_range("Infrastructure ID " + std::to_string(infra_id) + 
+                                    " out of range [0, " + std::to_string(under_construction.size()) + ")");
+        }
+        
+        // Validate water sources pointer and access
+        if (water_sources == nullptr) {
+            throw std::runtime_error("InfrastructureManager: water_sources pointer is null");
+        }
+        
+        if (infra_id >= static_cast<int>(water_sources->size())) {
+            throw std::out_of_range("Infrastructure ID " + std::to_string(infra_id) + 
+                                    " exceeds water sources size " + std::to_string(water_sources->size()));
+        }
+        
+        auto water_source_ptr = water_sources->at(static_cast<unsigned long>(infra_id));
+        if (water_source_ptr == nullptr) {
+            throw std::runtime_error("Water source at index " + std::to_string(infra_id) + " is null");
+        }
+        
         under_construction[infra_id] = true;
-        construction_end_date[infra_id] =
-                week + (int) water_sources->at(
-                        (unsigned long) infra_id)->construction_time;
+        construction_end_date[infra_id] = week + static_cast<int>(water_source_ptr->construction_time);
+        
     } catch (...) {
         throw out_of_range(
                 "Infrastructure not present in infrastructure manager (in utility).");
     }
 }
 
-void InfrastructureManager::connectWaterSourcesVectorsToUtilities(
+void InfrastructureManager::connectWaterSourcesVectorsToWSS(
         vector<WaterSource *> &water_sources,
         vector<int> &priority_draw_water_source,
         vector<int> &non_priority_draw_water_source) {

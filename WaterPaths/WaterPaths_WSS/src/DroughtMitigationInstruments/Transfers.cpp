@@ -190,8 +190,8 @@ void Transfers::applyPolicy(int week) {
 
     unsigned long n_vars = f.size();
     unsigned long n_allocations = buyers_ids.size();
-    int n_utilities = n_allocations + 1;
-    int n_pipes = n_vars - n_utilities;
+    int n_wss = n_allocations + 1;
+    int n_pipes = n_vars - n_wss;
 
     /**
      * Get summation of rofs of utilities needing transfers. This is for

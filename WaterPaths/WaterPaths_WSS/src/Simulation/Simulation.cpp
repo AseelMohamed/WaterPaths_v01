@@ -249,11 +249,19 @@ void Simulation::createContinuityModels(unsigned long realization,
     // Extract water supply systems from utilities for realization model
     vector<WaterSupplySystems *> wss_realization;
 
-    for (auto* utility : utilities) {
-        for (const auto& wss : utility->getWaterSupplySystems()) {
-            // Create copies of WSS for this realization
-            wss_realization.push_back(new WaterSupplySystems(*wss));
+    // CRITICAL SECTION: WSS copying must be thread-safe since original WSS objects are shared
+    #pragma omp critical(wss_copying)
+    {
+        printf("DEBUG [WSS] Thread %d: Starting WSS copying for realization %lu\n", 
+               omp_get_thread_num(), realization);
+        for (auto* utility : utilities) {
+            for (const auto& wss : utility->getWaterSupplySystems()) {
+                // Create copies of WSS for this realization
+                wss_realization.push_back(new WaterSupplySystems(*wss));
+            }
         }
+        printf("DEBUG [WSS] Thread %d: Completed WSS copying for realization %lu\n", 
+               omp_get_thread_num(), realization);
     }
     
     // Directly use the WSS connectivity matrix (water_sources_to_wss)
@@ -264,50 +272,71 @@ void Simulation::createContinuityModels(unsigned long realization,
     vector<MinEnvFlowControl *> min_env_flow_controls_realization =
             Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
 
-    // Store realization models in vector - using WSS instead of utilities
-    realization_model = new ContinuityModelRealization(
-            water_sources_realization,
-            water_sources_graph,
-            water_sources_to_wss_mapping,  // Now properly maps water sources to individual WSS
-            wss_realization,
-            drought_mitigation_policies_realization,
-            min_env_flow_controls_realization,
-            wss_rdm.at(realization),
-            water_sources_rdm.at(realization),
-            policies_rdm.at(realization),
-            realization);
-
-    // Create rof models by copying the water sources and WSS.
-    // ROF model needs its own copies for independent ROF calculations
-    vector<WaterSource *> water_sources_rof =
-            Utils::copyWaterSourceVector(water_sources);
-    
-    // Create fresh WSS copies for ROF model (from original utilities, not realization)
-    vector<WaterSupplySystems *> wss_rof;
-    for (auto* utility : utilities) {
-        for (const auto& wss : utility->getWaterSupplySystems()) {
-            wss_rof.push_back(new WaterSupplySystems(*wss));
-        }
+    // CRITICAL SECTION: Entire ContinuityModel construction must be thread-safe
+    // The ContinuityModel constructor modifies WSS objects and assigns water sources
+    #pragma omp critical(continuity_model_construction)
+    {
+        printf("DEBUG [WSS] Thread %d: Starting ContinuityModel construction for realization %lu\n", 
+               omp_get_thread_num(), realization);
+        
+        // Store realization models in vector - using WSS instead of utilities
+        realization_model = new ContinuityModelRealization(
+                water_sources_realization,
+                water_sources_graph,
+                water_sources_to_wss_mapping,  // Now properly maps water sources to individual WSS
+                wss_realization,
+                drought_mitigation_policies_realization,
+                min_env_flow_controls_realization,
+                wss_rdm.at(realization),
+                water_sources_rdm.at(realization),
+                policies_rdm.at(realization),
+                realization);
+        
+        printf("DEBUG [WSS] Thread %d: Completed ContinuityModelRealization construction for realization %lu\n", 
+               omp_get_thread_num(), realization);
     }
-    
-    vector<MinEnvFlowControl *> min_env_flow_controls_rof =
-            Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
 
-    // Store realization models in vector - using WSS instead of utilities
-    rof_model = new ContinuityModelROF(
-            water_sources_rof,
-            water_sources_graph,
-            water_sources_to_wss_mapping,  // Use the same WSS-level mapping as realization model
-            wss_rof,
-            min_env_flow_controls_rof,
-            wss_rdm.at(realization),
-            water_sources_rdm.at(realization),
-            total_simulation_time,
-            import_export_rof_tables,
-            realization);
+    // CRITICAL SECTION: ROF model construction also needs thread safety
+    #pragma omp critical(rof_model_construction)
+    {
+        printf("DEBUG [WSS] Thread %d: Starting ROF model construction for realization %lu\n", 
+               omp_get_thread_num(), realization);
+               
+        // Create rof models by copying the water sources and WSS.
+        // ROF model needs its own copies for independent ROF calculations
+        vector<WaterSource *> water_sources_rof =
+                Utils::copyWaterSourceVector(water_sources);
+        
+        // Create fresh WSS copies for ROF model (from original utilities, not realization)
+        vector<WaterSupplySystems *> wss_rof;
+        for (auto* utility : utilities) {
+            for (const auto& wss : utility->getWaterSupplySystems()) {
+                wss_rof.push_back(new WaterSupplySystems(*wss));
+            }
+        }
+        
+        vector<MinEnvFlowControl *> min_env_flow_controls_rof =
+                Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
 
-    // Initialize rof models by connecting it to realization water sources and WSS for observation
-    rof_model->connectRealizationWaterSources(water_sources_realization);
+        // Store realization models in vector - using WSS instead of utilities
+        rof_model = new ContinuityModelROF(
+                water_sources_rof,
+                water_sources_graph,
+                water_sources_to_wss_mapping,  // Use the same WSS-level mapping as realization model
+                wss_rof,
+                min_env_flow_controls_rof,
+                wss_rdm.at(realization),
+                water_sources_rdm.at(realization),
+                total_simulation_time,
+                import_export_rof_tables,
+                realization);
+
+        // Initialize rof models by connecting it to realization water sources and WSS for observation
+        rof_model->connectRealizationWaterSources(water_sources_realization);
+        
+        printf("DEBUG [WSS] Thread %d: Completed ROF model construction for realization %lu\n", 
+               omp_get_thread_num(), realization);
+    }
     
     // Connect ROF model to realization WSS so it can observe infrastructure changes
     rof_model->connectRealizationWSS(wss_realization);
@@ -390,17 +419,11 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
         createContinuityModels(realization, realization_model, rof_model);
 
         // Initialize data collector.
-        // For data collection, we still need utilities (for financial data)
-        // Extract utilities from WSS back-references
-        vector<Utility *> utilities_for_data_collection;
-        for (const auto& wss : realization_model->getContinuity_wss()) {
-            utilities_for_data_collection.push_back(wss->getOwner());
-        }
-        
+        // Use original utilities for data collection without modifying shared state
         master_data_collector->addRealization(
                 realization_model->getContinuity_water_sources(),
                 realization_model->getDrought_mitigation_policies(),
-                utilities_for_data_collection,
+                utilities,  // Use original utilities - financial data aggregation needed separately
                 realization);
 
             for (int w = 0; w < (int) total_simulation_time; ++w) {
@@ -433,6 +456,29 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
             if (import_export_rof_tables == EXPORT_ROF_TABLES) {
                 rof_model->printROFTable(rof_tables_folder);
             }
+
+        // DEBUG: Check if any infrastructure was built in this realization
+        #pragma omp critical
+        {
+            const auto& realization_wss = realization_model->getContinuity_wss();
+            bool any_infrastructure_built = false;
+            
+            for (const auto& wss : realization_wss) {
+                const auto& water_sources = wss->getWater_sources();
+                for (const auto& source : water_sources) {
+                    if (source && source->isOnline()) {
+                        printf("DEBUG: Realization %lu - Water source %d came online during simulation\n", 
+                               realization, source->id);
+                        any_infrastructure_built = true;
+                    }
+                }
+            }
+            
+            if (!any_infrastructure_built) {
+                printf("DEBUG: Realization %lu - No infrastructure was built (no sources came online)\n", realization);
+            }
+        }
+
 //        printf("Realization %lu took %f seconds.\n", r, omp_get_wtime() - start);
 
 // #pragma omp critical
@@ -454,6 +500,7 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
         // Delete realization model last since it owns the shared objects
         delete realization_model;
     }
+    
     // Handle exception from the OpenMP region and pass it up to the
     // problem class.
     if (had_catch) {
@@ -489,6 +536,7 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
 //	master_data_collector->cleanCollectorsOfDeletedRealizations();
 //        throw_with_nested(runtime_error(error_m.c_str()));
     }
+    
     return master_data_collector;
 }
 

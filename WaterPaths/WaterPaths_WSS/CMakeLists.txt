@@ -9,15 +9,15 @@ find_package(OpenMP REQUIRED)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -O0 -march=native")
 
-# Add debugging flags for bounds checking (conditionally, since MinGW doesn't support sanitizers)
-if(NOT WIN32 OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    # Enable sanitizers only on non-Windows or with Clang
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address,undefined -fno-omit-frame-pointer -g")
-    set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address,undefined")
-else()
-    # For MinGW/Windows, just add debug symbols and bounds checking where possible
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -fno-omit-frame-pointer -Wall -Wextra")
-endif()
+# # Add debugging flags for bounds checking (conditionally, since MinGW doesn't support sanitizers)
+# if(NOT WIN32 OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+#     # Enable sanitizers only on non-Windows or with Clang
+#     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address,undefined -fno-omit-frame-pointer -g")
+#     set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fsanitize=address,undefined")
+# else()
+#     # For MinGW/Windows, just add debug symbols and bounds checking where possible
+#     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -fno-omit-frame-pointer -Wall -Wextra")
+# endif()
 
 set(SOURCE_FILES
         ../WaterPaths_WSS/src/ContinuityModels/Base/ContinuityModel.cpp
@@ -99,7 +99,7 @@ set(SOURCE_FILES
         ../WaterPaths_WSS/src/SystemComponents/Utility/Utility.h
         ../WaterPaths_WSS/src/SystemComponents/Utility/InfrastructureManager.cpp
         ../WaterPaths_WSS/src/SystemComponents/Utility/InfrastructureManager.h
-        ../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystem.cpp
+        ../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.cpp
         ../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.h
         ../WaterPaths_WSS/src/SystemComponents/WaterSources/Base/WaterSource.cpp
         ../WaterPaths_WSS/src/SystemComponents/WaterSources/Base/WaterSource.h

@@ -89,7 +89,7 @@ public:
     void addWaterSource(WaterSource *water_source);
 
     void
-    connectWaterSourcesVectorsToUtilities(vector<WaterSource *> &water_sources,
+    connectWaterSourcesVectorsToWSS(vector<WaterSource *> &water_sources,
                                           vector<int> &priority_draw_water_source,
                                           vector<int> &non_priority_draw_water_source);
     void reset();

@@ -18,21 +18,6 @@ double ObjectivesCalculator::calculateReliabilityObjective(
         n_realizations = realizations.size();
     }
 
-    // Check for null pointers and filter them out
-    vector<unsigned long> valid_realizations;
-    for (const unsigned long &r : realizations) {
-        if (r < utility_collector.size() && utility_collector[r] != nullptr) {
-            valid_realizations.push_back(r);
-        }
-    }
-    
-    if (valid_realizations.empty()) {
-        return 1.0; //FIXME: This returns perfect reliability if no valid realizations
-    }
-    
-    realizations = valid_realizations;
-    n_realizations = realizations.size();
-
     unsigned long n_weeks = utility_collector[realizations[0]]->getCombined_storage().size();
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
 
@@ -144,30 +129,45 @@ double ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective(
         n_realizations = realizations.size();
     }
 
-    // Check for null pointers and filter them out
-    vector<unsigned long> valid_realizations;
-    for (const unsigned long &r : realizations) {
-        if (r < utility_data.size() && utility_data[r] != nullptr) {
-            valid_realizations.push_back(r);
-        }
-    }
-    
-    if (valid_realizations.empty()) {
-        return 0.0; //FIXME: This returns no cost if no valid realizations
-    }
-    
-    realizations = valid_realizations;
-    n_realizations = realizations.size();
-
     double infrastructure_npc = 0;
+    printf("DEBUG [WSS ObjectivesCalculator] Calculating Infrastructure NPC for %lu realizations\n", n_realizations);
     for (const unsigned long &r : realizations) {
         auto realization = utility_data[r];
-        infrastructure_npc += accumulate(
-                realization->getNet_present_infrastructure_cost().begin(),
-                realization->getNet_present_infrastructure_cost().end(),
-                0.);
+        
+        auto &infra_costs = realization->getNet_present_infrastructure_cost();
+        printf("DEBUG [WSS ObjectivesCalculator] Realization %lu has %llu infrastructure cost data points\n", 
+               r, (unsigned long long)infra_costs.size());
+        
+        // Print first few and last few values to see the pattern
+        if (!infra_costs.empty()) {
+            printf("DEBUG [WSS ObjectivesCalculator] Realization %lu cost values: first=%.2f", r, infra_costs.front());
+            if (infra_costs.size() > 1) {
+                printf(", second=%.2f", infra_costs[1]);
+            }
+            if (infra_costs.size() > 2) {
+                printf(", third=%.2f", infra_costs[2]);
+            }
+            printf(", last=%.2f", infra_costs.back());
+            if (infra_costs.size() > 1) {
+                printf(", second_last=%.2f", infra_costs[infra_costs.size()-2]);
+            }
+            printf("\n");
+        }
+        
+        // WSS FIX: Infrastructure cost is cumulative and stored weekly
+        // We only need the FINAL value (last week), not the sum of all weeks
+        // The cost accumulates as bonds are issued, so the last value = total NPC
+        double realization_final_cost = 0.0;
+        if (!infra_costs.empty()) {
+            realization_final_cost = infra_costs.back();  // Take last week's value
+        }
+        printf("DEBUG [WSS ObjectivesCalculator] Realization %lu final infrastructure NPC: %.2f (from %llu weekly readings)\n", 
+               r, realization_final_cost, (unsigned long long)infra_costs.size());
+        infrastructure_npc += realization_final_cost;
     }
-
+    
+    printf("DEBUG [WSS ObjectivesCalculator] Total infrastructure NPC: %.2f, Average: %.2f\n", 
+           infrastructure_npc, infrastructure_npc / n_realizations);
     return infrastructure_npc / n_realizations;
 }
 

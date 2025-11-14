@@ -30,14 +30,16 @@ ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
     // update wss' total stored volume
     for (WaterSupplySystems *u : this->continuity_wss) {
         u->updateTotalAvailableVolume();
-        u->getOwner()->setNoFinancialCalculations();
+        // CRITICAL FIX: Mark ROF WSS as not used for realization to prevent bond issuance
+        // ROF models should only calculate risks, not issue actual bonds
+        const_cast<WaterSupplySystems*>(u)->setUsedForRealization(false);
     }
 
     for (int u = 0; u < n_wss; ++u) {
         if (use_precomputed_rof_tables != IMPORT_ROF_TABLES) {
             wss_storage_to_rof_table.emplace_back(
                     total_weeks_simulation,
-                    (unsigned long) NUMBER_REALIZATIONS_ROF);
+                    (unsigned long) NO_OF_INSURANCE_STORAGE_TIERS);
         }
     }
 
@@ -110,16 +112,28 @@ vector<double> ContinuityModelROF::calculateLongTermROF(int week) {
             }
             continuityStep(actual_week, yr, APPLY_DEMAND_BUFFER);
 
-            // check total available storage for each utility and, if smaller
+            // check total available storage for each WSS and, if smaller
             // than the fail ration, increase the number of failed years of
-            // that utility by 1 (FAILURE).
+            // that WSS by 1 (FAILURE).
             for (int u = 0; u < n_wss; ++u) {
-                auto storage_condition =
-                        continuity_wss[u]->getStorageToCapacityRatio() <=
-                        STORAGE_CAPACITY_RATIO_FAIL;
-                auto treatment_condition =
-                        continuity_wss[u]->getUnrestrictedDemand() >
-                        0.9 * continuity_wss[u]->getTotal_treatment_capacity();
+                double total_stored_volume = continuity_wss[u]->getTotal_stored_volume();
+                double total_storage_capacity = continuity_wss[u]->getTotal_storage_capacity();
+                double storage_ratio = continuity_wss[u]->getStorageToCapacityRatio();
+                double unrestricted_demand = continuity_wss[u]->getUnrestrictedDemand();
+                double treatment_capacity = continuity_wss[u]->getTotal_treatment_capacity();
+                
+                auto storage_condition = storage_ratio <= STORAGE_CAPACITY_RATIO_FAIL;
+                auto treatment_condition = unrestricted_demand > 0.9 * treatment_capacity;
+                
+                // Deep debugging: Track detailed reservoir volumes over time
+                // if (yr == 0 && (w % 13 == 0 || w < 10)) { // Print every quarter + first 10 weeks
+                //     printf("WSS_%d LT-Week_%d: Vol=%.2f, Cap=%.2f, Ratio=%.4f, Demand=%.2f, TreatCap=%.2f, StorFail=%s, TreatFail=%s, FailThreshold=%.2f\n", 
+                //            u, actual_week, total_stored_volume, total_storage_capacity, storage_ratio, 
+                //            unrestricted_demand, treatment_capacity,
+                //            storage_condition ? "YES" : "NO", treatment_condition ? "YES" : "NO",
+                //            STORAGE_CAPACITY_RATIO_FAIL);
+                // }
+                
                 if (storage_condition || treatment_condition) {
                     year_failure[u] = FAILURE;
                 }
@@ -138,6 +152,13 @@ vector<double> ContinuityModelROF::calculateLongTermROF(int week) {
         risk_of_failure[i] /= NUMBER_REALIZATIONS_ROF;
     }
 
+    // // Track long-term ROF changes
+    // printf("LONG-TERM ROF (Week %d): ", week);
+    // for (int i = 0; i < n_wss; ++i) {
+    //     printf("WSS_%d=%.4f ", i, risk_of_failure[i]);
+    // }
+    // printf("\n");
+
     return risk_of_failure;
 }
 
@@ -151,10 +172,19 @@ vector<double> ContinuityModelROF::calculateShortTermROF(int week,
     
     vector<double> risk_of_failure;
     if (import_export_rof_tables == IMPORT_ROF_TABLES) {
-        return ContinuityModelROF::calculateShortTermROFTable(week);
+        risk_of_failure = ContinuityModelROF::calculateShortTermROFTable(week);
     } else {
-        return ContinuityModelROF::calculateShortTermROFFullCalcs(week);
+        risk_of_failure = ContinuityModelROF::calculateShortTermROFFullCalcs(week);
     }
+    
+    // // Track short-term ROF changes
+    // printf("SHORT-TERM ROF (Week %d): ", week);
+    // for (int i = 0; i < n_wss; ++i) {
+    //     printf("WSS_%d=%.4f ", i, risk_of_failure[i]);
+    // }
+    // printf("\n");
+    
+    return risk_of_failure;
 }
 
 /**
@@ -248,16 +278,24 @@ vector<double> ContinuityModelROF::calculateShortTermROFFullCalcs(int week) {
             // than the fail ration, increase the number of failed years of
             // that utility by 1 (FAILURE).
             for (int u = 0; u < n_wss; ++u) {
-//                if (continuity_wss[u]->getStorageToCapacityRatio() <=
-//                    STORAGE_CAPACITY_RATIO_FAIL) {
-//                    year_failure[u] = FAILURE;
-//                }
-                auto storage_condition =
-                        continuity_wss[u]->getStorageToCapacityRatio() <=
-                        STORAGE_CAPACITY_RATIO_FAIL;
-                auto treatment_condition =
-                        continuity_wss[u]->getUnrestrictedDemand() >
-                        0.9 * continuity_wss[u]->getTotal_treatment_capacity();
+                double total_stored_volume = continuity_wss[u]->getTotal_stored_volume();
+                double total_storage_capacity = continuity_wss[u]->getTotal_storage_capacity();
+                double storage_ratio = continuity_wss[u]->getStorageToCapacityRatio();
+                double unrestricted_demand = continuity_wss[u]->getUnrestrictedDemand();
+                double treatment_capacity = continuity_wss[u]->getTotal_treatment_capacity();
+                
+                auto storage_condition = storage_ratio <= STORAGE_CAPACITY_RATIO_FAIL;
+                auto treatment_condition = unrestricted_demand > 0.9 * treatment_capacity;
+                
+                // Deep debugging: Track detailed reservoir volumes over time
+                // if (yr == 0 && (w % 10 == 0 || w < 5)) { // Print every 10 weeks + first 5 weeks
+                //     printf("WSS_%d ST-Week_%d: Vol=%.2f, Cap=%.2f, Ratio=%.4f, Demand=%.2f, TreatCap=%.2f, StorFail=%s, TreatFail=%s, FailThreshold=%.2f\n", 
+                //            u, actual_week, total_stored_volume, total_storage_capacity, storage_ratio, 
+                //            unrestricted_demand, treatment_capacity,
+                //            storage_condition ? "YES" : "NO", treatment_condition ? "YES" : "NO",
+                //            STORAGE_CAPACITY_RATIO_FAIL);
+                // }
+                
                 if (storage_condition || treatment_condition) {
                     year_failure[u] = FAILURE;
                 }
@@ -474,6 +512,13 @@ void ContinuityModelROF::resetWSSAndReservoirs(int rof_type) {
     // update wss combined storage.
     for (WaterSupplySystems *u : continuity_wss) {
         u->updateTotalAvailableVolume();
+    }
+    
+    // Synchronize updated values from continuity WSS to realization WSS
+    // This ensures data collection gets the updated values
+    for (int i = 0; i < continuity_wss.size() && i < realization_wss.size(); ++i) {
+        double continuity_volume = continuity_wss[i]->getTotal_available_volume();
+        realization_wss[i]->setTotal_available_volume(continuity_volume);
     }
 }
 

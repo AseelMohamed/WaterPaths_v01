@@ -713,10 +713,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     rof_triggered_infra_order_caesb_descoberto.push_back(13);
     rofs_infra_caesb_descoberto.push_back(1.1);
     
-    // Combine both demands for the utility level
-    // Note: We'll handle system-specific demands within each WaterSupplySystem
-    
-    // Create the single CAESB utility, which will hold the water supply systems.
+    // Create the single CAESB utility (handles finances and decisions only)
     Utility caesb((char *) "CAESB", 0,
                   demand_caesb_descoberto, // Placeholder, will be managed by WSS
                   demand_n_weeks,
@@ -725,7 +722,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                   caesbDescobertoUserClassesWaterPrices, // Placeholder
                   wwtp_discharge_caesb_descoberto, // Placeholder
                   caesb_descoberto_inf_buffer, // Placeholder
-                  {}, {}); // Empty vectors - no default WSS will be created
+                  {}, {}, // Empty vectors
+                  0.04); // Infrastructure discount rate (taxa de desconto)
 
     // Add Descoberto water supply system (system_id=0)
     caesb.addWaterSupplySystem("Descoberto", 0, 0,
@@ -735,7 +733,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                water_sources_to_wtp_caesb_1,
                                wtp_capacities_caesb_1);
 
-    // Add Torto/SM water supply system (system_id=1)
+    // Add TortoSM water supply system (system_id=1)  
     caesb.addWaterSupplySystem("TortoSM", 1, 0,
                                demand_caesb_tortoSM, demand_n_weeks,
                                wwtp_discharge_caesb_tortoSM,
@@ -743,6 +741,18 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                water_sources_to_wtp_caesb_2,
                                wtp_capacities_caesb_2);
 
+    // Set infrastructure parameters for each WSS (this is where WSS gets operational control)
+    // WSS_0 (Descoberto) gets Descoberto infrastructure
+    auto& wss_descoberto = caesb.systemById(0);
+    wss_descoberto.setInfrastructureParameters(rof_triggered_infra_order_caesb_descoberto,
+                                               vector<int>(),  // Empty demand order
+                                               rofs_infra_caesb_descoberto);
+
+    // WSS_1 (TortoSM) gets TortoSM infrastructure  
+    auto& wss_tortoSM = caesb.systemById(1);
+    wss_tortoSM.setInfrastructureParameters(rof_triggered_infra_order_caesb_tortoSM,
+                                           vector<int>(),  // Empty demand order
+                                           rofs_infra_caesb_tortoSM);
 
     vector<Utility *> utilities; //vetor que contém a única companhia CAESB
     utilities.push_back(&caesb);
@@ -754,8 +764,6 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             {1, 3, 4, 9, 10, 11}      // Sources managed by TortoSM WSS (system_id=1)
     };
 
-
-    
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
 //    // O que table_storage_shift representa? O que são esses números (2000, 5000...) [3] [17]
     // Update table storage shift to match WSS structure (2 WSS within single utility)

@@ -4,6 +4,7 @@
 
 // #include <iostream>
 #include <algorithm>
+#include <set>
 #include "ContinuityModelRealization.h"
 
 ContinuityModelRealization::ContinuityModelRealization(
@@ -43,6 +44,19 @@ void ContinuityModelRealization::setShortTermROFs(const vector<double> &risks_of
     }
 }
 
+/**
+ * Set long-term risk of failure for each WSS and trigger infrastructure decisions.
+ * 
+ * CORRECTED ARCHITECTURE:
+ * - Each WSS evaluates its individual ROF and makes infrastructure decisions
+ * - WSS-level decisions are based on specific local conditions, not aggregated utility-level data
+ * - Utilities are notified to implement (finance, construct) the infrastructure decisions
+ * - This reflects how real water systems operate: individual systems identify needs, 
+ *   utilities implement and finance the solutions
+ * 
+ * @param risks_of_failure Vector of ROF values, one per WSS
+ * @param week Current simulation week
+ */
 void ContinuityModelRealization::setLongTermROFs(const vector<double> &risks_of_failure, const int week) {
     vector<int> new_infra_triggered;
     int nit; // new infrastruction triggered - id.
@@ -55,8 +69,11 @@ void ContinuityModelRealization::setLongTermROFs(const vector<double> &risks_of_
                 infrastructureConstructionHandler(risks_of_failure[u], week);
         // If new source was built, check add it to the list of sources
         // built by all utilities.
-        if (nit != NON_INITIALIZED)
+        if (nit != NON_INITIALIZED) {
             new_infra_triggered.push_back(nit);
+            // Bond issuance is now handled internally by WSS infrastructureConstructionHandler
+            // No separate bond issuance call needed here
+        }
     }
 
     // Look for and remove duplicates, in the unlikely case two wss

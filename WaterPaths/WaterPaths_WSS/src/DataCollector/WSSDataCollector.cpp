@@ -4,6 +4,7 @@
 
 #include <iomanip>
 #include <sstream>
+#include <algorithm>
 #include "WSSDataCollector.h"
 
 WSSDataCollector::WSSDataCollector(const WaterSupplySystems *wss, unsigned long realization)
@@ -128,7 +129,9 @@ string WSSDataCollector::printCompactStringHeader() {
 }
 
 void WSSDataCollector::collect_data() {
-    combined_storage.push_back(wss->getTotal_available_volume());
+    // FIXED: Use stored volume for reliability calculations, not available volume
+    // Available volume includes flow-through sources that don't show storage depletion
+    combined_storage.push_back(wss->getTotal_stored_volume());
     storage_capacity.push_back(wss->getTotal_storage_capacity());
     storage_to_capacity_ratio.push_back(wss->getStorageToCapacityRatio());
     unrestricted_demand.push_back(wss->getUnrestrictedDemand());
@@ -139,7 +142,7 @@ void WSSDataCollector::collect_data() {
     unfulfilled_demand.push_back(wss->getUnfulfilled_demand());
     net_stream_inflow.push_back(wss->getNet_stream_inflow());
     total_treatment_capacity.push_back(wss->getTotal_treatment_capacity());
-    // total_storage_treatment_capacity.push_back(wss->getTotal_storage_treatment_capacity());
+    total_storage_treatment_capacity.push_back(0.0); // Placeholder - implement getTotal_storage_treatment_capacity() if needed
     water_sources_count.push_back((int)wss->getWater_sources().size());
 
     // checkForNans();

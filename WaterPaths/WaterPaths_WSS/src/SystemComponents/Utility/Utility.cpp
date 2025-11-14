@@ -3,9 +3,15 @@
 //
 
 #include <algorithm>
+#include <stdexcept>
+#include <sstream>
 #include "Utility.h"
 #include "WaterSupplySystems.h"
 #include "../../Utils/Utils.h"
+
+// THREAD-SAFE: Define static member for globally tracking issued bonds
+std::set<std::string> Utility::globally_issued_bonds;
+std::map<std::string, double> Utility::globally_issued_bond_npcs;
 
 /**
  * Main constructor for the Utility class.
@@ -35,11 +41,13 @@ Utility::Utility(
         WwtpDischargeRule wwtp_discharge_rule,
         double demand_buffer,
         vector<vector<int>> water_source_to_wtp,
-        vector<double> utility_owned_wtp_capacities) :
+        vector<double> utility_owned_wtp_capacities,
+        double infra_discount_rate) :
         // Removed operational variables - now in WaterSupplySystems
         wwtp_discharge_rule(wwtp_discharge_rule),
         demands_all_realizations(demands_all_realizations),
-        infra_discount_rate(NON_INITIALIZED),
+        infra_discount_rate(infra_discount_rate),  // Set from constructor parameter
+        base_infra_discount_rate(infra_discount_rate),  // Store base rate for RDM multiplication
         bond_term_multiplier(NON_INITIALIZED),
         bond_interest_rate_multiplier(NON_INITIALIZED),
         id(id),
@@ -130,6 +138,9 @@ Utility::Utility(const char *name, int id,
         infra_discount_rate(infra_discount_rate),
         bond_term_multiplier(bond_term),
         bond_interest_rate_multiplier(bond_interest_rate),
+        base_infra_discount_rate(infra_discount_rate),
+        base_bond_term_multiplier(bond_term),
+        base_bond_interest_rate_multiplier(bond_interest_rate),
         id(id),
         number_of_week_demands(number_of_week_demands),
         name(name),
@@ -145,13 +156,14 @@ Utility::Utility(const char *name, int id,
                                   rof_infra_construction_order,
                                   demand_infra_construction_order);
 
-    // Initialize water supply systems
+    // Initialize water supply systems with INFRASTRUCTURE PARAMETERS
     water_supply_systems.emplace_back(std::make_unique<WaterSupplySystems>(
-        name, id, id, this, demands_all_realizations, wwtp_discharge_rule));
+        name, id, id, this, demands_all_realizations, number_of_week_demands,
+        wwtp_discharge_rule, demand_buffer, water_source_to_wtp, utility_owned_wtp_capacities,
+        rof_infra_construction_order, demand_infra_construction_order,
+        infra_construction_triggers));
         
-    // Delegate to water supply systems
-    water_supply_systems[0]->unrollWaterSourceToWtpVector(water_source_to_wtp,
-                                                       utility_owned_wtp_capacities);
+    // unrollWaterSourceToWtpVector is already called in the WSS constructor above
 
     // InfrastructureManager will work through utility to coordinate with WaterSupplySystems
     // Water sources are managed by WaterSupplySystems, not directly by Utility
@@ -214,6 +226,9 @@ Utility::Utility(const char *name, int id,
         infra_discount_rate(infra_discount_rate),
         bond_term_multiplier(bond_term),
         bond_interest_rate_multiplier(bond_interest_rate),
+        base_infra_discount_rate(infra_discount_rate),
+        base_bond_term_multiplier(bond_term),
+        base_bond_interest_rate_multiplier(bond_interest_rate),
         id(id),
         number_of_week_demands(number_of_week_demands),
         name(name),
@@ -222,13 +237,14 @@ Utility::Utility(const char *name, int id,
         demand_buffer(demand_buffer),
         utility_owned_wtp_capacities(utility_owned_wtp_capacities) {
 
-    // Initialize water supply systems (create one default system)
+    // Initialize water supply systems (create one default system with infrastructure parameters)
     water_supply_systems.emplace_back(std::make_unique<WaterSupplySystems>(
-        name, id, id, this, demands_all_realizations, wwtp_discharge_rule));
+        name, id, id, this, demands_all_realizations, number_of_week_demands,
+        wwtp_discharge_rule, demand_buffer, water_source_to_wtp, 
+        utility_owned_wtp_capacities, rof_infra_construction_order,
+        demand_infra_construction_order, infra_construction_triggers));
         
-    // Delegate to water supply systems
-    water_supply_systems[0]->unrollWaterSourceToWtpVector(water_source_to_wtp,
-                                                          utility_owned_wtp_capacities);
+    // Note: unrollWaterSourceToWtpVector is now called within the WSS constructor
 
     infrastructure_construction_manager = InfrastructureManager(id,
                                                                 infra_construction_triggers,
@@ -473,6 +489,22 @@ void Utility::updateContingencyFundAndDebtService(
         double utility_unrestricted_demand, double demand_multiplier,
         double demand_offset, double utility_unfulfilled_demand, int week) {
     int week_of_year = Utils::weekOfTheYear(week);
+    
+    // printf("DEBUG [Financial] Utility %d: week=%d, week_of_year=%d, weekly_price_vector_size=%zu\n", 
+    //        id, week, week_of_year, weekly_average_volumetric_price.size());
+    
+    // Add bounds checking for weekly_average_volumetric_price
+    if (week_of_year < 0 || week_of_year >= (int)weekly_average_volumetric_price.size()) {
+        char error_msg[512];
+        sprintf(error_msg, "Utility %d: week_of_year %d (from week %d) out of bounds for weekly_average_volumetric_price (size=%zu)", 
+                id, week_of_year, week, weekly_average_volumetric_price.size());
+        printf("ERROR: %s\n", error_msg);
+        throw std::out_of_range(error_msg);
+    }
+    
+    this->utility_unrestricted_demand = utility_unrestricted_demand;
+    this->demand_multiplier = demand_multiplier;
+    this->demand_offset = demand_offset;
     double unrestricted_price = weekly_average_volumetric_price[week_of_year];
     double current_price;
 
@@ -480,7 +512,11 @@ void Utility::updateContingencyFundAndDebtService(
     if (week_of_year == 0) {
         insurance_purchase = 0.;
     } else if (week_of_year == 1) {
-        infra_net_present_cost = 0.;
+        // CRITICAL FIX: Only reset infra_net_present_cost for realization models
+        // ROF models should not reset this to avoid corrupting shared bond data
+        if (used_for_realization) {
+            infra_net_present_cost = 0.;
+        }
         current_debt_payment = 0.;
     }
 
@@ -490,18 +526,22 @@ void Utility::updateContingencyFundAndDebtService(
     else
         current_price = restricted_price;
 
-    if (current_price < unrestricted_price)
-        throw logic_error("Prices under surcharge cannot be smaller than "
-                          "prices w/o restrictions enacted.");
+    // Validation: ensure restricted price is not lower than unrestricted price
+    // In some edge cases during transition periods, this might occur due to timing
+    if (current_price < unrestricted_price) {
+        printf("DEBUG [WSS] Warning: restricted price %.6f < unrestricted price %.6f, using unrestricted price\n", 
+               current_price, unrestricted_price);
+        current_price = unrestricted_price;
+        restricted_price = NON_INITIALIZED;  // Reset to prevent repeated warnings
+    }
 
     // calculate fund contributions if there were no shortage.
     double projected_fund_contribution = percent_contingency_fund_contribution *
-                                         utility_unrestricted_demand *
-                                         unrestricted_price;
+                          this->utility_unrestricted_demand *
+                          unrestricted_price;
 
-    // Calculate actual gross revenue.
-    gross_revenue = utility_restricted_demand * current_price;
-
+    // Calculate actual gross revenue using the aggregated restricted demand
+    gross_revenue = this->utility_restricted_demand * current_price;    
     // Calculate losses due to restrictions and transfers.
     double lost_demand_vol_sales =
             (utility_unrestricted_demand * (1 - demand_multiplier) +
@@ -535,6 +575,107 @@ void Utility::updateContingencyFundAndDebtService(
     current_debt_payment = updateCurrent_debt_payment(week);
 }
 
+/**
+ * Aggregate financial calculations across all WSS (following Original model pattern)
+ * This method aggregates demand and financial data from all WSS and performs
+ * utility-level financial calculations once per week, matching Original model behavior.
+ */
+void Utility::updateUtilityFinancialCalculations(int week) {
+    // Early exit if this is not for realization (e.g., ROF model)
+    if (!used_for_realization) {
+        // printf("DEBUG [Financial] Utility %d: Skipping financial calculations (not for realization)\n", id);
+        return;
+    }
+    
+    // Early exit if weekly price vector is not properly initialized
+    if (weekly_average_volumetric_price.empty()) {
+        // printf("WARNING [Financial] Utility %d: weekly_average_volumetric_price not initialized, skipping\n", id);
+        return;
+    }
+    
+    // Debug: Add safety checks
+    // printf("DEBUG [Financial] Utility %d: Starting financial calculations for week %d\n", id, week);
+    
+    // Aggregate data from all WSS
+    double total_unrestricted_demand = 0.0;
+    double total_restricted_demand = 0.0; 
+    double total_unfulfilled_demand = 0.0;
+    double avg_demand_multiplier = 0.0;
+    double total_demand_offset = 0.0;
+    bool any_treatment_violation = false;
+    
+    // Use WSS references if available, otherwise use owned WSS objects
+    const auto& wss_refs = getWSSReferences();
+    bool using_refs = !wss_refs.empty();
+    
+    // printf("DEBUG [Financial] Utility %d: Processing %zu WSS %s\n", id, 
+    //        using_refs ? wss_refs.size() : water_supply_systems.size(),
+    //        using_refs ? "(references)" : "(owned)");
+    
+    if (using_refs) {
+        // Use WSS references (points to realization-specific WSS copies)
+        for (size_t i = 0; i < wss_refs.size(); ++i) {
+            const auto& wss = wss_refs[i];
+            if (wss == nullptr) {
+                printf("ERROR [Financial] WSS reference %zu is null!\n", i);
+                continue;
+            }
+            
+            total_unrestricted_demand += wss->getUnrestrictedDemand(-1);
+            total_restricted_demand += wss->getRestrictedDemand();
+            total_unfulfilled_demand += wss->getUnfulfilled_demand();
+            avg_demand_multiplier += wss->getDemand_multiplier();
+            total_demand_offset += wss->getDemand_offset();
+        }
+        
+        // Calculate average demand multiplier
+        if (!wss_refs.empty()) {
+            avg_demand_multiplier /= wss_refs.size();
+        }
+    } else {
+        // Use owned WSS objects (normal case for original utilities)
+        for (const auto& wss : water_supply_systems) {
+            if (wss == nullptr) {
+                printf("ERROR [Financial] Owned WSS is null!\n");
+                continue;
+            }
+            
+            total_unrestricted_demand += wss->getUnrestrictedDemand(-1);
+            total_restricted_demand += wss->getRestrictedDemand();
+            total_unfulfilled_demand += wss->getUnfulfilled_demand();
+            avg_demand_multiplier += wss->getDemand_multiplier();
+            total_demand_offset += wss->getDemand_offset();
+        }
+        
+        // Calculate average demand multiplier
+        if (!water_supply_systems.empty()) {
+            avg_demand_multiplier /= water_supply_systems.size();
+        }
+    }
+    
+    // Default multiplier if no WSS at all
+    if (avg_demand_multiplier == 0.0) {
+        avg_demand_multiplier = 1.0;
+    }
+    
+    // Store aggregated values at utility level
+    utility_unrestricted_demand = total_unrestricted_demand;
+    utility_restricted_demand = total_restricted_demand;
+    
+    // printf("DEBUG [Financial] Utility %d: Calling updateContingencyFundAndDebtService with aggregated data\n", id);
+    
+    // Call financial calculation with aggregated data (like Original model)
+    updateContingencyFundAndDebtService(
+        total_unrestricted_demand,
+        avg_demand_multiplier,
+        total_demand_offset,
+        total_unfulfilled_demand,
+        week
+    );
+    
+    // printf("DEBUG [Financial] Utility %d: Financial calculations completed successfully\n", id);
+}
+
 void Utility::resetDroughtMitigationVariables() {
     restricted_price = NON_INITIALIZED;
     offset_rate_per_volume = NONE;
@@ -565,32 +706,251 @@ double Utility::updateCurrent_debt_payment(int week) {
 ///////////////////////////////////////////////
 
 void Utility::issueBond(int new_infra_triggered, int week) {
-    if (new_infra_triggered != NON_INITIALIZED) {
-        // Find the water source across all water supply systems using the new_infra_triggered ID
-        WaterSource* water_source = nullptr;
-        for (const auto& wss : water_supply_systems) {
-            const auto& sources = wss->getWater_sources();
-            for (WaterSource* source : sources) {
+    // THREAD-SAFE: Use critical section to prevent race conditions on bond issuance
+    #pragma omp critical(bond_issuance)
+    {
+        printf("DEBUG [WSS] Utility::issueBond called: utility_id=%d, new_infra_triggered=%d, week=%d (THREAD-SAFE)\n", 
+               id, new_infra_triggered, week);
+        printf("DEBUG [WSS] Utility %d has %zu WSS refs, %zu owned WSS\n", 
+               id, water_supply_systems_refs.size(), water_supply_systems.size());
+               
+        if (new_infra_triggered != NON_INITIALIZED) {
+            printf("DEBUG [WSS] Accessing water source %d for bond issuance\n", new_infra_triggered);
+            // Try to use the non-owning references first (points to realization WSS with actual water sources)
+            // Fall back to owned WSS if refs are empty
+            vector<WaterSupplySystems*> wss_to_search;
+            
+            if (!water_supply_systems_refs.empty()) {
+                printf("DEBUG [WSS] Using %zu WSS references for bond search\n", water_supply_systems_refs.size());
+                wss_to_search = water_supply_systems_refs;
+            } else {
+                printf("DEBUG [WSS] Using %zu owned WSS for bond search (fallback)\n", water_supply_systems.size());
+                for (const auto& wss : water_supply_systems) {
+                    wss_to_search.push_back(wss.get());
+                }
+            }
+            
+            // Find the water source in the WSS and remember the owning WSS so we
+            // can request the bond corresponding to that system (not the utility)
+            WaterSource* target_source = nullptr;
+            WaterSupplySystems* owner_wss = nullptr;
+            for (const auto& wss : wss_to_search) {
+                if (wss == nullptr) continue;
+                const auto& sources = wss->getWater_sources();
+                for (const auto& source : sources) {
+                    if (source && source->id == new_infra_triggered) {
+                        target_source = source;
+                        owner_wss = wss;
+                        break;
+                    }
+                }
+                if (target_source) break;
+            }
+
+            if (target_source && owner_wss) {
+                printf("DEBUG [WSS] Found target water source %d in WSS %d\n", 
+                       target_source->id, owner_wss->getSystemId());
+                // In the WSS design multiple systems live under the same Utility
+                // (same utility id). The water source holds a vector of bonds
+                // indexed by system id (WSS id). Use the owner's system id when
+                // available; fall back to utility id for legacy cases.
+                int bond_index = owner_wss->getSystemId();
+                printf("DEBUG [WSS] Using bond index %d (WSS system id) to get bond for source %d\n",
+                       bond_index, new_infra_triggered);
+                
+                // Create unique key for global tracking: "utility_id:source_id:wss_id"
+                char bond_key[64];
+                sprintf(bond_key, "%d:%d:%d", id, new_infra_triggered, bond_index);
+                std::string bond_key_str(bond_key);
+                
+                // Check if this bond has already been issued globally
+                bool should_skip = (globally_issued_bonds.find(bond_key_str) != globally_issued_bonds.end());
+                
+                if (should_skip) {
+                    printf("DEBUG [WSS] Bond for source %d (bond_index %d) already issued GLOBALLY, skipping physical issuance\n", 
+                           new_infra_triggered, bond_index);
+                    
+                    // THREAD-SAFE: Even though bond was already issued, this realization needs its cost recorded
+                    if (used_for_realization && current_realization_id != (unsigned long)NON_INITIALIZED) {
+                        auto npc_it = globally_issued_bond_npcs.find(bond_key_str);
+                        if (npc_it != globally_issued_bond_npcs.end()) {
+                            double npc = npc_it->second;
+                            realization_infra_costs[current_realization_id] += npc;
+                            printf("DEBUG [WSS] Retrieved NPC %.2f from global map for realization %lu, new total: %.2f\n",
+                                   npc, current_realization_id, realization_infra_costs[current_realization_id]);
+                        } else {
+                            printf("ERROR [WSS] Bond %s marked as issued but NPC not found in global map!\n", bond_key);
+                        }
+                    }
+                } else {
+                    try {
+                        Bond &bond = target_source->getBond(bond_index);
+                        if (!bond.isIssued()) {
+                        printf("DEBUG [WSS] Bond not yet issued, proceeding with issuance\n");
+                        double construction_time = target_source->construction_time;
+                        printf("DEBUG [WSS] Bond parameters - construction_time: %.2f, bond_term_multiplier: %.4f, bond_interest_rate_multiplier: %.4f, infra_discount_rate: %.4f\n",
+                               construction_time, bond_term_multiplier, bond_interest_rate_multiplier, infra_discount_rate);
+                        
+                        bond.issueBond(week, (int) construction_time, bond_term_multiplier,
+                                       bond_interest_rate_multiplier);
+                        issued_bonds.push_back(&bond);
+                        
+                        // Calculate NPC first
+                        double npc = bond.getNetPresentValueAtIssuance(infra_discount_rate, week);
+                        printf("DEBUG [WSS] Individual bond NPC: %.2f\n", npc);
+                        printf("DEBUG [WSS] Before adding - Total infra_net_present_cost: %.2f\n", infra_net_present_cost);
+                        
+                        // Mark this bond as globally issued and store its NPC
+                        globally_issued_bonds.insert(bond_key_str);
+                        globally_issued_bond_npcs[bond_key_str] = npc;
+                        printf("DEBUG [WSS] Bond marked as globally issued: %s with NPC %.2f\n", bond_key, npc);
+                        
+                        // THREAD-SAFE: Only accumulate costs for realization models
+                        if (used_for_realization) {
+                            infra_net_present_cost += npc;
+                            
+                            // THREAD-SAFE: Also track per-realization cost
+                            if (current_realization_id != (unsigned long)NON_INITIALIZED) {
+                                realization_infra_costs[current_realization_id] += npc;
+                                printf("DEBUG [WSS] Added NPC %.2f to realization %lu, new total for this realization: %.2f\n",
+                                       npc, current_realization_id, realization_infra_costs[current_realization_id]);
+                            }
+                        }
+                        
+                        printf("DEBUG [WSS] Bond issued successfully. NPC: %.2f, Total infra_net_present_cost: %.2f\n", 
+                               npc, infra_net_present_cost);
+                        printf("DEBUG [WSS] Updated Total infra_net_present_cost: %.2f\n", infra_net_present_cost);
+                        printf("DEBUG [WSS] Bond issued for water source ID=%d, total issued_bonds count: %zu\n", 
+                               new_infra_triggered, issued_bonds.size());
+                        } else {
+                            printf("DEBUG [WSS] Bond already issued for water source %d\n", new_infra_triggered);
+                            // Still mark it globally to prevent future attempts
+                            globally_issued_bonds.insert(bond_key_str);
+                        }
+                    } catch (const std::exception& e) {
+                        printf("ERROR [WSS] Failed to get bond for source %d with index %d: %s\n", 
+                               new_infra_triggered, bond_index, e.what());
+                    }
+                }
+            } else {
+                printf("ERROR [WSS] Could not find water source %d in any WSS\n", new_infra_triggered);
+            }
+        } else {
+            printf("DEBUG [WSS] new_infra_triggered is NON_INITIALIZED, no bond to issue\n");
+        }
+    } // End critical section
+}
+
+// CRITICAL FIX: Overloaded version to issue bond for infrastructure in specific WSS
+void Utility::issueBond(int new_infra_triggered, int week, WaterSupplySystems* target_wss) {
+    // THREAD-SAFE: Use critical section to prevent race conditions on bond issuance
+    #pragma omp critical(bond_issuance)
+    {
+        printf("DEBUG [WSS] Attempting to issue bond for source %d in specific WSS %d (THREAD-SAFE)\n", 
+               new_infra_triggered, target_wss ? target_wss->getSystemId() : -1);
+        
+        if (new_infra_triggered != NON_INITIALIZED && target_wss != nullptr) {
+            // Create unique key for global tracking: "utility_id:source_id:wss_id"
+            char bond_key[64];
+            sprintf(bond_key, "%d:%d:%d", id, new_infra_triggered, target_wss->getSystemId());
+            std::string bond_key_str(bond_key);
+            
+            // Check if this bond has already been issued globally
+            bool should_skip = (globally_issued_bonds.find(bond_key_str) != globally_issued_bonds.end());
+            
+            if (should_skip) {
+                printf("DEBUG [WSS] Bond for source %d in WSS %d already issued GLOBALLY, skipping physical issuance\n", 
+                       new_infra_triggered, target_wss->getSystemId());
+                
+                // THREAD-SAFE: Even though bond was already issued, this realization needs its cost recorded
+                if (used_for_realization && current_realization_id != (unsigned long)NON_INITIALIZED) {
+                    auto npc_it = globally_issued_bond_npcs.find(bond_key_str);
+                    if (npc_it != globally_issued_bond_npcs.end()) {
+                        double npc = npc_it->second;
+                        realization_infra_costs[current_realization_id] += npc;
+                        printf("DEBUG [WSS] Retrieved NPC %.2f from global map for realization %lu, new total: %.2f\n",
+                               npc, current_realization_id, realization_infra_costs[current_realization_id]);
+                    } else {
+                        printf("ERROR [WSS] Bond %s marked as issued but NPC not found in global map!\n", bond_key);
+                    }
+                }
+            } else {
+                // Look for the infrastructure source only in the target WSS
+                const auto& water_sources = target_wss->getWater_sources();
+                WaterSource* target_source = nullptr;
+            
+            for (const auto& source : water_sources) {
                 if (source && source->id == new_infra_triggered) {
-                    water_source = source;
+                    target_source = source;
                     break;
                 }
             }
-            if (water_source) break;
-        }
-        
-        if (water_source) {
-            Bond &bond = water_source->getBond(id);
-            if (!bond.isIssued()) {
-                double construction_time = water_source->getConstruction_time();
-                bond.issueBond(week, (int) construction_time, bond_term_multiplier,
-                               bond_interest_rate_multiplier);
-                issued_bonds.push_back(&bond);
-                infra_net_present_cost += bond.getNetPresentValueAtIssuance(
-                        infra_discount_rate, week);
+            
+            if (target_source) {
+                printf("DEBUG [WSS] Found infrastructure source %d in target WSS %d\n", 
+                       new_infra_triggered, target_wss->getSystemId());
+                
+                // WSS FIX: Issue bond from thread-local source but don't add pointer to issued_bonds
+                // This avoids the problem of persistent storage while still tracking costs
+                try {
+                    Bond &bond = target_source->getBond(target_wss->getSystemId());
+                    if (!bond.isIssued()) {
+                        double construction_time = target_source->construction_time;
+                        
+                        printf("DEBUG [WSS] Bond parameters - construction_time: %.2f, bond_term_multiplier: %.4f, bond_interest_rate_multiplier: %.4f, infra_discount_rate: %.4f\n",
+                               construction_time, bond_term_multiplier, bond_interest_rate_multiplier, infra_discount_rate);
+                        
+                        bond.issueBond(week, (int) construction_time, bond_term_multiplier,
+                                       bond_interest_rate_multiplier);
+                        // WSS FIX: Don't add to issued_bonds vector to avoid invalid pointers
+                        // issued_bonds.push_back(&bond);
+                        
+                        // Calculate NPC first
+                        double npc = bond.getNetPresentValueAtIssuance(infra_discount_rate, week);
+                        printf("DEBUG [WSS] Individual bond NPC: %.2f\n", npc);
+                        printf("DEBUG [WSS] Before adding - Total infra_net_present_cost: %.2f\n", infra_net_present_cost);
+                        
+                        // Mark this bond as globally issued and store its NPC
+                        globally_issued_bonds.insert(bond_key_str);
+                        globally_issued_bond_npcs[bond_key_str] = npc;
+                        printf("DEBUG [WSS] Bond marked as globally issued: %s with NPC %.2f\n", bond_key, npc);
+                        
+                        // THREAD-SAFE: Only accumulate costs for realization models
+                        if (used_for_realization) {
+                            infra_net_present_cost += npc;
+                            
+                            // THREAD-SAFE: Also track per-realization cost
+                            if (current_realization_id != (unsigned long)NON_INITIALIZED) {
+                                realization_infra_costs[current_realization_id] += npc;
+                                printf("DEBUG [WSS] Added NPC %.2f to realization %lu, new total for this realization: %.2f\n",
+                                       npc, current_realization_id, realization_infra_costs[current_realization_id]);
+                            }
+                        }
+                        
+                        printf("DEBUG [WSS] Bond issued successfully. NPC: %.2f, Total infra_net_present_cost: %.2f\n", 
+                               npc, infra_net_present_cost);
+                        printf("DEBUG [WSS] Updated Total infra_net_present_cost: %.2f\n", infra_net_present_cost);
+                        printf("DEBUG [WSS] Bond issued for water source ID=%d, total issued_bonds count: %zu\n", 
+                               new_infra_triggered, issued_bonds.size());
+                    } else {
+                        printf("DEBUG [WSS] Bond already issued for water source %d\n", new_infra_triggered);
+                        // Still mark it globally to prevent future attempts
+                        globally_issued_bonds.insert(bond_key_str);
+                    }
+                } catch (const std::exception& e) {
+                    printf("ERROR [WSS] Failed to get bond for source %d in WSS %d: %s\n", 
+                           new_infra_triggered, target_wss->getSystemId(), e.what());
+                }
+            } else {
+                printf("DEBUG [WSS] Could not find water source %d in target WSS %d\n", 
+                       new_infra_triggered, target_wss->getSystemId());
             }
+            }  // Close the else block from should_skip check
+        } else {
+            printf("DEBUG [WSS] Invalid parameters: new_infra_triggered=%d, target_wss=%p\n", 
+                   new_infra_triggered, static_cast<void*>(target_wss));
         }
-    }
+    } // End critical section
 }
 
 void Utility::forceInfrastructureConstruction(int week,
@@ -630,23 +990,61 @@ void Utility::setDemand_offset(double demand_offset, double offset_rate_per_volu
  * @param r
  */
 void Utility::setRealization(unsigned long r, vector<double> &rdm_factors) {
-    // Set realization for all water supply systems
-    for (auto& wss : water_supply_systems) {
-        wss->setRealization(r, rdm_factors);
-    }
+    // Prefer operating on non-owning WSS references that point to realization-specific
+    // WaterSupplySystems copies (populated by Simulation::createContinuityModels).
+    // Fall back to owned water_supply_systems if refs are not set.
+    if (!water_supply_systems_refs.empty()) {
+        for (auto* wss : water_supply_systems_refs) {
+            if (wss) wss->setRealization(r, rdm_factors);
+        }
 
-    // Then aggregate demand series realization from all WSS at utility level
-    utility_demand_series_realization = vector<double>(number_of_week_demands, 0.0);
-    for (int week = 0; week < number_of_week_demands; ++week) {
-        for (const auto& wss : water_supply_systems) {
-            utility_demand_series_realization[week] += wss->getUnrestrictedDemand(week);
+        // Aggregate demand series realization from referenced WSS
+        utility_demand_series_realization = vector<double>(number_of_week_demands, 0.0);
+        for (int week = 0; week < number_of_week_demands; ++week) {
+            for (const auto* wss : water_supply_systems_refs) {
+                if (wss) utility_demand_series_realization[week] += wss->getUnrestrictedDemand(week);
+            }
+        }
+    } else {
+        // Set realization for owned water supply systems
+        for (auto& wss : water_supply_systems) {
+            wss->setRealization(r, rdm_factors);
+        }
+
+        // Then aggregate demand series realization from owned WSS at utility level
+        utility_demand_series_realization = vector<double>(number_of_week_demands, 0.0);
+        for (int week = 0; week < number_of_week_demands; ++week) {
+            for (const auto& wss : water_supply_systems) {
+                utility_demand_series_realization[week] += wss->getUnrestrictedDemand(week);
+            }
         }
     }
-
+    
     // Set financial/policy realization factors at the utility level
+    // printf("DEBUG: setRealization - Before: infra_discount_rate=%.6f, infra_net_present_cost=%.2f\n", 
+    //        infra_discount_rate, infra_net_present_cost);
+    
+    // THREAD-SAFE: Track current realization for per-realization cost tracking
+    current_realization_id = r;
+    
+    // Initialize this realization's cost tracking if not already present
+    if (realization_infra_costs.find(r) == realization_infra_costs.end()) {
+        realization_infra_costs[r] = 0.0;
+    }
+    
+    // LIKE ORIGINAL: NO reset of infrastructure costs - cross-realization accumulation
+    // printf("DEBUG: setRealization - CONTINUING realization %lu with infra_net_present_cost=%.2f (no reset)\n", 
+    //        r, infra_net_present_cost);
+    // printf("DEBUG: setRealization - Current issued_bonds count: %zu (no reset)\n", issued_bonds.size());
+    
     bond_interest_rate_multiplier = rdm_factors.at(1);
     bond_term_multiplier = rdm_factors.at(2);
-    infra_discount_rate *= rdm_factors.at(3);
+    
+    // THREAD-SAFE FIX: Apply RDM multiplier to BASE discount rate (not accumulated)
+    // This prevents accumulation when setRealization is called multiple times on shared utility
+    infra_discount_rate = base_infra_discount_rate * rdm_factors.at(3);
+    // printf("DEBUG: setRealization - Applied RDM multiplier %.6f to base rate %.6f, now: %.6f\n", 
+    //        rdm_factors.at(3), base_infra_discount_rate, infra_discount_rate);
     price_rdm_multiplier = rdm_factors.at(4);
 
     for (double &awp : weekly_average_volumetric_price) {
@@ -673,9 +1071,10 @@ double Utility::getUnrestrictedDemand(int week) const {
     if (week == -1) {
         // no-parameter logic
         double utility_unrestricted_demand = 0.0;
-    for (const auto& wss : water_supply_systems) {
-        utility_unrestricted_demand += wss->getUnrestrictedDemand();
-    }
+        for (const auto& wss : water_supply_systems) {
+            double wss_unrestricted_demand = wss->getUnrestrictedDemand();
+            utility_unrestricted_demand += wss_unrestricted_demand;
+        }
         return utility_unrestricted_demand;
 
     } else {
@@ -687,7 +1086,8 @@ double Utility::getUnrestrictedDemand(int week) const {
 double Utility::getRestrictedDemand() const {
     double utility_restricted_demand = 0.0;
     for (const auto& wss : water_supply_systems) {
-        utility_restricted_demand += wss->getRestrictedDemand();
+        double wss_restricted_demand = wss->getRestrictedDemand();
+        utility_restricted_demand += wss_restricted_demand;
     }
     return utility_restricted_demand;
 }
@@ -697,6 +1097,18 @@ double Utility::getGrossRevenue() const {
 }
 
 double Utility::getInfrastructure_net_present_cost() const {
+    // THREAD-SAFE: Return per-realization cost if realization ID is set
+    // This isolates costs for each realization's data collector
+    if (current_realization_id != (unsigned long)NON_INITIALIZED) {
+        auto it = realization_infra_costs.find(current_realization_id);
+        if (it != realization_infra_costs.end()) {
+            return it->second;
+        }
+        // If realization not found in map yet, return 0 (no costs accumulated yet)
+        return 0.0;
+    }
+    
+    // Fall back to global accumulated cost if no realization is set
     return infra_net_present_cost;
 }
 
@@ -769,6 +1181,61 @@ double Utility::getTotal_storage_capacity() const {
     return utility_total_storage_capacity;
 }
 
+double Utility::getTotal_available_volume() const {
+    double utility_total_available_volume = 0.0;
+    
+    // Force WSS to update their volumes before aggregating
+    for (auto& wss : water_supply_systems) {
+        const_cast<WaterSupplySystems*>(wss.get())->updateTotalAvailableVolume();
+        utility_total_available_volume += wss->getTotal_available_volume();
+    }
+    
+    return utility_total_available_volume;
+}
+
+double Utility::getTotal_stored_volume() const {
+    double utility_total_stored_volume = 0.0;
+    
+    // Force WSS to update their volumes before aggregating
+    for (auto& wss : water_supply_systems) {
+        // Force update of volumes from water sources
+        const_cast<WaterSupplySystems*>(wss.get())->updateTotalAvailableVolume();
+        double wss_stored = wss->getTotal_stored_volume();
+        utility_total_stored_volume += wss_stored;
+    }
+    
+    return utility_total_stored_volume;
+}
+
+void Utility::updateTotalAvailableVolume() {
+    // Delegate to all water supply systems to update their available volumes
+    for (auto& wss : water_supply_systems) {
+        wss->updateTotalAvailableVolume();
+    }
+}
+
 const vector<unique_ptr<WaterSupplySystems>> &Utility::getWaterSupplySystems() const {
     return water_supply_systems;
+}
+
+void Utility::updateWSSReferences(const vector<WaterSupplySystems*>& new_wss) {
+    // Update the non-owning references to point to the WSS objects that have water sources
+    water_supply_systems_refs.clear();
+    
+    for (auto* wss : new_wss) {
+        if (wss && wss->getOwner() == this) {
+            water_supply_systems_refs.push_back(wss);
+        }
+    }
+    
+    // printf("DEBUG: Updated utility %s to reference %zu WSS with water sources\n", 
+    //        name, water_supply_systems_refs.size());
+}
+
+const vector<WaterSupplySystems*>& Utility::getWSSReferences() const {
+    return water_supply_systems_refs;
+}
+
+bool Utility::isUsedForRealization() const {
+    return used_for_realization;
 }

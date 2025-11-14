@@ -85,7 +85,7 @@ string UtilitiesDataCollector::printCompactString(int week) {
               << ","
               << debt_service_payments[week]
               << ",";
-
+    
     return outStream.str();
 }
 
@@ -153,20 +153,28 @@ string UtilitiesDataCollector::printCompactStringHeader() {
               << id << "ins_price" << ","
               << id << "infra_npv" << ","
               << id << "debt_serv" << ",";
-
+    
     return outStream.str();
 }
 
 void UtilitiesDataCollector::collect_data() {
     vector<int> infra_built;
 
-    // combined_storage.push_back(utility->getTotal_available_volume());
+    // CRITICAL FIX: Restore storage collection for reliability calculations
+    // Use stored volume (actual water in storage) rather than available volume
+    // (which includes flow-through sources that don't show storage depletion)
+    combined_storage.push_back(utility->getTotal_stored_volume());
     // lt_rof.push_back(utility->getLong_term_risk_of_failure());
     // st_rof.push_back(utility->getShort_term_risk_of_failure());
     unrestricted_demand.push_back(utility->getUnrestrictedDemand());
     restricted_demand.push_back(utility->getRestrictedDemand());
     contingency_fund_size.push_back(utility->getContingency_fund());
     net_present_infrastructure_cost.push_back(utility->getInfrastructure_net_present_cost());
+    
+    // Debug: Track when infrastructure cost data is collected each week
+    static int debug_week_counter = 0;
+    // printf("DEBUG [WSS UtilitiesDataCollector] Week %d: collecting infra cost %.2f for utility %d\n", 
+    //        debug_week_counter++, utility->getInfrastructure_net_present_cost(), utility->id);
     gross_revenues.push_back(utility->getGrossRevenue());
     debt_service_payments.push_back(utility->getCurrent_debt_payment());
     contingency_fund_contribution.push_back(utility->getCurrent_contingency_fund_contribution());

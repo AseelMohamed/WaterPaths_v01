@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include "Restrictions.h"
 #include "../Utils/Utils.h"
 
@@ -66,7 +67,7 @@ void Restrictions::applyPolicy(int week) {
     realization_wss[0]->setDemand_multiplier(current_multiplier);
     if (!restricted_weekly_average_volumetric_price.empty() && stage > 0) {
         int week_of_year = Utils::weekOfTheYear(week);
-        // Financial operations should use owner utility
+            // Financial operations should use owner utility
         realization_wss[0]->getOwner()->setRestricted_price(
                 restricted_weekly_average_volumetric_price[stage - 1][week_of_year]);
     }
@@ -133,8 +134,10 @@ void Restrictions::calculateWeeklyAverageWaterPrices(
             }
 
             for (int w = 0; w < (int) (WEEKS_IN_YEAR + 1); ++w) {
+                // Fix buffer overflow: ensure month index doesn't exceed array bounds
+                int month_index = min((int)(w / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
                 restricted_weekly_average_volumetric_price[s][w] =
-                        monthly_average_price[(int) (w / WEEKS_IN_MONTH)] / WEEKS_IN_MONTH;
+                        monthly_average_price[month_index] / WEEKS_IN_MONTH;
             }
         }
     }

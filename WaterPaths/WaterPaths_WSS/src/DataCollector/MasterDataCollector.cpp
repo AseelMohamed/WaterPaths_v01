@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <iomanip>
+#include <sstream>
 #include <sys/stat.h>
 #include <numeric>
 #include <random>

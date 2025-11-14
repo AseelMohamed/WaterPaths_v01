@@ -9,10 +9,12 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <set>
 #include "../WaterSources/Reservoir.h"
 #include "../../Utils/Constants.h"
 #include "../../Controls/WwtpDischargeRule.h"
 #include "InfrastructureManager.h"
+#include "../Bonds/Base/Bond.h"
 
 class WaterSupplySystems; // forward declaration
 
@@ -32,6 +34,7 @@ private:
     vector<int> water_source_to_wtp;
     InfrastructureManager infrastructure_construction_manager;
     std::vector<std::unique_ptr<WaterSupplySystems>> water_supply_systems;
+    std::vector<WaterSupplySystems*> water_supply_systems_refs; // Non-owning references to WSS for simulation
     std::vector<double> utility_demand_series_realization;
 
     /// Drought mitigation
@@ -44,6 +47,10 @@ private:
     double infra_discount_rate;
     double bond_term_multiplier;
     double bond_interest_rate_multiplier;
+    // THREAD-SAFE: Store base rates to prevent accumulation when setRealization is called multiple times
+    double base_infra_discount_rate;
+    double base_bond_term_multiplier;
+    double base_bond_interest_rate_multiplier;
     double max_capacity = 0;
     double restricted_price = NON_INITIALIZED;
     double utility_restricted_demand = 0;
@@ -59,6 +66,19 @@ private:
     double current_debt_payment = 0;
     double infra_net_present_cost = 0;
     vector<Bond *> issued_bonds;
+    
+    // THREAD-SAFE: Global tracking of issued bonds across all threads/realizations
+    // Key format: "utility_id:source_id:wss_id"
+    static std::set<std::string> globally_issued_bonds;
+    
+    // THREAD-SAFE: Store NPC for each globally issued bond so other realizations can retrieve it
+    // Maps bond_key -> NPC value
+    static std::map<std::string, double> globally_issued_bond_npcs;
+    
+    // THREAD-SAFE: Track infrastructure costs per realization to avoid shared state corruption
+    // Maps realization_id -> accumulated NPC for that realization
+    std::map<unsigned long, double> realization_infra_costs;
+    unsigned long current_realization_id = NON_INITIALIZED;
 
     // Helper method to find system containing a specific water source
     WaterSupplySystems& systemForSource(int source_id);
@@ -80,7 +100,8 @@ public:
             WwtpDischargeRule wwtp_discharge_rule,
             double demand_buffer,
             vector<vector<int>> water_source_to_wtp,
-            vector<double> utility_owned_wtp_capacities);
+            vector<double> utility_owned_wtp_capacities,
+            double infra_discount_rate); 
 
     Utility(const char *name, int id,
             vector<vector<double>> &demands_all_realizations,
@@ -128,6 +149,11 @@ public:
     static bool compById(Utility *a, Utility *b); //Checked
 
     const vector<unique_ptr<WaterSupplySystems>> &getWaterSupplySystems() const;
+    
+    void updateWSSReferences(const vector<WaterSupplySystems*>& new_wss);
+    
+    // Get WSS references for simulation (non-owning pointers)
+    const vector<WaterSupplySystems*>& getWSSReferences() const;
 
     WaterSupplySystems& systemById(int system_id);
     const WaterSupplySystems& systemById(int system_id) const;
@@ -144,7 +170,8 @@ public:
 
     void setRealization(unsigned long r, vector<double> &rdm_factors);
 
-//     int infrastructureConstructionHandler(double long_term_rof, int week); //checked
+    // DEPRECATED: This method should be phased out - infrastructure decisions moved to WSS level
+    int infrastructureConstructionHandler(double long_term_rof, int week); //checked - LEGACY ONLY
 
     const vector<int> &getDemand_infra_construction_order() const; //checked
 
@@ -166,6 +193,9 @@ public:
 
     void issueBond(int new_infra_triggered, int week); //checked
 
+    // CRITICAL FIX: Overloaded version to issue bond for infrastructure in specific WSS
+    void issueBond(int new_infra_triggered, int week, WaterSupplySystems* target_wss); //NEW
+
     void resetDroughtMitigationVariables(); //Checked
 
     double waterPrice(int week); //Checked
@@ -175,6 +205,9 @@ public:
     void updateContingencyFundAndDebtService(
             double unrestricted_demand, double demand_multiplier,
             double demand_offset, double unfulfilled_demand, int week); //checked
+
+    // NEW: Aggregate financial calculations across all WSS (following Original model pattern)
+    void updateUtilityFinancialCalculations(int week);
 
     void setRestricted_price(double restricted_price); //checked
 
@@ -202,6 +235,12 @@ public:
 
     double getTotal_storage_capacity() const; //check --- 
 
+    double getTotal_available_volume() const; // NEW - aggregates from all WSS
+    
+    double getTotal_stored_volume() const; // NEW - aggregates stored volume from all WSS
+
+    void updateTotalAvailableVolume(); // NEW - delegates to all WSS
+
     double getUnfulfilled_demand() const; 
 
     double getRestrictedDemand() const; //checked
@@ -213,6 +252,8 @@ public:
     const InfrastructureManager &getInfrastructure_construction_manager() const;
 
     double getInfraDiscountRate() const;
+
+    bool isUsedForRealization() const; // Getter for realization flag
 
     void
     unrollWaterSourceToWtpVector(

@@ -130,13 +130,40 @@ double ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective(
     }
 
     double infrastructure_npc = 0;
+    printf("DEBUG [Original ObjectivesCalculator] Calculating Infrastructure NPC for %lu realizations\n", n_realizations);
     for (const unsigned long &r : realizations) {
         auto realization = utility_data[r];
-        infrastructure_npc += accumulate(
+        auto &infra_costs = realization->getNet_present_infrastructure_cost();
+        printf("DEBUG [Original ObjectivesCalculator] Realization %lu has %llu infrastructure cost data points\n", 
+               r, (unsigned long long)infra_costs.size());
+        
+        // Print first few and last few values to see the pattern
+        if (!infra_costs.empty()) {
+            printf("DEBUG [Original ObjectivesCalculator] Realization %lu cost values: first=%.2f", r, infra_costs.front());
+            if (infra_costs.size() > 1) {
+                printf(", second=%.2f", infra_costs[1]);
+            }
+            if (infra_costs.size() > 2) {
+                printf(", third=%.2f", infra_costs[2]);
+            }
+            printf(", last=%.2f", infra_costs.back());
+            if (infra_costs.size() > 1) {
+                printf(", second_last=%.2f", infra_costs[infra_costs.size()-2]);
+            }
+            printf("\n");
+        }
+        
+        double realization_sum = accumulate(
                 realization->getNet_present_infrastructure_cost().begin(),
                 realization->getNet_present_infrastructure_cost().end(),
                 0.);
+        printf("DEBUG [Original ObjectivesCalculator] Realization %lu sum: %.2f (from %llu values)\n", 
+               r, realization_sum, (unsigned long long)infra_costs.size());
+        infrastructure_npc += realization_sum;
     }
+
+    printf("DEBUG [Original ObjectivesCalculator] Total infrastructure NPC: %.2f, Average: %.2f\n", 
+           infrastructure_npc, infrastructure_npc / n_realizations);
 
     return infrastructure_npc / n_realizations;
 }

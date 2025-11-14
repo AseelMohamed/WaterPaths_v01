@@ -777,18 +777,36 @@ double Utility::updateCurrent_debt_payment(int week) {
 }
 
 void Utility::issueBond(int new_infra_triggered, int week) {
+    printf("DEBUG [Original] Utility::issueBond called: utility_id=%d, new_infra_triggered=%d, week=%d\n", 
+           id, new_infra_triggered, week);
+    printf("DEBUG [Original] Utility %d has %zu water sources total\n", 
+           id, water_sources.size());
+    
     if (new_infra_triggered != NON_INITIALIZED) {
+        printf("DEBUG [Original] Accessing water source %d for bond issuance\n", new_infra_triggered);
         Bond &bond = water_sources.at((unsigned long) new_infra_triggered)
                 ->getBond(id);
         if (!bond.isIssued()) {
+            printf("DEBUG [Original] Bond not yet issued, proceeding with issuance\n");
             double construction_time = water_sources
                     .at((unsigned long) new_infra_triggered)->construction_time;
+            printf("DEBUG [Original] Bond parameters - construction_time: %.2f, bond_term_multiplier: %.4f, bond_interest_rate_multiplier: %.4f, infra_discount_rate: %.4f\n",
+                   construction_time, bond_term_multiplier, bond_interest_rate_multiplier, infra_discount_rate);
             bond.issueBond(week, (int) construction_time, bond_term_multiplier,
                            bond_interest_rate_multiplier);
             issued_bonds.push_back(&bond);
-            infra_net_present_cost += bond.getNetPresentValueAtIssuance(
-                    infra_discount_rate, week);
+            double npc = bond.getNetPresentValueAtIssuance(infra_discount_rate, week);
+            printf("DEBUG [Original] Individual bond NPC: %.2f\n", npc);
+            printf("DEBUG [Original] Before adding - Total infra_net_present_cost: %.2f\n", infra_net_present_cost);
+            infra_net_present_cost += npc;
+            printf("DEBUG [Original] Bond issued successfully. NPC: %.2f, Total infra_net_present_cost: %.2f\n", 
+                   npc, infra_net_present_cost);
+            printf("DEBUG [Original] Updated Total infra_net_present_cost: %.2f\n", infra_net_present_cost);
+        } else {
+            printf("DEBUG [Original] Bond already issued for water source %d\n", new_infra_triggered);
         }
+    } else {
+        printf("DEBUG [Original] new_infra_triggered is NON_INITIALIZED, no bond to issue\n");
     }
 }
 
@@ -818,10 +836,6 @@ void Utility::forceInfrastructureConstruction(int week,
 int Utility::infrastructureConstructionHandler(double long_term_rof, int week) {
     double past_year_average_demand = 0;
     if (week >= (int) WEEKS_IN_YEAR) {
-        //     past_year_average_demand =
-        //            std::accumulate(demand_series_realization.begin() + week - (int) WEEKS_IN_YEAR,
-        //                            demand_series_realization.begin() + week, 0.0) / WEEKS_IN_YEAR;
-
         for (int w = week - (int) WEEKS_IN_YEAR; w < week; ++w) {
             past_year_average_demand += demand_series_realization.at(w);
         }
@@ -841,6 +855,8 @@ int Utility::infrastructureConstructionHandler(double long_term_rof, int week) {
 
     // Issue and add bond of triggered water source to list of outstanding bonds, and update total new
     // infrastructure NPV.
+    printf("DEBUG [Original] About to issue bond for triggered infrastructure: new_infra_triggered=%d\n", 
+           new_infra_triggered);
     issueBond(new_infra_triggered, week);
 
     updateTreatmentAndNumberOfStorageSources();

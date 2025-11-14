@@ -165,7 +165,12 @@ void UtilitiesDataCollector::collect_data() {
     unrestricted_demand.push_back(utility->getUnrestrictedDemand());
     restricted_demand.push_back(utility->getRestrictedDemand());
     contingency_fund_size.push_back(utility->getContingency_fund());
-    net_present_infrastructure_cost.push_back(utility->getInfrastructure_net_present_cost());
+    
+    double current_infra_cost = utility->getInfrastructure_net_present_cost();
+    printf("DEBUG [Original UtilitiesDataCollector] Week %llu: collecting infra cost %.2f for utility %d\n", 
+           (unsigned long long)net_present_infrastructure_cost.size(), current_infra_cost, id);
+    net_present_infrastructure_cost.push_back(current_infra_cost);
+    
     gross_revenues.push_back(utility->getGrossRevenue());
     debt_service_payments.push_back(utility->getCurrent_debt_payment());
     contingency_fund_contribution.push_back(utility->getCurrent_contingency_fund_contribution());

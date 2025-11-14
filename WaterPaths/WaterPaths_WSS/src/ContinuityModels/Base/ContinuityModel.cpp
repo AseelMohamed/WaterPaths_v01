@@ -37,17 +37,14 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
     // correspondence between mapping indices and WSS entries and can lead
     // to duplicate-add attempts when populating WSS with water sources.
 
-    // CRITICAL: Reconnect infrastructure managers after WSS objects are copied
-    // When WSS objects are copied, their internal vectors get new addresses but 
-    // InfrastructureManager still points to the old addresses
-    for (auto* wss_ptr : continuity_wss) {
-        wss_ptr->reconnectInfrastructureManager();
-    }
-
     // Link water sources to WSS within each utility by passing pointers of the former to each WSS.
+    printf("DEBUG [WSS] ContinuityModel constructor: Assigning water sources to WSS...\n");
+    printf("DEBUG [WSS] Total WSS: %zu, Total water sources: %zu\n", wss.size(), continuity_water_sources.size());
     for (unsigned long u = 0; u < wss.size(); ++u) {
+        printf("DEBUG [WSS] WSS[%lu] gets water sources: ", u);
         for (unsigned long ws = 0; ws < water_sources_to_wss[u].size(); ++ws) {
             auto ws_id = water_sources_to_wss[u][ws];
+            printf("ID=%d ", ws_id);
             if (ws_id >= continuity_water_sources.size()) {
                 string error = "Water source " + to_string(ws_id) + " was not added to list of water sources passed to the continuity model.";
                 throw invalid_argument(error);
@@ -56,7 +53,11 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
                     continuity_water_sources.at((unsigned int) ws_id);
             this->continuity_wss[u]->addWaterSource(water_source);
         }
+        printf("\n");
+        printf("DEBUG [WSS] WSS[%lu] now has %zu water sources after assignment\n", 
+               u, this->continuity_wss[u]->getWater_sources().size());
     }   
+
     wss_to_water_sources.assign(water_sources.size(), vector<int>(0));
     water_sources_online_to_wss.assign(water_sources.size(), vector<int>(0));
     
@@ -207,6 +208,31 @@ void ContinuityModel::continuityStep(
     }
 
     /**
+     * Update utility finances (including yearly infrastructure cost resets).
+     * This must happen after demand splitting to have current demand/restriction data.
+     */
+    vector<Utility*> processed_utilities;
+    for (WaterSupplySystems *wss : continuity_wss) {
+        Utility* utility = wss->getOwner();
+        if (utility) {
+            // Check if we've already processed this utility
+            bool already_processed = false;
+            for (Utility* u : processed_utilities) {
+                if (u == utility) {
+                    already_processed = true;
+                    break;
+                }
+            }
+            
+            if (!already_processed) {
+                // Call utility-level financial calculations (aggregates all WSS data like Original model)
+                utility->updateUtilityFinancialCalculations(week);
+                processed_utilities.push_back(utility);
+            }
+        }
+    }
+
+    /**
      * Set minimum environmental flows for water sources based on their
      * individual controls.
      */
@@ -246,6 +272,11 @@ void ContinuityModel::continuityStep(
         //         continue;
         //     }
         // }
+        double total_demand_for_source = 0;
+        for (double demand : demands[i]) {
+            total_demand_for_source += demand;
+        }
+        
         continuity_water_sources[i]->continuityWaterSource(
                 week - delta_realization_weeks[rof_realization + 1],
                 upstream_spillage[i], wastewater_discharges[i], demands[i]);
@@ -264,8 +295,21 @@ void ContinuityModel::continuityStep(
 void ContinuityModel::setRealization(unsigned long realization_id, vector<double> &wss_rdm,
                                      vector<double> &water_sources_rdm) {
     if (realization_id != (unsigned) NON_INITIALIZED) {
+        // Set realization on WSS
         for (WaterSupplySystems *u : continuity_wss)
             u->setRealization(realization_id, wss_rdm);
+        
+        // CRITICAL FIX: Also set realization on parent utilities to initialize bond parameters
+        std::set<Utility*> unique_utilities;
+        for (WaterSupplySystems *wss : continuity_wss) {
+            if (wss && wss->getOwner()) {
+                unique_utilities.insert(wss->getOwner());
+            }
+        }
+        for (Utility *utility : unique_utilities) {
+            utility->setRealization(realization_id, wss_rdm);
+        }
+        
         for (WaterSource *ws : continuity_water_sources)
             ws->setRealization(realization_id, water_sources_rdm);
         for (MinEnvFlowControl *mef : min_env_flow_controls)

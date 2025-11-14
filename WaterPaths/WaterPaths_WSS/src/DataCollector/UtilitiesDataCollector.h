@@ -8,6 +8,7 @@
 
 #include "Base/DataCollector.h"
 #include "../SystemComponents/Utility/Utility.h"
+#include "../SystemComponents/Utility/WaterSupplySystems.h"
 
 class UtilitiesDataCollector : public DataCollector {
 private:

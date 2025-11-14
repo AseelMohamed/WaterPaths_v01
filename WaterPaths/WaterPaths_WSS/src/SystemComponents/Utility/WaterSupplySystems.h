@@ -92,7 +92,17 @@ public:
             const vector<vector<int>>& water_source_to_wtp,
             const vector<double>& wss_owned_wtp_capacities);
     void reconnectInfrastructureManager();
-    int infrastructureConstructionHandler(double long_term_rof, int week); //checked
+    
+    // Infrastructure decision-making (WSS-level triggers based on individual ROF)
+    int infrastructureConstructionHandler(double long_term_rof, int week);
+    
+    // Infrastructure management accessors
+    const vector<int>& getRof_infra_construction_order() const;
+    
+    // Method to set infrastructure parameters after WSS creation
+    void setInfrastructureParameters(const vector<int>& rof_infra_construction_order,
+                                    const vector<int>& demand_infra_construction_order, 
+                                    const vector<double>& infra_construction_triggers);
 
     // Demand splitting algorithms
     static bool idealDemandSplitUnconstrained(
@@ -128,11 +138,13 @@ public:
     double getTotal_storage_treatment_capacity() const;
     double getUnrestrictedDemand(int week = -1) const; //checked
     double getDemand_multiplier() const; //checked  
-    double getDemand_offset() const; //checked
+    double getDemand_offset() const;
+
     void resetTotal_storage_capacity(); //checked
     
     // Setter methods for delegation
     void setRisk_of_failure(double risk_of_failure); //Checked
+    void setTotal_available_volume(double volume); // For synchronization
     
     // Metadata accessors
     int getSystemId() const; //Checked
@@ -140,13 +152,13 @@ public:
 
     Utility* getOwner() const { return owner; }
     const vector<WaterSource*>& getWater_sources() const; //Checked
+    bool isUsedForRealization() const { return used_for_realization; }
+    void setUsedForRealization(bool value) { used_for_realization = value; }
 
     // Operational drought response
     void setDemand_multiplier(double demand_multiplier); //checked
     void setDemand_offset(double demand_offset, double offset_rate_per_volume); //checked
     double getRestrictedDemand() const; //checked
-    
-
 private:
     Utility* owner;
     vector<int> priority_draw_water_source;

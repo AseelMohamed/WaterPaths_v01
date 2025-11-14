@@ -15,7 +15,7 @@ using namespace std;
 
 class Caesb : public Problem {
 private:
-    const int n_utilities = 2;
+    const int n_wss = 2;
 //obs: não inseri os streamflows do subsistema gama (provavelmente será excluído da análise)
     vector<vector<double>> streamflows_descoberto; //descoberto
     vector<vector<double>> streamflows_tortoSM; //captação no Santa Maria
