@@ -252,16 +252,16 @@ void Simulation::createContinuityModels(unsigned long realization,
     // CRITICAL SECTION: WSS copying must be thread-safe since original WSS objects are shared
     #pragma omp critical(wss_copying)
     {
-        printf("DEBUG [WSS] Thread %d: Starting WSS copying for realization %lu\n", 
-               omp_get_thread_num(), realization);
+        // printf("DEBUG [WSS] Thread %d: Starting WSS copying for realization %lu\n", 
+        //        omp_get_thread_num(), realization);
         for (auto* utility : utilities) {
             for (const auto& wss : utility->getWaterSupplySystems()) {
                 // Create copies of WSS for this realization
                 wss_realization.push_back(new WaterSupplySystems(*wss));
             }
         }
-        printf("DEBUG [WSS] Thread %d: Completed WSS copying for realization %lu\n", 
-               omp_get_thread_num(), realization);
+        // printf("DEBUG [WSS] Thread %d: Completed WSS copying for realization %lu\n", 
+        //        omp_get_thread_num(), realization);
     }
     
     // Directly use the WSS connectivity matrix (water_sources_to_wss)
@@ -276,8 +276,8 @@ void Simulation::createContinuityModels(unsigned long realization,
     // The ContinuityModel constructor modifies WSS objects and assigns water sources
     #pragma omp critical(continuity_model_construction)
     {
-        printf("DEBUG [WSS] Thread %d: Starting ContinuityModel construction for realization %lu\n", 
-               omp_get_thread_num(), realization);
+        // printf("DEBUG [WSS] Thread %d: Starting ContinuityModel construction for realization %lu\n", 
+        //        omp_get_thread_num(), realization);
         
         // Store realization models in vector - using WSS instead of utilities
         realization_model = new ContinuityModelRealization(
@@ -292,15 +292,33 @@ void Simulation::createContinuityModels(unsigned long realization,
                 policies_rdm.at(realization),
                 realization);
         
-        printf("DEBUG [WSS] Thread %d: Completed ContinuityModelRealization construction for realization %lu\n", 
-               omp_get_thread_num(), realization);
+        // Update utilities to reference the realization-specific WSS
+        // Group WSS by their owner utility
+        std::map<Utility*, std::vector<WaterSupplySystems*>> utility_to_wss_map;
+        for (auto* wss : wss_realization) {
+            if (wss && wss->getOwner()) {
+                utility_to_wss_map[wss->getOwner()].push_back(wss);
+            }
+        }
+        
+        // Update each utility with its WSS references
+        for (auto& pair : utility_to_wss_map) {
+            Utility* utility = pair.first;
+            const std::vector<WaterSupplySystems*>& wss_list = pair.second;
+            utility->updateWSSReferences(wss_list);
+            // printf("DEBUG [WSS] Updated utility %d with %zu WSS references for realization %lu\n",
+            //        utility->id, wss_list.size(), realization);
+        }
+        
+        // printf("DEBUG [WSS] Thread %d: Completed ContinuityModelRealization construction for realization %lu\n", 
+        //        omp_get_thread_num(), realization);
     }
 
     // CRITICAL SECTION: ROF model construction also needs thread safety
     #pragma omp critical(rof_model_construction)
     {
-        printf("DEBUG [WSS] Thread %d: Starting ROF model construction for realization %lu\n", 
-               omp_get_thread_num(), realization);
+        // printf("DEBUG [WSS] Thread %d: Starting ROF model construction for realization %lu\n", 
+        //        omp_get_thread_num(), realization);
                
         // Create rof models by copying the water sources and WSS.
         // ROF model needs its own copies for independent ROF calculations
@@ -334,8 +352,8 @@ void Simulation::createContinuityModels(unsigned long realization,
         // Initialize rof models by connecting it to realization water sources and WSS for observation
         rof_model->connectRealizationWaterSources(water_sources_realization);
         
-        printf("DEBUG [WSS] Thread %d: Completed ROF model construction for realization %lu\n", 
-               omp_get_thread_num(), realization);
+        // printf("DEBUG [WSS] Thread %d: Completed ROF model construction for realization %lu\n", 
+        //        omp_get_thread_num(), realization);
     }
     
     // Connect ROF model to realization WSS so it can observe infrastructure changes
@@ -467,15 +485,15 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
                 const auto& water_sources = wss->getWater_sources();
                 for (const auto& source : water_sources) {
                     if (source && source->isOnline()) {
-                        printf("DEBUG: Realization %lu - Water source %d came online during simulation\n", 
-                               realization, source->id);
+                        // printf("DEBUG: Realization %lu - Water source %d came online during simulation\n", 
+                        //        realization, source->id);
                         any_infrastructure_built = true;
                     }
                 }
             }
             
             if (!any_infrastructure_built) {
-                printf("DEBUG: Realization %lu - No infrastructure was built (no sources came online)\n", realization);
+                // printf("DEBUG: Realization %lu - No infrastructure was built (no sources came online)\n", realization);
             }
         }
 

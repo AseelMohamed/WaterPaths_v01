@@ -160,7 +160,7 @@ string UtilitiesDataCollector::printCompactStringHeader() {
 void UtilitiesDataCollector::collect_data() {
     vector<int> infra_built;
 
-    // CRITICAL FIX: Restore storage collection for reliability calculations
+    // Restore storage collection for reliability calculations
     // Use stored volume (actual water in storage) rather than available volume
     // (which includes flow-through sources that don't show storage depletion)
     combined_storage.push_back(utility->getTotal_stored_volume());
@@ -175,10 +175,23 @@ void UtilitiesDataCollector::collect_data() {
     static int debug_week_counter = 0;
     // printf("DEBUG [WSS UtilitiesDataCollector] Week %d: collecting infra cost %.2f for utility %d\n", 
     //        debug_week_counter++, utility->getInfrastructure_net_present_cost(), utility->id);
-    gross_revenues.push_back(utility->getGrossRevenue());
-    debt_service_payments.push_back(utility->getCurrent_debt_payment());
-    contingency_fund_contribution.push_back(utility->getCurrent_contingency_fund_contribution());
-    drought_mitigation_cost.push_back(utility->getDrought_mitigation_cost());
+    
+    double gr = utility->getGrossRevenue();
+    double dsp = utility->getCurrent_debt_payment();
+    double cfc = utility->getCurrent_contingency_fund_contribution();
+    double dmc = utility->getDrought_mitigation_cost();
+    
+    // Debug for weeks 0 and 52 only
+    if (debug_week_counter == 0 || debug_week_counter == 52) {
+        // printf("DEBUG [WSS DataCollector] Week %d: Collecting - gross_rev=%.2f, debt=%.2f, cont_fund=%.2f, drought=%.2f\n",
+        //        debug_week_counter, gr, dsp, cfc, dmc);
+    }
+    debug_week_counter++;
+    
+    gross_revenues.push_back(gr);
+    debt_service_payments.push_back(dsp);
+    contingency_fund_contribution.push_back(cfc);
+    drought_mitigation_cost.push_back(dmc);
     insurance_contract_cost.push_back(utility->getInsurance_purchase());
     insurance_payout.push_back(utility->getInsurance_payout());
     capacity.push_back(utility->getTotal_storage_capacity());

@@ -30,7 +30,7 @@ ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
     // update wss' total stored volume
     for (WaterSupplySystems *u : this->continuity_wss) {
         u->updateTotalAvailableVolume();
-        // CRITICAL FIX: Mark ROF WSS as not used for realization to prevent bond issuance
+        // Mark ROF WSS as not used for realization to prevent bond issuance
         // ROF models should only calculate risks, not issue actual bonds
         const_cast<WaterSupplySystems*>(u)->setUsedForRealization(false);
     }

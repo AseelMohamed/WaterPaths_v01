@@ -142,9 +142,6 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     vector<int> rof_triggered_infra_order_caesb_tortoSM =
             vecInfraRankToVecInt(caesb_tortoSM_infra_order_raw);
 
-        cout << rof_triggered_infra_order_caesb_descoberto[0] << endl;
-        cout << rof_triggered_infra_order_caesb_descoberto[1] << endl;
-        cout << rof_triggered_infra_order_caesb_descoberto[2] << endl;
     // Create vectors with each utility's long-term ROF values assigned to all
     // infrastructure options.
     vector<double> rofs_infra_caesb_descoberto = vector<double>

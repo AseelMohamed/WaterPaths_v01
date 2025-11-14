@@ -38,13 +38,13 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
     // to duplicate-add attempts when populating WSS with water sources.
 
     // Link water sources to WSS within each utility by passing pointers of the former to each WSS.
-    printf("DEBUG [WSS] ContinuityModel constructor: Assigning water sources to WSS...\n");
-    printf("DEBUG [WSS] Total WSS: %zu, Total water sources: %zu\n", wss.size(), continuity_water_sources.size());
+    // printf("DEBUG [WSS] ContinuityModel constructor: Assigning water sources to WSS...\n");
+    // printf("DEBUG [WSS] Total WSS: %zu, Total water sources: %zu\n", wss.size(), continuity_water_sources.size());
     for (unsigned long u = 0; u < wss.size(); ++u) {
-        printf("DEBUG [WSS] WSS[%lu] gets water sources: ", u);
+        // printf("DEBUG [WSS] WSS[%lu] gets water sources: ", u);
         for (unsigned long ws = 0; ws < water_sources_to_wss[u].size(); ++ws) {
             auto ws_id = water_sources_to_wss[u][ws];
-            printf("ID=%d ", ws_id);
+            // printf("ID=%d ", ws_id);
             if (ws_id >= continuity_water_sources.size()) {
                 string error = "Water source " + to_string(ws_id) + " was not added to list of water sources passed to the continuity model.";
                 throw invalid_argument(error);
@@ -53,9 +53,9 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
                     continuity_water_sources.at((unsigned int) ws_id);
             this->continuity_wss[u]->addWaterSource(water_source);
         }
-        printf("\n");
-        printf("DEBUG [WSS] WSS[%lu] now has %zu water sources after assignment\n", 
-               u, this->continuity_wss[u]->getWater_sources().size());
+        // printf("\n");
+        // printf("DEBUG [WSS] WSS[%lu] now has %zu water sources after assignment\n", 
+        //        u, this->continuity_wss[u]->getWater_sources().size());
     }   
 
     wss_to_water_sources.assign(water_sources.size(), vector<int>(0));

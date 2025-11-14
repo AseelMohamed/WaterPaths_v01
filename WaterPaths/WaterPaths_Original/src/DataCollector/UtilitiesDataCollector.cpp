@@ -167,14 +167,17 @@ void UtilitiesDataCollector::collect_data() {
     contingency_fund_size.push_back(utility->getContingency_fund());
     
     double current_infra_cost = utility->getInfrastructure_net_present_cost();
-    printf("DEBUG [Original UtilitiesDataCollector] Week %llu: collecting infra cost %.2f for utility %d\n", 
-           (unsigned long long)net_present_infrastructure_cost.size(), current_infra_cost, id);
     net_present_infrastructure_cost.push_back(current_infra_cost);
     
-    gross_revenues.push_back(utility->getGrossRevenue());
-    debt_service_payments.push_back(utility->getCurrent_debt_payment());
-    contingency_fund_contribution.push_back(utility->getCurrent_contingency_fund_contribution());
-    drought_mitigation_cost.push_back(utility->getDrought_mitigation_cost());
+    double gr = utility->getGrossRevenue();
+    double dsp = utility->getCurrent_debt_payment();
+    double cfc = utility->getCurrent_contingency_fund_contribution();
+    double dmc = utility->getDrought_mitigation_cost();
+    
+    gross_revenues.push_back(gr);
+    debt_service_payments.push_back(dsp);
+    contingency_fund_contribution.push_back(cfc);
+    drought_mitigation_cost.push_back(dmc);
     insurance_contract_cost.push_back(utility->getInsurance_purchase());
     insurance_payout.push_back(utility->getInsurance_payout());
     capacity.push_back(utility->getTotal_storage_capacity());

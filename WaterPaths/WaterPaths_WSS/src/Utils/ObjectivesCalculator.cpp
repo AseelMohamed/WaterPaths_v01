@@ -130,44 +130,14 @@ double ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective(
     }
 
     double infrastructure_npc = 0;
-    printf("DEBUG [WSS ObjectivesCalculator] Calculating Infrastructure NPC for %lu realizations\n", n_realizations);
+    // WSS FIX: Infrastructure cost is cumulative and stored weekly
+    // We only need the FINAL value (last week), not the sum of all weeks
+    // The cost accumulates as bonds are issued, so the last value = total NPC
     for (const unsigned long &r : realizations) {
-        auto realization = utility_data[r];
-        
-        auto &infra_costs = realization->getNet_present_infrastructure_cost();
-        printf("DEBUG [WSS ObjectivesCalculator] Realization %lu has %llu infrastructure cost data points\n", 
-               r, (unsigned long long)infra_costs.size());
-        
-        // Print first few and last few values to see the pattern
-        if (!infra_costs.empty()) {
-            printf("DEBUG [WSS ObjectivesCalculator] Realization %lu cost values: first=%.2f", r, infra_costs.front());
-            if (infra_costs.size() > 1) {
-                printf(", second=%.2f", infra_costs[1]);
-            }
-            if (infra_costs.size() > 2) {
-                printf(", third=%.2f", infra_costs[2]);
-            }
-            printf(", last=%.2f", infra_costs.back());
-            if (infra_costs.size() > 1) {
-                printf(", second_last=%.2f", infra_costs[infra_costs.size()-2]);
-            }
-            printf("\n");
+        if (!utility_data[r]->getNet_present_infrastructure_cost().empty()) {
+            infrastructure_npc += utility_data[r]->getNet_present_infrastructure_cost().back();
         }
-        
-        // WSS FIX: Infrastructure cost is cumulative and stored weekly
-        // We only need the FINAL value (last week), not the sum of all weeks
-        // The cost accumulates as bonds are issued, so the last value = total NPC
-        double realization_final_cost = 0.0;
-        if (!infra_costs.empty()) {
-            realization_final_cost = infra_costs.back();  // Take last week's value
-        }
-        printf("DEBUG [WSS ObjectivesCalculator] Realization %lu final infrastructure NPC: %.2f (from %llu weekly readings)\n", 
-               r, realization_final_cost, (unsigned long long)infra_costs.size());
-        infrastructure_npc += realization_final_cost;
     }
-    
-    printf("DEBUG [WSS ObjectivesCalculator] Total infrastructure NPC: %.2f, Average: %.2f\n", 
-           infrastructure_npc, infrastructure_npc / n_realizations);
     return infrastructure_npc / n_realizations;
 }
 
@@ -176,6 +146,7 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
         vector<unsigned long> realizations) {
 
     unsigned long n_realizations = utility_data.size();
+    
     if (realizations.empty()) {
         realizations = vector<unsigned long>(n_realizations);
         iota(realizations.begin(), realizations.end(), 0);
@@ -183,24 +154,9 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
         n_realizations = realizations.size();
     }
 
-    // Check for null pointers and filter them out
-    vector<unsigned long> valid_realizations;
-    for (const unsigned long &r : realizations) {
-        if (r < utility_data.size() && utility_data[r] != nullptr) {
-            valid_realizations.push_back(r);
-        }
-    }
-    
-    if (valid_realizations.empty()) {
-        return 0.0; //FIXME: This returns default value if no valid realizations
-    }
-    
-    realizations = valid_realizations;
-    n_realizations = realizations.size();
-
     unsigned long n_weeks = utility_data[realizations[0]]->getGross_revenues().size();
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
-    double discount_rate = utility_data[realizations[0]]->getUtility()->getInfraDiscountRate();
+    double discount_rate = utility_data[0]->getUtility()->getInfraDiscountRate();
 
     double realizations_year_debt_payment = 0;
     double realizations_year_cont_fund_contribution = 0;
@@ -214,6 +170,26 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
     for (const unsigned long &r : realizations) {
         year_financial_costs.assign(n_years, 0.0);
         y = 0;
+        
+        // DEBUG: Check vector sizes and sample values for first realization
+        if (r == 0) {
+            auto &debt = utility_data[r]->getDebt_service_payments();
+            auto &cont = utility_data[r]->getContingency_fund_contribution();
+            auto &rev = utility_data[r]->getGross_revenues();
+            auto &ins = utility_data[r]->getInsurance_contract_cost();
+            
+            // printf("DEBUG [WSS] Peak Cost R0: Vector sizes - debt=%lu, cont=%lu, rev=%lu, ins=%lu\n",
+            //        (unsigned long)debt.size(), (unsigned long)cont.size(), 
+            //        (unsigned long)rev.size(), (unsigned long)ins.size());
+            
+            if (!debt.empty() && !cont.empty() && !rev.empty() && !ins.empty()) {
+                // printf("DEBUG [WSS] Peak Cost R0: Week 0 - debt=%.2f, cont=%.2f, revenue=%.2f, insurance=%.2f\n",
+                //        debt[0], cont[0], rev[0], ins[0]);
+                // printf("DEBUG [WSS] Peak Cost R0: Week 52 - debt=%.2f, cont=%.2f, revenue=%.2f, insurance=%.2f\n",
+                //        debt[52], cont[52], rev[52], ins[52]);
+            }
+        }
+        
         for (unsigned long w = 0; w < n_weeks; ++w) {
             // accumulate year's info by summing weekly amounts.
             realizations_year_debt_payment +=
@@ -257,6 +233,8 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
     double obj_value = accumulate(realization_financial_costs.begin(),
                                   realization_financial_costs.end(),
                                   0.0) / n_realizations;
+    
+    // printf("DEBUG [WSS] Peak Financial Cost: Final objective value = %.6f\n", obj_value);
 
     if (std::isinf(obj_value)) {
         string error_inf = "Infinite peak financial cost.";
@@ -271,6 +249,7 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
         vector<unsigned long> realizations) {
 
     unsigned long n_realizations = utility_data.size();
+    
     if (realizations.empty()) {
         realizations = vector<unsigned long>(n_realizations);
         iota(realizations.begin(), realizations.end(), 0);
@@ -278,24 +257,9 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
         n_realizations = realizations.size();
     }
 
-    // Check for null pointers and filter them out
-    vector<unsigned long> valid_realizations;
-    for (const unsigned long &r : realizations) {
-        if (r < utility_data.size() && utility_data[r] != nullptr) {
-            valid_realizations.push_back(r);
-        }
-    }
-    
-    if (valid_realizations.empty()) {
-        return 0.0; //FIXME: This returns default value if no valid realizations
-    }
-    
-    realizations = valid_realizations;
-    n_realizations = realizations.size();
-
     unsigned long n_weeks = utility_data[realizations[0]]->getGross_revenues().size();
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
-    double discount_rate = utility_data[realizations[0]]->getUtility()->getInfraDiscountRate();
+    double discount_rate = utility_data[0]->getUtility()->getInfraDiscountRate();
 
     vector<double> worse_year_financial_costs;
     vector<double> year_financial_costs;
@@ -307,6 +271,27 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
     for (const unsigned long &r : realizations) {
         y = 0;
         year_financial_costs.assign(n_years, 0);
+        
+        // DEBUG: Check vector sizes and sample values for first realization
+        if (r == 0) {
+            auto &drought = utility_data[r]->getDrought_mitigation_cost();
+            auto &rev = utility_data[r]->getGross_revenues();
+            auto &fund_size = utility_data[r]->getContingency_fund_size();
+            
+            // printf("DEBUG [WSS] Worse Case R0: Vector sizes - drought=%lu, rev=%lu, fund_size=%lu\n",
+            //        (unsigned long)drought.size(), (unsigned long)rev.size(), 
+            //        (unsigned long)fund_size.size());
+            
+            if (!drought.empty() && !rev.empty() && !fund_size.empty()) {
+                // printf("DEBUG [WSS] Worse Case R0: Week 0 - drought=%.2f, revenue=%.2f, fund_size=%.2f\n",
+                //        drought[0], rev[0], fund_size[0]);
+                if (fund_size.size() > 52) {
+                    // printf("DEBUG [WSS] Worse Case R0: Week 52 - drought=%.2f, revenue=%.2f, fund_size=%.2f\n",
+                    //        drought[52], rev[52], fund_size[52]);
+                }
+            }
+        }
+        
         for (unsigned long w = 0; w < n_weeks; ++w) {
             // accumulate year's info by summing weekly amounts.
             year_drought_mitigation_cost +=
@@ -339,6 +324,8 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
 
     double obj_value = worse_year_financial_costs.at(
             (unsigned long) floor(WORSE_CASE_COST_PERCENTILE * n_realizations));
+    
+    // printf("DEBUG [WSS] Worse Case Cost: Final objective value = %.6f\n", obj_value);
 
     if (std::isinf(obj_value)) {
         string error_inf = "Infinite worse case cost.";

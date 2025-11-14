@@ -36,10 +36,8 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Ut
     // Link water sources to utilities by passing pointers of the former to
     // the latter.
     for (unsigned long u = 0; u < utilities.size(); ++u) {
-        printf("DEBUG [Original] ContinuityModel: Assigning water sources to utility %lu:\n", u);
         for (unsigned long ws = 0; ws < water_sources_to_utilities[u].size(); ++ws) {
             auto ws_id = water_sources_to_utilities[u][ws];
-            printf("DEBUG [Original] ContinuityModel: Utility %lu getting water source ID %d\n", u, ws_id);
             if (ws_id >= continuity_water_sources.size()) {
                 char error[128];
                 sprintf(error, "Water source %d was not added to list of water "
@@ -50,8 +48,6 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Ut
                     continuity_water_sources.at((unsigned int) ws_id);
             this->continuity_utilities[u]->addWaterSource(water_source);
         }
-        printf("DEBUG [Original] ContinuityModel: Utility %lu now has %zu water sources\n", 
-               u, this->continuity_utilities[u]->getWater_sources().size());
     }
 
     // Create table showing which utilities draw water from each water source.
