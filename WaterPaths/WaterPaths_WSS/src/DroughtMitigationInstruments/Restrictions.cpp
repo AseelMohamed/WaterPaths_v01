@@ -10,9 +10,16 @@
 
 /**
  * Restriction policy.
- * @param id
- * @param stage_multipliers
- * @param stage_triggers
+ * 
+ * IMPORTANT BEHAVIOR:
+ * - Restrictions are TRIGGERED by a specific WSS's Risk of Failure (ROF)
+ * - But once triggered, restrictions are APPLIED to ALL WSS in the owner Utility
+ * - This ensures utility-wide operational consistency during drought response
+ * - Financial impacts (price surcharges) are applied at the Utility level
+ * 
+ * @param id WSS ID that this restriction policy monitors
+ * @param stage_multipliers Demand multipliers for each restriction stage (e.g., 0.8 = 20% reduction)
+ * @param stage_triggers ROF thresholds that trigger each restriction stage
  * @todo set lower ROF threshold for utilities to lift restrictions.
  * @todo implement drought surcharges.
  */
@@ -63,12 +70,46 @@ void Restrictions::applyPolicy(int week) {
         } else
             break;
     }
-    // Operational operations should use WSS
-    realization_wss[0]->setDemand_multiplier(current_multiplier);
+    
+    // SAFETY: Verify we have a valid triggering WSS
+    if (realization_wss.empty() || realization_wss[0] == nullptr) {
+        cerr << "ERROR: Restrictions policy has no valid WSS assigned. Cannot apply policy." << endl;
+        return;
+    }
+    
+    // Get the owner utility to apply restrictions utility-wide
+    Utility* owner_utility = realization_wss[0]->getOwner();
+    if (owner_utility == nullptr) {
+        cerr << "ERROR: WSS has no owner utility. Cannot apply restrictions." << endl;
+        return;
+    }
+    
+    // Apply operational restrictions to ALL WSS in the owner utility
+    // This ensures system-wide consistency when restrictions are triggered
+    const vector<WaterSupplySystems*>& all_wss = owner_utility->getWSSReferences();
+    if (!all_wss.empty()) {
+        // Use WSS references if available (realization-specific copies)
+        for (size_t i = 0; i < all_wss.size(); ++i) {
+            WaterSupplySystems* wss = all_wss[i];
+            if (wss != nullptr) {
+                wss->setDemand_multiplier(current_multiplier);
+            }
+        }
+    } else {
+        // Fallback to owned WSS if references not set
+        const auto& owned_wss = owner_utility->getWaterSupplySystems();
+        for (size_t i = 0; i < owned_wss.size(); ++i) {
+            const auto& wss = owned_wss[i];
+            if (wss != nullptr) {
+                wss->setDemand_multiplier(current_multiplier);
+            }
+        }
+    }
+    
+    // Apply financial restriction (price surcharge) at utility level
     if (!restricted_weekly_average_volumetric_price.empty() && stage > 0) {
         int week_of_year = Utils::weekOfTheYear(week);
-            // Financial operations should use owner utility
-        realization_wss[0]->getOwner()->setRestricted_price(
+        owner_utility->setRestricted_price(
                 restricted_weekly_average_volumetric_price[stage - 1][week_of_year]);
     }
 }

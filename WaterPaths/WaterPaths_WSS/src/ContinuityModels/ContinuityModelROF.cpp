@@ -125,15 +125,6 @@ vector<double> ContinuityModelROF::calculateLongTermROF(int week) {
                 auto storage_condition = storage_ratio <= STORAGE_CAPACITY_RATIO_FAIL;
                 auto treatment_condition = unrestricted_demand > 0.9 * treatment_capacity;
                 
-                // Deep debugging: Track detailed reservoir volumes over time
-                // if (yr == 0 && (w % 13 == 0 || w < 10)) { // Print every quarter + first 10 weeks
-                //     printf("WSS_%d LT-Week_%d: Vol=%.2f, Cap=%.2f, Ratio=%.4f, Demand=%.2f, TreatCap=%.2f, StorFail=%s, TreatFail=%s, FailThreshold=%.2f\n", 
-                //            u, actual_week, total_stored_volume, total_storage_capacity, storage_ratio, 
-                //            unrestricted_demand, treatment_capacity,
-                //            storage_condition ? "YES" : "NO", treatment_condition ? "YES" : "NO",
-                //            STORAGE_CAPACITY_RATIO_FAIL);
-                // }
-                
                 if (storage_condition || treatment_condition) {
                     year_failure[u] = FAILURE;
                 }
@@ -286,15 +277,6 @@ vector<double> ContinuityModelROF::calculateShortTermROFFullCalcs(int week) {
                 
                 auto storage_condition = storage_ratio <= STORAGE_CAPACITY_RATIO_FAIL;
                 auto treatment_condition = unrestricted_demand > 0.9 * treatment_capacity;
-                
-                // Deep debugging: Track detailed reservoir volumes over time
-                // if (yr == 0 && (w % 10 == 0 || w < 5)) { // Print every 10 weeks + first 5 weeks
-                //     printf("WSS_%d ST-Week_%d: Vol=%.2f, Cap=%.2f, Ratio=%.4f, Demand=%.2f, TreatCap=%.2f, StorFail=%s, TreatFail=%s, FailThreshold=%.2f\n", 
-                //            u, actual_week, total_stored_volume, total_storage_capacity, storage_ratio, 
-                //            unrestricted_demand, treatment_capacity,
-                //            storage_condition ? "YES" : "NO", treatment_condition ? "YES" : "NO",
-                //            STORAGE_CAPACITY_RATIO_FAIL);
-                // }
                 
                 if (storage_condition || treatment_condition) {
                     year_failure[u] = FAILURE;

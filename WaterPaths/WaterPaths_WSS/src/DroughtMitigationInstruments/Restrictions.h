@@ -30,6 +30,13 @@ public:
 
     Restrictions(const Restrictions &reservoir);
 
+    /**
+     * Applies restriction policy based on the assigned WSS's risk of failure.
+     * When restrictions are triggered, they are applied operationally to ALL
+     * WaterSupplySystems within the owner Utility (utility-wide restrictions),
+     * while financial impacts (price surcharges) are applied at the Utility level.
+     * @param week Current simulation week
+     */
     void applyPolicy(int week) override;
 
     void addSystemComponents(vector<WaterSupplySystems *> systems_wss,

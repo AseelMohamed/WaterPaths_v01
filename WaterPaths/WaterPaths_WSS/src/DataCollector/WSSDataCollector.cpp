@@ -129,7 +129,7 @@ string WSSDataCollector::printCompactStringHeader() {
 }
 
 void WSSDataCollector::collect_data() {
-    // FIXED: Use stored volume for reliability calculations, not available volume
+    // Use stored volume for reliability calculations, not available volume
     // Available volume includes flow-through sources that don't show storage depletion
     combined_storage.push_back(wss->getTotal_stored_volume());
     storage_capacity.push_back(wss->getTotal_storage_capacity());
@@ -144,6 +144,31 @@ void WSSDataCollector::collect_data() {
     total_treatment_capacity.push_back(wss->getTotal_treatment_capacity());
     total_storage_treatment_capacity.push_back(0.0); // Placeholder - implement getTotal_storage_treatment_capacity() if needed
     water_sources_count.push_back((int)wss->getWater_sources().size());
+
+    // Collect WSS-level financial data (set by Utility)
+    gross_revenues.push_back(wss->getWssGrossRevenue());
+    drought_mitigation_cost.push_back(wss->getWssDroughtMitigationCost());
+    contingency_fund_contribution.push_back(wss->getWssContingencyFundShare());
+    debt_service_payments.push_back(wss->getWssDebtServiceShare());
+    double wss_npc = wss->getWssInfrastructureNPC();
+    
+    // Validate NPC value - catch memory corruption early
+    if (std::isnan(wss_npc) || std::isinf(wss_npc) || wss_npc < -1e100 || wss_npc > 1e100) {
+        char error[512];
+        sprintf(error, "Invalid WSS NPC value %.2e for WSS %d (system_id=%d), week %zu, realization %lu. "
+                "This indicates memory corruption or uninitialized access. WSS pointer: %p",
+                wss_npc, id, wss->system_id, combined_storage.size(), realization, (void*)wss);
+        throw std::runtime_error(error);
+    }
+    net_present_infrastructure_cost.push_back(wss_npc);
+    
+    // Contingency fund size - sum of contributions up to this point
+    // (This mimics what UtilitiesDataCollector does for the utility level)
+    double cumulative_contingency = 0.0;
+    if (!contingency_fund_contribution.empty()) {
+        cumulative_contingency = contingency_fund_contribution.back();
+    }
+    contingency_fund_size.push_back(cumulative_contingency);
 
     // checkForNans();
 }
@@ -230,4 +255,29 @@ const vector<int> &WSSDataCollector::getWater_sources_count() const {
 
 const WaterSupplySystems *WSSDataCollector::getWss() const {
     return wss;
+}
+
+// Financial data getters
+const vector<double> &WSSDataCollector::getGross_revenues() const {
+    return gross_revenues;
+}
+
+const vector<double> &WSSDataCollector::getDrought_mitigation_cost() const {
+    return drought_mitigation_cost;
+}
+
+const vector<double> &WSSDataCollector::getContingency_fund_contribution() const {
+    return contingency_fund_contribution;
+}
+
+const vector<double> &WSSDataCollector::getDebt_service_payments() const {
+    return debt_service_payments;
+}
+
+const vector<double> &WSSDataCollector::getNet_present_infrastructure_cost() const {
+    return net_present_infrastructure_cost;
+}
+
+const vector<double> &WSSDataCollector::getContingency_fund_size() const {
+    return contingency_fund_size;
 }

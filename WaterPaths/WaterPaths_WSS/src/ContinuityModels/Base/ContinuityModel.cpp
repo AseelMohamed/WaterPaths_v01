@@ -6,6 +6,7 @@
 #include <cmath>
 // #include <cstring>
 #include <algorithm>
+#include <map>
 #include "ContinuityModel.h"
 // #include "../../SystemComponents/WaterSources/SequentialJointTreatmentExpansion.h"
 
@@ -31,17 +32,9 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
 
     //FIXME: THERE IS A STUPID MISTAKE HERE IN THE SORT FUNCTION THAT IS PREVENTING IT FROM WORKING UNDER WINDOWS AND LINUX.
     std::sort(continuity_water_sources.begin(), continuity_water_sources.end(), WaterSource::compare);
-    // NOTE: Do NOT sort continuity_wss here. The ordering of the water
-    // supply systems (WSS) must remain the same as the mapping passed in
-    // via water_sources_to_wss. Sorting the WSS vector breaks the
-    // correspondence between mapping indices and WSS entries and can lead
-    // to duplicate-add attempts when populating WSS with water sources.
 
     // Link water sources to WSS within each utility by passing pointers of the former to each WSS.
-    // printf("DEBUG [WSS] ContinuityModel constructor: Assigning water sources to WSS...\n");
-    // printf("DEBUG [WSS] Total WSS: %zu, Total water sources: %zu\n", wss.size(), continuity_water_sources.size());
     for (unsigned long u = 0; u < wss.size(); ++u) {
-        // printf("DEBUG [WSS] WSS[%lu] gets water sources: ", u);
         for (unsigned long ws = 0; ws < water_sources_to_wss[u].size(); ++ws) {
             auto ws_id = water_sources_to_wss[u][ws];
             // printf("ID=%d ", ws_id);
@@ -53,9 +46,6 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
                     continuity_water_sources.at((unsigned int) ws_id);
             this->continuity_wss[u]->addWaterSource(water_source);
         }
-        // printf("\n");
-        // printf("DEBUG [WSS] WSS[%lu] now has %zu water sources after assignment\n", 
-        //        u, this->continuity_wss[u]->getWater_sources().size());
     }   
 
     wss_to_water_sources.assign(water_sources.size(), vector<int>(0));
@@ -135,7 +125,14 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
 }
 
 ContinuityModel::~ContinuityModel() {
-    /// Delete water sources (with null check for shared objects)
+    /// Delete min env flow controls FIRST (they reference water sources)
+    for (auto mef : min_env_flow_controls){
+        if (mef != nullptr) {
+            delete mef;
+        }
+    }
+
+    /// Delete water sources (after min env flow controls that reference them)
     for (auto ws : continuity_water_sources) {
         if (ws != nullptr) {
             delete ws;
@@ -146,13 +143,6 @@ ContinuityModel::~ContinuityModel() {
     for (auto u : continuity_wss) {
         if (u != nullptr) {
             delete u;
-        }
-    }
-
-    /// Delete min env flow controls (with null check for shared objects)
-    for (auto mef : min_env_flow_controls){
-        if (mef != nullptr) {
-            delete mef;
         }
     }
 }
@@ -210,26 +200,21 @@ void ContinuityModel::continuityStep(
     /**
      * Update utility finances (including yearly infrastructure cost resets).
      * This must happen after demand splitting to have current demand/restriction data.
+     * Pass realization WSS directly to avoid thread-safety issues with shared utility objects.
      */
-    vector<Utility*> processed_utilities;
+    std::map<Utility*, std::vector<WaterSupplySystems*>> utility_to_wss;
     for (WaterSupplySystems *wss : continuity_wss) {
         Utility* utility = wss->getOwner();
         if (utility) {
-            // Check if we've already processed this utility
-            bool already_processed = false;
-            for (Utility* u : processed_utilities) {
-                if (u == utility) {
-                    already_processed = true;
-                    break;
-                }
-            }
-            
-            if (!already_processed) {
-                // Call utility-level financial calculations (aggregates all WSS data like Original model)
-                utility->updateUtilityFinancialCalculations(week);
-                processed_utilities.push_back(utility);
-            }
+            utility_to_wss[utility].push_back(wss);
         }
+    }
+    
+    for (auto& pair : utility_to_wss) {
+        Utility* utility = pair.first;
+        const std::vector<WaterSupplySystems*>& realization_wss = pair.second;
+        // Pass realization WSS directly to financial calculations (thread-safe)
+        utility->updateUtilityFinancialCalculations(week, realization_wss);
     }
 
     /**

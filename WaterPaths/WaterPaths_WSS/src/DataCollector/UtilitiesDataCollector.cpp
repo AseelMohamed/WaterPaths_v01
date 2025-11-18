@@ -171,21 +171,13 @@ void UtilitiesDataCollector::collect_data() {
     contingency_fund_size.push_back(utility->getContingency_fund());
     net_present_infrastructure_cost.push_back(utility->getInfrastructure_net_present_cost());
     
-    // Debug: Track when infrastructure cost data is collected each week
+    // Track when infrastructure cost data is collected each week
     static int debug_week_counter = 0;
-    // printf("DEBUG [WSS UtilitiesDataCollector] Week %d: collecting infra cost %.2f for utility %d\n", 
-    //        debug_week_counter++, utility->getInfrastructure_net_present_cost(), utility->id);
-    
     double gr = utility->getGrossRevenue();
     double dsp = utility->getCurrent_debt_payment();
     double cfc = utility->getCurrent_contingency_fund_contribution();
     double dmc = utility->getDrought_mitigation_cost();
     
-    // Debug for weeks 0 and 52 only
-    if (debug_week_counter == 0 || debug_week_counter == 52) {
-        // printf("DEBUG [WSS DataCollector] Week %d: Collecting - gross_rev=%.2f, debt=%.2f, cont_fund=%.2f, drought=%.2f\n",
-        //        debug_week_counter, gr, dsp, cfc, dmc);
-    }
     debug_week_counter++;
     
     gross_revenues.push_back(gr);

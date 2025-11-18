@@ -9,6 +9,7 @@
 #include <vector>
 #include "Base/DataCollector.h"
 #include "UtilitiesDataCollector.h"
+#include "WSSDataCollector.h"
 #include "../DroughtMitigationInstruments/Base/DroughtMitigationPolicy.h"
 #include "RestrictionsDataCollector.h"
 
@@ -20,6 +21,7 @@ private:
     vector<vector<DataCollector *>> water_source_collectors;
     vector<vector<DataCollector *>> drought_mitigation_policy_collectors;
     vector<vector<UtilitiesDataCollector *>> utility_collectors;
+    vector<vector<WSSDataCollector *>> wss_collectors;  // WSS-level data collectors
     vector<unsigned long> crashed_realizations;
     vector<unsigned long> realizations_ran;
     int realizations_created = 0;
@@ -61,7 +63,9 @@ public:
     void addRealization(
             vector<WaterSource *> water_sources_realization,
             vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization,
-            vector<Utility *> utilities_realization, unsigned long r);
+            vector<Utility *> utilities_realization,
+            vector<WaterSupplySystems *> wss_realization,
+            unsigned long r);
 
     void removeRealization(unsigned long r);
 
@@ -96,6 +100,9 @@ public:
                                           vector<RestrictionsDataCollector *> &utility_restrictions) const;
 
     int getRealizations_created() const;
+    
+    // Getter for WSS data collectors
+    const vector<vector<WSSDataCollector *>>& getWssCollectors() const { return wss_collectors; }
 };
 
 

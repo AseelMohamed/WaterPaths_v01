@@ -23,6 +23,15 @@ private:
     vector<double> total_treatment_capacity;
     vector<double> total_storage_treatment_capacity;
     vector<int> water_sources_count;
+    
+    // Financial data vectors (WSS-level)
+    vector<double> gross_revenues;
+    vector<double> drought_mitigation_cost;
+    vector<double> contingency_fund_contribution;
+    vector<double> debt_service_payments;
+    vector<double> net_present_infrastructure_cost;
+    vector<double> contingency_fund_size;
+    
     const WaterSupplySystems *wss;
 
 public:
@@ -45,7 +54,7 @@ public:
 
     void checkForNans() const;
 
-    // Getters
+    // Getters - Operational data
     const vector<double> &getCombined_storage() const;
     const vector<double> &getStorage_capacity() const;
     const vector<double> &getStorage_to_capacity_ratio() const;
@@ -60,6 +69,14 @@ public:
     const vector<double> &getTotal_storage_capacity() const;
     const vector<int> &getWater_sources_count() const;
     const WaterSupplySystems *getWss() const;
+    
+    // Getters - Financial data
+    const vector<double> &getGross_revenues() const;
+    const vector<double> &getDrought_mitigation_cost() const;
+    const vector<double> &getContingency_fund_contribution() const;
+    const vector<double> &getDebt_service_payments() const;
+    const vector<double> &getNet_present_infrastructure_cost() const;
+    const vector<double> &getContingency_fund_size() const;
 };
 
 #endif //TRIANGLEMODEL_WSSDATACOLLECTOR_H

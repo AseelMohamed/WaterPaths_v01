@@ -41,6 +41,7 @@ WaterSupplySystems::WaterSupplySystems(
     total_treatment_capacity = 0.0;
     n_sources = 0;
     max_capacity = 0.0;
+    wss_infrastructure_npc = 0.0;  // Explicit initialization
     
     // Initialize demand_series_realization as empty vector to prevent crashes
     // This will be properly set when setRealization() is called
@@ -101,6 +102,7 @@ WaterSupplySystems::WaterSupplySystems(
     total_treatment_capacity = 0.0;
     n_sources = 0;
     max_capacity = 0.0;
+    wss_infrastructure_npc = 0.0;  // Explicit initialization
     
     // Copy WTP capacities
     this->wss_owned_wtp_capacities = wss_owned_wtp_capacities;
@@ -173,6 +175,7 @@ WaterSupplySystems::WaterSupplySystems(
     total_treatment_capacity = 0.0;
     n_sources = 0;
     max_capacity = 0.0;
+    wss_infrastructure_npc = 0.0;  // Explicit initialization
     
     // Copy WTP capacities
     this->wss_owned_wtp_capacities = wss_owned_wtp_capacities;
@@ -256,6 +259,7 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     unrestricted_demand = other.unrestricted_demand;
     n_sources = other.n_sources;
     max_capacity = other.max_capacity;
+    // NOTE: wss_infrastructure_npc deliberately NOT copied - realization WSS should get NPC from ROF WSS via references
     
     // Deep copy all vectors (these are value types, so std::vector handles deep copy)
     priority_draw_water_source = other.priority_draw_water_source;
@@ -682,6 +686,24 @@ void WaterSupplySystems::setDemand_offset(double demand_offset, double offset_ra
  * @param r
  */
 void WaterSupplySystems::setRealization(unsigned long r, vector<double> &rdm_factors) {
+    // BOUNDS CHECK: Verify realization index is valid
+    if (r >= demands_all_realizations.size()) {
+        char error_msg[512];
+        sprintf(error_msg, "ERROR [WSS %d]: setRealization called with realization index %lu, "
+                "but demands_all_realizations only has %zu realizations available. "
+                "This typically means ROF model is trying to access demand data it shouldn't need.",
+                system_id, r, demands_all_realizations.size());
+        cerr << error_msg << endl;
+        
+        // For ROF models, we don't actually need to set realization-specific demands
+        // since they run with synthetic short-term scenarios. Just skip this operation.
+        if (!used_for_realization) {
+            return;
+        }
+        
+        throw std::out_of_range(error_msg);
+    }
+    
     // Simple, clean implementation like the original
     unsigned long n_weeks = demands_all_realizations.at(r).size();
     demand_series_realization = vector<double>(n_weeks);
@@ -863,9 +885,6 @@ int WaterSupplySystems::infrastructureConstructionHandler(double long_term_rof, 
 
     // Handle bond issuance immediately here since WSS has the infrastructure sources
     if (new_infra_triggered != NON_INITIALIZED) {
-        // printf("DEBUG [WSS] Infrastructure %d triggered in WSS %d, issuing bond immediately\n", 
-        //        new_infra_triggered, system_id);
-        
         // THREAD-SAFE: Only issue bonds for realization models, not ROF models
         // ROF models should not issue actual bonds as they're just calculating risks
         if (used_for_realization && owner) {
@@ -886,12 +905,7 @@ int WaterSupplySystems::infrastructureConstructionHandler(double long_term_rof, 
                         // Issue bond directly on the infrastructure source using utility's method
                         // but searching only in this WSS (which has the source)
                         owner->issueBond(new_infra_triggered, week, this);
-                        // printf("DEBUG [WSS] Bond issued for infrastructure %d in WSS %d\n", 
-                        //        new_infra_triggered, system_id);
-                    } else {
-                        // printf("DEBUG [WSS] Bond already issued for infrastructure %d in WSS %d\n", 
-                        //        new_infra_triggered, system_id);
-                    }
+                    } 
                 } catch (const std::exception& e) {
                     printf("ERROR [WSS] Failed to access bond for infrastructure %d in WSS %d: %s\n", 
                            new_infra_triggered, system_id, e.what());
@@ -900,15 +914,10 @@ int WaterSupplySystems::infrastructureConstructionHandler(double long_term_rof, 
                 printf("ERROR [WSS] Infrastructure %d triggered but not found in WSS %d\n", 
                        new_infra_triggered, system_id);
             }
-        } else {
-            // printf("DEBUG [WSS] WSS %d: Skipping bond issuance (ROF model or owner null)\n", system_id);
         }
     }
 
     updateTreatmentAndNumberOfStorageSources();
-    // printf("DEBUG: WSS %d week %d: Infrastructure construction handler checked. New infra ID: %d\n",
-    //        system_id, week, new_infra_triggered);
-
     return new_infra_triggered;
 }
 
@@ -957,4 +966,56 @@ void WaterSupplySystems::setInfrastructureParameters(const vector<int>& rof_infr
             infrastructure_construction_manager.addWaterSource(water_source);
         }
     }
+}
+
+// ============================================================================
+// Financial Data Storage Methods (Set by Utility, no calculation logic in WSS)
+// ============================================================================
+
+void WaterSupplySystems::setWssGrossRevenue(double revenue) {
+    wss_gross_revenue = revenue;
+}
+
+void WaterSupplySystems::setWssDroughtMitigationCost(double cost) {
+    wss_drought_mitigation_cost = cost;
+}
+
+void WaterSupplySystems::setWssContingencyFundShare(double share) {
+    wss_contingency_fund_share = share;
+}
+
+void WaterSupplySystems::setWssDebtServiceShare(double share) {
+    wss_debt_service_share = share;
+}
+
+void WaterSupplySystems::setWssInfrastructureNPC(double npc) {
+    // Validate input to catch corruption at source
+    if (std::isnan(npc) || std::isinf(npc) || npc < -1e100 || npc > 1e100) {
+        char error[512];
+        sprintf(error, "Attempting to set invalid NPC value %.2e for WSS %d (system_id=%d). "
+                "Previous value: %.2e. This indicates memory corruption or calculation error.",
+                npc, utility_id, system_id, wss_infrastructure_npc);
+        throw std::runtime_error(error);
+    }
+    wss_infrastructure_npc = npc;
+}
+
+double WaterSupplySystems::getWssGrossRevenue() const {
+    return wss_gross_revenue;
+}
+
+double WaterSupplySystems::getWssDroughtMitigationCost() const {
+    return wss_drought_mitigation_cost;
+}
+
+double WaterSupplySystems::getWssContingencyFundShare() const {
+    return wss_contingency_fund_share;
+}
+
+double WaterSupplySystems::getWssDebtServiceShare() const {
+    return wss_debt_service_share;
+}
+
+double WaterSupplySystems::getWssInfrastructureNPC() const {
+    return wss_infrastructure_npc;
 }

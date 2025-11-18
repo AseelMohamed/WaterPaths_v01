@@ -170,8 +170,7 @@ public:
 
     void setRealization(unsigned long r, vector<double> &rdm_factors);
 
-    // DEPRECATED: This method should be phased out - infrastructure decisions moved to WSS level
-    int infrastructureConstructionHandler(double long_term_rof, int week); //checked - LEGACY ONLY
+//     int infrastructureConstructionHandler(double long_term_rof, int week); //checked 
 
     const vector<int> &getDemand_infra_construction_order() const; //checked
 
@@ -207,7 +206,7 @@ public:
             double demand_offset, double unfulfilled_demand, int week); //checked
 
     // NEW: Aggregate financial calculations across all WSS (following Original model pattern)
-    void updateUtilityFinancialCalculations(int week);
+    void updateUtilityFinancialCalculations(int week, const std::vector<WaterSupplySystems*>& realization_wss);
 
     void setRestricted_price(double restricted_price); //checked
 

@@ -29,20 +29,25 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="34608747-ac33-40f2-8615-6ba76e616432" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/../Simulation_Comparison_Analysis.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/Objectives_s0.out" beforeDir="false" afterPath="$PROJECT_DIR$/output/Objectives_s0.out" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/ContinuityModels/Base/ContinuityModel.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/ContinuityModels/Base/ContinuityModel.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/DataCollector/UtilitiesDataCollector.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/DataCollector/UtilitiesDataCollector.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Problem/Caesb.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Problem/Caesb.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/SystemComponents/Utility/Utility.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/SystemComponents/Utility/Utility.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Utils/ObjectivesCalculator.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Utils/ObjectivesCalculator.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/output/Objectives_s0.out" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/output/Objectives_s0.out" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/ContinuityModels/Base/ContinuityModel.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/ContinuityModels/Base/ContinuityModel.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/MasterDataCollector.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/MasterDataCollector.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/MasterDataCollector.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/MasterDataCollector.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/UtilitiesDataCollector.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/UtilitiesDataCollector.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/WSSDataCollector.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/WSSDataCollector.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/WSSDataCollector.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/WSSDataCollector.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DroughtMitigationInstruments/Restrictions.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DroughtMitigationInstruments/Restrictions.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DroughtMitigationInstruments/Restrictions.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DroughtMitigationInstruments/Restrictions.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Simulation/Simulation.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Simulation/Simulation.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/Utility.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/Utility.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/Utility.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/Utility.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/ObjectivesCalculator.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/ObjectivesCalculator.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/ObjectivesCalculator.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/ObjectivesCalculator.h" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -114,7 +119,8 @@
       <workItem from="1762253337314" duration="1299000" />
       <workItem from="1762754612004" duration="4000" />
       <workItem from="1762776315055" duration="28578000" />
-      <workItem from="1763109781698" duration="7393000" />
+      <workItem from="1763109781698" duration="8020000" />
+      <workItem from="1763365430407" duration="3744000" />
     </task>
     <servers />
   </component>

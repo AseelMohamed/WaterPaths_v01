@@ -8,6 +8,7 @@
 
 #include "../DataCollector/UtilitiesDataCollector.h"
 #include "../DataCollector/RestrictionsDataCollector.h"
+#include "../DataCollector/WSSDataCollector.h"
 
 class ObjectivesCalculator {
 
@@ -30,6 +31,21 @@ public:
 
     static double calculateWorseCaseCostsObjective(
             const vector<UtilitiesDataCollector *>& utility_data,
+            vector<unsigned long> realizations = vector<unsigned long>(0));
+
+    // WSS-level objective calculation functions
+    static double calculateNetPresentCostInfrastructureObjective_WSS(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            const vector<UtilitiesDataCollector *>& utility_data,
+            vector<unsigned long> realizations = vector<unsigned long>(0));
+
+    static double calculateWorseCaseCostsObjective_WSS(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            const vector<UtilitiesDataCollector *>& utility_data,
+            vector<unsigned long> realizations = vector<unsigned long>(0));
+    
+    static double calculateReliabilityObjective_WSS(
+            const vector<vector<WSSDataCollector *>>& wss_data,
             vector<unsigned long> realizations = vector<unsigned long>(0));
 
 };

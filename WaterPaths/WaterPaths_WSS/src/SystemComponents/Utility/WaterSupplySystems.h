@@ -159,6 +159,20 @@ public:
     void setDemand_multiplier(double demand_multiplier); //checked
     void setDemand_offset(double demand_offset, double offset_rate_per_volume); //checked
     double getRestrictedDemand() const; //checked
+    
+    // Financial data storage (calculated by Utility, stored in WSS)
+    void setWssGrossRevenue(double revenue);
+    void setWssDroughtMitigationCost(double cost);
+    void setWssContingencyFundShare(double share);
+    void setWssDebtServiceShare(double share);
+    void setWssInfrastructureNPC(double npc);
+    
+    double getWssGrossRevenue() const;
+    double getWssDroughtMitigationCost() const;
+    double getWssContingencyFundShare() const;
+    double getWssDebtServiceShare() const;
+    double getWssInfrastructureNPC() const;
+    
 private:
     Utility* owner;
     vector<int> priority_draw_water_source;
@@ -194,6 +208,13 @@ private:
     double unrestricted_demand = 0;
     int n_sources = 0;
     double max_capacity = 0;
+    
+    /// Financial data storage (set by Utility, no calculation logic in WSS)
+    double wss_gross_revenue = 0.0;
+    double wss_drought_mitigation_cost = 0.0;
+    double wss_contingency_fund_share = 0.0;
+    double wss_debt_service_share = 0.0;
+    double wss_infrastructure_npc = 0.0;
     
     bool hasTreatmentCapacity() const;
 };
