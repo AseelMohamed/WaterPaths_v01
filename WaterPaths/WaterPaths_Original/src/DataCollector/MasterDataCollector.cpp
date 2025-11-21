@@ -417,7 +417,7 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
     vector<double> objectives;
 
     if (print) {
-        cout << "Calculating and printing Objectives" << endl;
+        printf("Calculating and printing Objectives\n");
         string obj_file_path = output_directory + file_name + ".out";
 //        cout << obj_file_path << endl;
 
@@ -649,7 +649,7 @@ void MasterDataCollector::setOutputDirectory(string io_directory) {
     if (io_directory != output_directory) {
         output_directory = io_directory + DEFAULT_OUTPUT_DIR;
         Utils::createDir(output_directory);
-        cout << "Output will be printed to folder " << output_directory << endl;
+        printf("Output will be printed to folder %s\n", output_directory.c_str());
     }
 }
 

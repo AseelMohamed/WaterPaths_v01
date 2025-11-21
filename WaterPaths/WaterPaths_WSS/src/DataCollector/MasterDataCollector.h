@@ -98,6 +98,10 @@ public:
 
     void isolateRestrictionDataCollectors(vector<UtilitiesDataCollector *> &u,
                                           vector<RestrictionsDataCollector *> &utility_restrictions) const;
+    
+    unsigned long getActualWeeksCollected() const;
+    void isolateWSSDataCollectors(vector<UtilitiesDataCollector *> &u,
+                                  vector<vector<WSSDataCollector *>> &utility_wss_collectors) const;
 
     int getRealizations_created() const;
     

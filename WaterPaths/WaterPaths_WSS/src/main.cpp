@@ -40,8 +40,8 @@ void eval(double *vars, double *objs, double *consts) {
         ofstream sol_out; // for debugging borg
         sol_out << endl;
         sol_out << "Failure! Decision Variable values: " << endl;
-        cout << endl;
-        cout << "Failure! Decision variable values: " << endl;
+        printf("\n");
+        printf("Failure! Decision variable values:\n");
         for (int i = 0; i < NUM_DEC_VAR; ++i) sol_out << vars[i] << " ";
         sol_out << endl;
         for (int i = 0; i < NUM_OBJECTIVES; ++i) objs[i] = 1e5;
@@ -204,7 +204,7 @@ int main(int argc, char *argv[]) {
     }
     // Read RDM file, if any
     if (strlen(utilities_rdm_file.c_str()) > 2) {
-        cout << "reading RDM file" << endl;
+        printf("reading RDM file\n");
         if (rdm_no != NON_INITIALIZED) {
             auto utilities_rdm_row = Utils::parse2DCsvFile(system_io + utilities_rdm_file)[rdm_no];
             auto policies_rdm_row = Utils::parse2DCsvFile(system_io + policies_rdm_file)[rdm_no];
@@ -269,11 +269,10 @@ int main(int argc, char *argv[]) {
 
         // Run model
         if (first_solution == -1) {
-            cout << endl << endl << endl << "Running solution "
-                 << standard_solution 
-	         << (rdm_no != NON_INITIALIZED ? " RDM " : "")
-	         << (rdm_no != NON_INITIALIZED ? to_string(rdm_no).c_str() : "")
-	         << endl;
+            printf("\n\n\nRunning solution %lu%s%s\n", 
+                   standard_solution,
+                   (rdm_no != NON_INITIALIZED ? " RDM " : ""),
+                   (rdm_no != NON_INITIALIZED ? to_string(rdm_no).c_str() : ""));
             problem.setSol_number(standard_solution);
             problem_ptr->functionEvaluation(solutions[standard_solution].data(), c_obj, c_constr);
 
@@ -283,7 +282,7 @@ int main(int argc, char *argv[]) {
                         (int) standard_solution, n_sets, n_bs_samples, n_threads, realizations_to_run);
             } else if (import_export_rof_table != EXPORT_ROF_TABLES) {
                 if (plotting)
-                    //problem.printTimeSeriesAndPathways();
+                    problem.printTimeSeriesAndPathways(plotting);
                 auto objectives = problem_ptr->calculateAndPrintObjectives(!print_objs_row);
                 //            trianglePtr->getMaster_data_collector()->printNETCDFUtilities("netcdf_output");
             }
@@ -298,11 +297,10 @@ int main(int argc, char *argv[]) {
             objs_file.open(file_name);
             printf("Objectives file will be printed at %s.\n", file_name.c_str());
             for (int s = first_solution; s < last_solution; ++s) {
-                cout << endl << endl << endl << "Running solution "
-                     << s 
-		        << (rdm_no != NON_INITIALIZED ? " RDM " : "")
-		        << (rdm_no != NON_INITIALIZED ? to_string(rdm_no).c_str() : "")
-		        << endl;
+                printf("\n\n\nRunning solution %d%s%s\n", 
+                       s,
+                       (rdm_no != NON_INITIALIZED ? " RDM " : ""),
+                       (rdm_no != NON_INITIALIZED ? to_string(rdm_no).c_str() : ""));
                 problem.setSol_number((unsigned long) s);
                 problem_ptr->functionEvaluation(solutions[s].data(), c_obj, c_constr);
                 vector<double> objectives = problem_ptr->calculateAndPrintObjectives(false);
@@ -346,7 +344,7 @@ int main(int argc, char *argv[]) {
                                                    c_num_constr,
                                                    eval);
         // Set all the parameter bounds and epsilons
-        cout << "setting up problem" << endl;
+        printf("setting up problem\n");
         problem_ptr->setProblemDefinition(problem);
 
         if (seed > -1) {
@@ -361,7 +359,7 @@ int main(int argc, char *argv[]) {
         printf("Reference set will be in %s.\n", output_file_name.c_str());
         printf("Runtime files will be in %s.\n", runtime_file.c_str());
 
-        BORG_Algorithm_output_runtime(runtime_file.c_str());
+        BORG_Algorithm_output_runtime(const_cast<char*>(runtime_file.c_str()));
 
         int rank; // different seed on each processor
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -377,8 +375,8 @@ int main(int argc, char *argv[]) {
         // If this is the master node, print out the final archive
 
         if (result != nullptr) {
-            outputFile = fopen(output_file_name, "w");
-            cout << "master node print, should see only once" << endl;
+            FILE* outputFile = fopen(output_file_name.c_str(), "w");
+            printf("master node print, should see only once\n");
             if (!outputFile) {
                 BORG_Debug("Unable to open final output file\n");
             }

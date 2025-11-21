@@ -1,25 +1,30 @@
 #!/bin/bash
-#SBATCH -n 45 -N 15
-#SBATCH --job-name=caesb_test
-#SBATCH --output=output/last_no112.out
-#SBATCH --error=output/last_no112.err
-#SBATCH --time=60:00:00
-#SBATCH --exclusive
+#SBATCH --ntasks=24
+#SBATCH --ntasks-per-node=24
+#SBATCH --threads-per-core=1
+#SBATCH --nodes=2
+#SBATCH --partition=defq
+#SBATCH --job-name=BorgTest2_s0
+#SBATCH --output=test50k_s0.out
+#SBATCH --error=error50k_s0.err
+#SBATCH --time=15:00:00
 
-export OMP_NUM_THREADS=5
-cd $SLURM_SUBMIT_DIR
+module purge
+module load OLD/opt/all
+module load development/compilers/GCC/12.1.0
+module load development/componentsDev2024_openMPI_5.0.3
 
-time mpirun -np 45 ./FDBsimulation\
-	-T 5\
+mpirun -np 24 ./FDBsimulation\
+        -T 2\
         -t 2080\
-        -r 999\
-        -d /scratch/spec1058/WaterPaths_jan22/\
+        -r 100\
+        -d /eejit/home/moham073/WaterPaths_Original/\
         -C -1\
-        -O rof_tables_no112/\
-        -e 4\
-        -U InputFiles_no112/utilities_rdm.csv\
-        -W InputFiles_no112/water_sources_rdm.csv\
-        -P InputFiles_no112/policies_rdm.csv\
-	-b true\
-	-n 30000\
-	-o 5000
+        -O rof_tables/\
+        -e 0\
+        -U InputFiles/utilities_rdm_reeval.csv\
+        -W InputFiles/water_sources_rdm_reeval.csv\
+        -P InputFiles/policies_rdm_reeval.csv\
+        -b true\
+        -o 5000\
+        -n 50000

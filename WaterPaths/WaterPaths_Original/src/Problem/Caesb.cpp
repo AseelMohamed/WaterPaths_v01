@@ -897,8 +897,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 //	printf("Function evaluation time: %f s\n", end_time - start_time);
 
     double realization_end = omp_get_wtime();
-    std::cout << "Simulation took  " << realization_end - realization_start
-              << "s" << std::endl;
+    printf("Simulation took  %fs\n", realization_end - realization_start);
 
     /// Calculate objectives and store them in Borg decision variables array.
 #ifdef  PARALLEL
@@ -985,7 +984,7 @@ Caesb::Caesb(unsigned long n_weeks, int import_export_rof_table)
 
 void
 Caesb::readInputData() { //A partir dessa linha serão inseridos os dados de entrada para que o modelo possa funcionar
-    cout << "Reading input data." << endl;
+    printf("Reading input data.\n");
     string data_dir = DEFAULT_DATA_DIR + BAR;
 
 //#pragma omp parallel default(none) num_threads(omp_get_thread_num())

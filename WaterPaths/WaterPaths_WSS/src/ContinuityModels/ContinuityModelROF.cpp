@@ -39,7 +39,8 @@ ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
         if (use_precomputed_rof_tables != IMPORT_ROF_TABLES) {
             wss_storage_to_rof_table.emplace_back(
                     total_weeks_simulation,
-                    (unsigned long) NO_OF_INSURANCE_STORAGE_TIERS);
+                    (unsigned long) NUMBER_REALIZATIONS_ROF);
+                    // (unsigned long) NO_OF_INSURANCE_STORAGE_TIERS);
         }
     }
 

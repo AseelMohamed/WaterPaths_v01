@@ -340,7 +340,8 @@ int InfrastructureManager::infrastructureConstructionHandler(
         vector<double> &utility_owned_wtp_capacities,
         vector<int> &water_source_to_wtp,
         double &total_storage_capacity,
-        double &total_available_volume, double &total_stored_volume) {
+        double &total_available_volume, double &total_stored_volume,
+        int wss_id) {
     int new_infra_triggered = NON_INITIALIZED;
     bool under_construction_any = (find(under_construction.begin(),
                                         under_construction.end(), true) !=
@@ -451,8 +452,8 @@ int InfrastructureManager::infrastructureConstructionHandler(
                                          total_stored_volume);
 
                     /// Record ID of and when infrastructure option construction was
-                    /// completed. (utility_id, week, new source id)
-                    infra_built_last_week = {id, week, wss};
+                    /// completed. (utility_id, wss_id, week, water_source_id)
+                    infra_built_last_week.push_back({id, wss_id, week, wss});
 
                     /// Erase infrastructure option from both vectors of
                     /// infrastructure to be built.
@@ -563,8 +564,15 @@ InfrastructureManager::getDemand_infra_construction_order() const {
     return demand_infra_construction_order;
 }
 
-const vector<int> &InfrastructureManager::getInfra_built_last_week() const {
+const vector<vector<int>> &InfrastructureManager::getInfra_built_last_week() const {
     return infra_built_last_week;
+}
+
+vector<vector<int>> InfrastructureManager::getAllAndClearInfraBuilt() {
+    vector<vector<int>> result = infra_built_last_week;
+    // Clear after returning so we don't collect duplicates
+    infra_built_last_week.clear();
+    return result;
 }
 
 const vector<bool> &InfrastructureManager::getUnder_construction() const {

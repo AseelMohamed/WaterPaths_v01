@@ -49,7 +49,7 @@ WaterSupplySystems::WaterSupplySystems(
     
     // Initialize infrastructure construction manager (basic constructor with no infrastructure)
     infrastructure_construction_manager = InfrastructureManager(
-        system_id, 
+        utility_id,  // Use utility_id for pathway tracking, not system_id
         vector<double>(),  // empty construction triggers
         vector<vector<int>>(),  // empty if_built_remove
         0.0,  // no discount rate 
@@ -109,7 +109,7 @@ WaterSupplySystems::WaterSupplySystems(
     
     // Initialize infrastructure construction manager (with empty construction orders for basic constructor)
     infrastructure_construction_manager = InfrastructureManager(
-        system_id, 
+        utility_id,  // Use utility_id for pathway tracking, not system_id 
         vector<double>(),  // empty construction triggers
         vector<vector<int>>(),  // empty if_built_remove
         0.0,  // no discount rate 
@@ -182,7 +182,7 @@ WaterSupplySystems::WaterSupplySystems(
     
     // Initialize infrastructure construction manager with infrastructure parameters (no financial params)
     infrastructure_construction_manager = InfrastructureManager(
-        system_id, 
+        utility_id,  // Use utility_id for pathway tracking, not system_id 
         infra_construction_triggers,
         vector<vector<int>>(),  // empty infra_if_built_remove (WSS doesn't handle complex financial rules)
         0.0,  // no discount rate (handled by utility)
@@ -265,7 +265,12 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     priority_draw_water_source = other.priority_draw_water_source;
     non_priority_draw_water_source = other.non_priority_draw_water_source;
     weekly_peaking_factor = other.weekly_peaking_factor;
-    demand_series_realization = other.demand_series_realization;
+    
+    // CRITICAL FIX: NEVER copy demand_series_realization from source
+    // Always initialize as empty - setRealization() will properly populate it
+    // This prevents copying uninitialized or partially initialized vectors during parallel execution
+    demand_series_realization = vector<double>();
+    
     wss_owned_wtp_capacities = other.wss_owned_wtp_capacities;
     water_source_to_wtp = other.water_source_to_wtp;
     
@@ -277,6 +282,7 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     water_sources.resize(other.water_sources.size(), nullptr);
     
     // Deep copy the infrastructure manager
+    // Note: The id in infrastructure_construction_manager should be utility_id, not system_id
     infrastructure_construction_manager = other.infrastructure_construction_manager;
     
     // Deep copy the dynamically allocated array for available_treated_flow_rate
@@ -439,8 +445,7 @@ void WaterSupplySystems::addWaterSource(WaterSource* water_source) {
 void WaterSupplySystems::checkErrorsAddWaterSourceOnline(WaterSource* water_source) {
     for (WaterSource *ws : water_sources) {
         if ((ws != nullptr) && ws->id == water_source->id) {
-            cout << "Water source ID: " << water_source->id << endl <<
-                 "WSS ID: " << system_id << endl;
+            printf("Water source ID: %d\nWSS ID: %d\n", water_source->id, system_id);
             throw invalid_argument("Attempt to add water source with "
                                    "duplicate ID to WSS.");
         }
@@ -706,6 +711,15 @@ void WaterSupplySystems::setRealization(unsigned long r, vector<double> &rdm_fac
     
     // Simple, clean implementation like the original
     unsigned long n_weeks = demands_all_realizations.at(r).size();
+    
+    // CRITICAL: Validate n_weeks is reasonable before allocating
+    if (n_weeks == 0 || n_weeks > 100000) {
+        char error_msg[512];
+        sprintf(error_msg, "ERROR: WSS %d setRealization got invalid n_weeks=%lu from demands_all_realizations[%lu]",
+                system_id, n_weeks, r);
+        throw std::runtime_error(error_msg);
+    }
+    
     demand_series_realization = vector<double>(n_weeks);
 
     // Apply demand multiplier and copy demands pertaining to current realization.
@@ -797,11 +811,31 @@ double WaterSupplySystems::getUnrestrictedDemand(int week) const {
     if (week == -1) {
         return unrestricted_demand;
     } else {
+        // CRITICAL: Check if vector is empty (not yet initialized by setRealization)
+        size_t vec_size = demand_series_realization.size();
+        if (vec_size == 0) {
+            // Vector not yet initialized - return 0 demand rather than crashing
+            // This can happen if ROF calculation accesses WSS before setRealization completes
+            printf("WARNING: WSS %d getUnrestrictedDemand called before setRealization initialized demand vector (week=%d)\n",
+                   system_id, week);
+            return 0.0;
+        }
+        
+        // Check for corrupted vector (impossibly large size indicates memory corruption)
+        if (vec_size > 100000) {
+            char error_msg[512];
+            sprintf(error_msg, "FATAL: WSS %d (used_for_realization=%d) has corrupted demand_series_realization vector (size=%zu). "
+                    "Week=%d. demands_all_realizations.size()=%zu. This indicates the vector was not properly initialized by setRealization().",
+                    system_id, used_for_realization, vec_size, week, demands_all_realizations.size());
+            printf("ERROR: %s\n", error_msg);
+            throw std::runtime_error(error_msg);
+        }
+        
         // Bounds check for demand_series_realization access
-        if (week < 0 || week >= (int)demand_series_realization.size()) {
+        if (week < 0 || week >= (int)vec_size) {
             char error_msg[512];
             sprintf(error_msg, "WSS %d: Week %d out of bounds for demand_series_realization (size=%zu) in getUnrestrictedDemand", 
-                    system_id, week, demand_series_realization.size());
+                    system_id, week, vec_size);
             printf("ERROR: %s\n", error_msg);
             throw std::out_of_range(error_msg);
         }
@@ -881,7 +915,8 @@ int WaterSupplySystems::infrastructureConstructionHandler(double long_term_rof, 
             water_source_to_wtp,
             total_storage_capacity,
             total_available_volume,
-            total_stored_volume);
+            total_stored_volume,
+            system_id);  // Pass WSS ID for pathway tracking
 
     // Handle bond issuance immediately here since WSS has the infrastructure sources
     if (new_infra_triggered != NON_INITIALIZED) {
@@ -944,7 +979,7 @@ void WaterSupplySystems::setInfrastructureParameters(const vector<int>& rof_infr
                                                      const vector<double>& infra_construction_triggers) {
     // Recreate the infrastructure manager with the provided parameters
     infrastructure_construction_manager = InfrastructureManager(
-        system_id, 
+        utility_id,  // Use utility_id for pathway tracking, not system_id
         infra_construction_triggers,
         vector<vector<int>>(),  // empty infra_if_built_remove (WSS doesn't handle complex financial rules)
         0.0,  // no discount rate (handled by utility)

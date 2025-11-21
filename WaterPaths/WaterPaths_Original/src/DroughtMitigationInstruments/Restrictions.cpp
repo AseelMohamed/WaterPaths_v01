@@ -120,8 +120,10 @@ void Restrictions::calculateWeeklyAverageWaterPrices(
             }
 
             for (int w = 0; w < (int) (WEEKS_IN_YEAR + 1); ++w) {
+                // Cap month index at 11 to handle week 52 (which would map to month 12)
+                int month_idx = std::min((int) (w / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
                 restricted_weekly_average_volumetric_price[s][w] =
-                        monthly_average_price[(int) (w / WEEKS_IN_MONTH)] / WEEKS_IN_MONTH;
+                        monthly_average_price[month_idx] / WEEKS_IN_MONTH;
             }
         }
     }

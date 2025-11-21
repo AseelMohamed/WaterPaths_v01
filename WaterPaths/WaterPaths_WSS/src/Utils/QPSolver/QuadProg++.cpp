@@ -100,7 +100,7 @@ double solve_quadprog(Matrix<double> &G, Vector<double> &g0,
     /* m is the number of inequality constraints */
     /* size of the active set A (containing the indices of the active constraints) */
 #ifdef TRACE_SOLVER
-    std::cout << std::endl << "Starting solve_quadprog" << std::endl;
+    printf("\nStarting solve_quadprog\n");
     print_matrix("H", H);
     print_vector("f", f);
     print_matrix("Aeq", Aeq);
@@ -158,7 +158,7 @@ double solve_quadprog(Matrix<double> &G, Vector<double> &g0,
     /* and compute the current solution value */
     f_value = 0.5 * scalar_product(g0, x);
 #ifdef TRACE_SOLVER
-    std::cout << "Unconstrained solution: " << f_value << std::endl;
+    printf("Unconstrained solution: %f\n", f_value);
     print_vector("allocations_aux", allocations_aux);
 #endif
 
@@ -270,7 +270,7 @@ double solve_quadprog(Matrix<double> &G, Vector<double> &g0,
     A[iq] = ip;
 
 #ifdef TRACE_SOLVER
-    std::cout << "Trying with constraint " << ip << std::endl;
+    printf("Trying with constraint %lu\n", ip);
     print_vector("np", np);
 #endif
 
@@ -281,7 +281,7 @@ double solve_quadprog(Matrix<double> &G, Vector<double> &g0,
     /* compute N* np (if q > 0): the negative of the step direction in the dual space */
     update_r(R, r, d, iq);
 #ifdef TRACE_SOLVER
-    std::cout << "Step direction z" << std::endl;
+    printf("Step direction z\n");
     print_vector("z", z);
     print_vector("r", r, iq + 1);
     print_vector("u", u, iq + 1);
@@ -314,7 +314,7 @@ double solve_quadprog(Matrix<double> &G, Vector<double> &g0,
     /* the step is chosen as the minimum of t1 and t2 */
     t = std::min(t1, t2);
 #ifdef TRACE_SOLVER
-    std::cout << "Step sizes: " << t << " (t1 = " << t1 << ", t2 = " << t2 << ") ";
+    printf("Step sizes: %f (t1 = %f, t2 = %f) ", t, t1, t2);
 #endif
 
     /* Step 2c: determine new S-pair and take step: */
@@ -334,8 +334,7 @@ double solve_quadprog(Matrix<double> &G, Vector<double> &g0,
         iai[l] = l;
         delete_constraint(R, J, A, u, n, p, iq, l);
 #ifdef TRACE_SOLVER
-        std::cout << " in dual space: "
-          << f_value << std::endl;
+        printf(" in dual space: %f\n", f_value);
         print_vector("allocations_aux", allocations_aux);
         print_vector("z", z);
         print_vector("A", A, iq + 1);
@@ -355,8 +354,7 @@ double solve_quadprog(Matrix<double> &G, Vector<double> &g0,
         u[k] -= t * r[k];
     u[iq] += t;
 #ifdef TRACE_SOLVER
-    std::cout << " in both spaces: "
-      << f_value << std::endl;
+    printf(" in both spaces: %f\n", f_value);
     print_vector("allocations_aux", allocations_aux);
     print_vector("u", u, iq + 1);
     print_vector("r", r, iq + 1);
@@ -365,7 +363,7 @@ double solve_quadprog(Matrix<double> &G, Vector<double> &g0,
 
     if (fabs(t - t2) < std::numeric_limits<double>::epsilon()) {
 #ifdef TRACE_SOLVER
-        std::cout << "Full step has taken " << t << std::endl;
+        printf("Full step has taken %f\n", t);
         print_vector("allocations_aux", allocations_aux);
 #endif
         /* full step has taken */
@@ -400,7 +398,7 @@ double solve_quadprog(Matrix<double> &G, Vector<double> &g0,
 
     /* a patial step has taken */
 #ifdef TRACE_SOLVER
-    std::cout << "Partial step has taken " << t << std::endl;
+    printf("Partial step has taken %f\n", t);
     print_vector("allocations_aux", allocations_aux);
 #endif
     /* drop constraint l */
@@ -547,7 +545,7 @@ inline void update_r(const Matrix<double> &R, Vector<double> &r, const Vector<do
 bool add_constraint(Matrix<double> &R, Matrix<double> &J, Vector<double> &d, int &iq, double &R_norm) {
     int n = d.size();
 #ifdef TRACE_SOLVER
-    std::cout << "Add constraint " << iq << '/';
+    printf("Add constraint %d/", iq);
 #endif
     register int i, j, k;
     double cc, ss, h, t1, t2, xny;
@@ -595,7 +593,7 @@ bool add_constraint(Matrix<double> &R, Matrix<double> &J, Vector<double> &d, int
     for (i = 0; i < iq; i++)
         R[i][iq - 1] = d[i];
 #ifdef TRACE_SOLVER
-    std::cout << iq << std::endl;
+    printf("%d\n", iq);
     print_matrix("R", R, iq, iq);
     print_matrix("J", J);
     print_vector("d", d, iq);
@@ -612,7 +610,7 @@ bool add_constraint(Matrix<double> &R, Matrix<double> &J, Vector<double> &d, int
 void delete_constraint(Matrix<double> &R, Matrix<double> &J, Vector<int> &A, Vector<double> &u, int n, int p, int &iq,
                        int l) {
 #ifdef TRACE_SOLVER
-    std::cout << "Delete constraint " << l << ' ' << iq;
+    printf("Delete constraint %d %d", l, iq);
 #endif
     register int i, j, k, qq = -1; // just to prevent warnings from smart compilers
     double cc, ss, h, xny, t1, t2;
@@ -641,7 +639,7 @@ void delete_constraint(Matrix<double> &R, Matrix<double> &J, Vector<int> &A, Vec
     /* constraint has been fully removed */
     iq--;
 #ifdef TRACE_SOLVER
-    std::cout << '/' << iq << std::endl;
+    printf("/%d\n", iq);
 #endif
 
     if (iq == 0)
@@ -782,7 +780,7 @@ void print_matrix(char *name, const Matrix<double> &A, int n, int m) {
     t = s.str();
     t = t.substr(0, t.size() - 3); // To remove the trailing space, comma and newline
 
-    std::cout << t << std::endl;
+    printf("%s\n", t.c_str());
 }
 
 void print_vector(char *name, const Vector<double> &v, int n) {
@@ -798,5 +796,5 @@ void print_vector(char *name, const Vector<double> &v, int n) {
     t = s.str();
     t = t.substr(0, t.size() - 2); // To remove the trailing space and comma
 
-    std::cout << t << std::endl;
+    printf("%s\n", t.c_str());
 }

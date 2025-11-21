@@ -150,10 +150,8 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
     // Check if IDs are sequential.
     for (int ws = 1; ws < (int) water_sources.size(); ++ws) {
         if (water_sources[ws]->id != water_sources[ws - 1]->id + 1) {
-            cout << "The IDs of water sources " << water_sources[ws]->id << " "
-                                                                            "and "
-                 << water_sources[ws - 1]->id << " do not follow a "
-                                                 "unit progression." << endl;
+            printf("The IDs of water sources %d and %d do not follow a unit progression.\n",
+                   water_sources[ws]->id, water_sources[ws - 1]->id);
             throw_with_nested(
                     invalid_argument("Improper water source ID sequencing"));
         }
@@ -161,10 +159,8 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
 
     for (int u = 1; u < (int) utilities.size(); ++u) {
         if (utilities[u]->id != utilities[u - 1]->id + 1) {
-            cout << "The IDs of utilities " << utilities[u]->id << " "
-                                                                   "and "
-                 << utilities[u - 1]->id << " do not follow a "
-                                            "unit progression." << endl;
+            printf("The IDs of utilities %d and %d do not follow a unit progression.\n",
+                   utilities[u]->id, utilities[u - 1]->id);
             throw_with_nested(
                     invalid_argument("Improper utility ID sequencing"));
         }
@@ -190,12 +186,8 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
                           water_sources_to_wss[u].end(),
                           ws)
                 == water_sources_to_wss[u].end()) {
-                cout << "Water source #" << ws << " is listed in the "
-                                                  "construction order for utility "
-                     << utilities[u]->id
-                     << " (" << utilities[u]->name << ")  but is  not  "
-                                                      "present in  utility's list of water sources."
-                     << endl;
+                printf("Water source #%d is listed in the construction order for utility %d (%s) but is not present in utility's list of water sources.\n",
+                       ws, utilities[u]->id, utilities[u]->name);
                 throw invalid_argument("Utility's construction order and "
                                        "owned sources mismatch.");
             }
@@ -207,9 +199,7 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
                                 const WaterSource *
                                 obj) { return obj->id == ws; }) ==
                 water_sources.end()) {
-                cout << "Water source #" << ws << " not present in "
-                                                  "comprehensive water sources vector."
-                     << endl;
+                printf("Water source #%d not present in comprehensive water sources vector.\n", ws);
                 throw invalid_argument("Water sources declared to belong to"
                                        " a utility is not present "
                                        "in vector of water sources.");
@@ -248,30 +238,27 @@ void Simulation::createContinuityModels(unsigned long realization,
     
     // Extract water supply systems from utilities for realization model
     vector<WaterSupplySystems *> wss_realization;
+    vector<MinEnvFlowControl *> min_env_flow_controls_realization;
+    vector<vector<int>> water_sources_to_wss_mapping;
 
-    // CRITICAL SECTION: WSS copying must be thread-safe since original WSS objects are shared
-    #pragma omp critical(wss_copying)
+    // CRITICAL SECTION: ALL copying and construction must be serialized
+    // Using single critical section to prevent race conditions when multiple threads
+    // copy from shared utility objects simultaneously
+    #pragma omp critical(model_creation)
     {
+        // Copy WSS from utilities
         for (auto* utility : utilities) {
             for (const auto& wss : utility->getWaterSupplySystems()) {
                 // Create copies of WSS for this realization
                 wss_realization.push_back(new WaterSupplySystems(*wss));
             }
         }
-    }
-    
-    // Directly use the WSS connectivity matrix (water_sources_to_wss)
-    // Each row corresponds to a WSS, and contains the water source IDs for that WSS
-    vector<vector<int>> water_sources_to_wss_mapping = water_sources_to_wss;
+        
+        // Directly use the WSS connectivity matrix
+        water_sources_to_wss_mapping = water_sources_to_wss;
+        
+        min_env_flow_controls_realization = Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
 
-    
-    vector<MinEnvFlowControl *> min_env_flow_controls_realization =
-            Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
-
-    // CRITICAL SECTION: Entire ContinuityModel construction must be thread-safe
-    // The ContinuityModel constructor modifies WSS objects and assigns water sources
-    #pragma omp critical(continuity_model_construction)
-    {
         // Store realization models in vector - using WSS instead of utilities
         realization_model = new ContinuityModelRealization(
                 water_sources_realization,
@@ -286,8 +273,9 @@ void Simulation::createContinuityModels(unsigned long realization,
                 realization);
     }
 
-    // CRITICAL SECTION: ROF model construction also needs thread safety
-    #pragma omp critical(rof_model_construction)
+    // CRITICAL SECTION: ROF model construction must use SAME critical section name
+    // to ensure it serializes with realization model construction above
+    #pragma omp critical(model_creation)
     {    
         // Create rof models by copying the water sources and WSS.
         // ROF model needs its own copies for independent ROF calculations
@@ -324,10 +312,12 @@ void Simulation::createContinuityModels(unsigned long realization,
 
         // Initialize rof models by connecting it to realization water sources and WSS for observation
         rof_model->connectRealizationWaterSources(water_sources_realization);
+        
+        // Connect ROF model to realization WSS INSIDE critical section
+        // This prevents race conditions where one thread accesses wss_realization pointers
+        // while another thread is still initializing the demand_series_realization vectors
+        rof_model->connectRealizationWSS(wss_realization);
     }
-    
-    // Connect ROF model to realization WSS so it can observe infrastructure changes
-    rof_model->connectRealizationWSS(wss_realization);
 
     // Pass ROF tables to continuity model
     if (import_export_rof_tables == IMPORT_ROF_TABLES) {
@@ -388,6 +378,37 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
                          realizations_to_run.end());
     vector<unsigned long> realizations_to_run_unique;
     realizations_to_run_unique.assign(s.begin(), s.end());
+    
+    // VALIDATION: Check if any requested realizations have missing/corrupted ROF tables
+    if (import_export_rof_tables == IMPORT_ROF_TABLES) {
+        vector<unsigned long> valid_realizations;
+        for (unsigned long realization : realizations_to_run_unique) {
+            if (realization >= precomputed_rof_tables->size()) {
+                printf("WARNING: Realization %lu requested but only %zu ROF tables available. Skipping.\n",
+                       realization, precomputed_rof_tables->size());
+                continue;
+            }
+            
+            // Simple check: if the vector of tables for this realization is not empty, consider it valid
+            // More detailed validation happens in setRofTables where empty files are caught
+            if (!precomputed_rof_tables->at(realization).empty()) {
+                valid_realizations.push_back(realization);
+            } else {
+                printf("WARNING: Realization %lu has no ROF tables loaded. Skipping this realization.\n", 
+                       realization);
+            }
+        }
+        
+        if (valid_realizations.empty()) {
+            throw std::runtime_error("ERROR: No valid realizations to run after filtering out corrupted ROF tables!");
+        }
+        
+        // printf("Running %zu out of %zu requested realizations (skipped %zu with corrupted ROF tables)\n",
+        //        valid_realizations.size(), realizations_to_run_unique.size(), 
+        //        realizations_to_run_unique.size() - valid_realizations.size());
+        
+        realizations_to_run_unique = valid_realizations;
+    }
 
     // Prepare error output.
     int had_catch = 0;
@@ -399,7 +420,6 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
 #pragma omp parallel for ordered num_threads(n_threads) shared(had_catch, realizations_to_run_unique, error_m, error_file_name, error_file_content) default(none)
     for (unsigned long r = 0; r < realizations_to_run_unique.size(); ++r) {
         unsigned long realization = realizations_to_run_unique[r];
-        //printf("Realization %lu\n", r);
 
         // Create continuity models.
         ContinuityModelRealization *realization_model = nullptr;

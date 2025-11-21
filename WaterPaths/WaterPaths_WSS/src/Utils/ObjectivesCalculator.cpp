@@ -474,12 +474,35 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         // Check failures for this WSS across all realizations
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
+                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                
+                // CRITICAL: Check if data was actually collected (vectors not empty)
+                if (storage_vec.empty() || capacity_vec.empty()) {
+                    char error[512];
+                    sprintf(error, "ERROR: WSS data collector has empty storage vectors for realization %lu. "
+                            "This means collectData() was not called during simulation. "
+                            "Storage size=%zu, Capacity size=%zu. "
+                            "Check if import_export_rof_tables == EXPORT_ROF_TABLES is skipping data collection.",
+                            r, storage_vec.size(), capacity_vec.size());
+                    throw std::runtime_error(error);
+                }
+                
                 for (unsigned long y = 0; y < n_years; ++y) {
                     for (int w = (int) round(y * WEEKS_IN_YEAR);
                          w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
                         
-                        double storage = wss_realization_data[r]->getCombined_storage()[w];
-                        double capacity = wss_realization_data[r]->getStorage_capacity()[w];
+                        // Bounds check before accessing vectors
+                        if (w >= (int)storage_vec.size() || w >= (int)capacity_vec.size()) {
+                            char error[512];
+                            sprintf(error, "ERROR: Week %d out of bounds for WSS data (storage size=%zu, capacity size=%zu) "
+                                    "in realization %lu, year %lu. Expected %lu weeks.",
+                                    w, storage_vec.size(), capacity_vec.size(), r, y, n_weeks);
+                            throw std::out_of_range(error);
+                        }
+                        
+                        double storage = storage_vec[w];
+                        double capacity = capacity_vec[w];
                         
                         if (capacity > 0 && storage / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
                             realizations_year_reliabilities[r][y] = FAILURE;

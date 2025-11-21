@@ -25,7 +25,7 @@ private:
     vector<int> rof_infra_construction_order;
     vector<int> demand_infra_construction_order;
 
-    vector<int> infra_built_last_week;
+    vector<vector<int>> infra_built_last_week;
     vector<int> construction_end_date;
     vector<bool> under_construction;
     double infra_net_present_cost = NONE;
@@ -74,7 +74,8 @@ public:
             vector<double> &utility_owned_wtp_capacities,
             vector<int> &water_source_to_wtp,
             double &total_storage_capacity,
-            double &total_available_volume, double &total_stored_volume);
+            double &total_available_volume, double &total_stored_volume,
+            int wss_id = -1);
 
     void
     forceInfrastructureConstruction(int week, vector<int> new_infra_triggered);
@@ -98,7 +99,9 @@ public:
 
     const vector<int> &getDemand_infra_construction_order() const;
 
-    const vector<int> &getInfra_built_last_week() const;
+    const vector<vector<int>> &getInfra_built_last_week() const;
+    
+    vector<vector<int>> getAllAndClearInfraBuilt();
 
     const vector<bool> &getUnder_construction() const;
 

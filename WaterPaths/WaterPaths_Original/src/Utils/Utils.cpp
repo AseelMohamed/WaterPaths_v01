@@ -117,7 +117,7 @@ vector<double> Utils::parse1DCsvFile(string file_name, unsigned long max_lines,
                 record = stof(ss.str());
                 data.push_back(record);
             } catch (const std::invalid_argument e) {
-                cout << "NaN found in file " << file_name << " line " << l << endl;
+                printf("NaN found in file %s line %lu\n", file_name.c_str(), l);
                 e.what();
             }
             if (!rows_to_read.empty())// && rows_to_read[0] != NON_INITIALIZED) 

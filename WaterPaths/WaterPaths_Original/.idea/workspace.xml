@@ -29,25 +29,47 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="34608747-ac33-40f2-8615-6ba76e616432" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/../Simulation_Comparison_Analysis.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Comparison.zip" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Comparison/Original/Utility.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Comparison/Original/Utility.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Comparison/WSS/Utility.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Comparison/WSS/Utility.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Comparison/WSS/WaterSupplySystems.cpp" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Comparison/WSS/WaterSupplySystems.h" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../Makefile" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/borg_caesb.sh" beforeDir="false" afterPath="$PROJECT_DIR$/borg_caesb.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/Objectives_s0.out" beforeDir="false" afterPath="$PROJECT_DIR$/output/Objectives_s0.out" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/DataCollector/MasterDataCollector.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/DataCollector/MasterDataCollector.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/DroughtMitigationInstruments/Restrictions.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/DroughtMitigationInstruments/Restrictions.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Problem/Base/Problem.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Problem/Base/Problem.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Problem/Caesb.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Problem/Caesb.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Simulation/Simulation.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Simulation/Simulation.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/SystemComponents/Utility/Utility.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/SystemComponents/Utility/Utility.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Utils/Utils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/Utils/Utils.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/borg_caesb.sh" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/borg_caesb.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/output/Objectives_s0.out" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/output/Objectives_s0.out" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/ContinuityModels/Base/ContinuityModel.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/ContinuityModels/Base/ContinuityModel.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/MasterDataCollector.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/MasterDataCollector.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/MasterDataCollector.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/MasterDataCollector.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/UtilitiesDataCollector.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/UtilitiesDataCollector.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/WSSDataCollector.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/WSSDataCollector.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/WSSDataCollector.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DataCollector/WSSDataCollector.h" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DroughtMitigationInstruments/Restrictions.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DroughtMitigationInstruments/Restrictions.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/DroughtMitigationInstruments/Restrictions.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/DroughtMitigationInstruments/Restrictions.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Problem/Base/Problem.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Problem/Base/Problem.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Problem/Caesb.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Problem/Caesb.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Simulation/Simulation.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Simulation/Simulation.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/InfrastructureManager.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/InfrastructureManager.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/InfrastructureManager.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/InfrastructureManager.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/Utility.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/Utility.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/Utility.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/Utility.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.cpp" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/SystemComponents/Utility/WaterSupplySystems.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/Matrices.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/Matrices.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/ObjectivesCalculator.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/ObjectivesCalculator.cpp" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/ObjectivesCalculator.h" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/ObjectivesCalculator.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/QPSolver/QuadProg++.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/QPSolver/QuadProg++.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/Utils.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/Utils/Utils.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../WaterPaths_WSS/src/main.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/../WaterPaths_WSS/src/main.cpp" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -102,7 +124,7 @@
   }
 }</component>
   <component name="RunManager">
-    <configuration name="WaterPaths_Original" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-T 10 -t 2080 -r 20 -m 0 -C -1 -d C:\PhD_coding\WaterPaths_v01\WaterPaths\WaterPaths_Original\ -U InputFiles\utilities_rdm_reeval.csv -W InputFiles\water_sources_rdm_reeval.csv -P InputFiles\policies_rdm_reeval.csv -s FBcompSol_DVs.csv" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$PROJECT_DIR$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="WaterPaths_Original" TARGET_NAME="WaterPaths_Original" CONFIG_NAME="WaterPaths_Original" RUN_TARGET_PROJECT_NAME="WaterPaths_Original" RUN_TARGET_NAME="WaterPaths_Original">
+    <configuration name="WaterPaths_Original" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-T 10 -t 2080 -r 1 -m 0 -C 1 -d C:\PhD_coding\WaterPaths_v01\WaterPaths\WaterPaths_Original\ -U InputFiles\utilities_rdm_reeval.csv -W InputFiles\water_sources_rdm_reeval.csv -P InputFiles\policies_rdm_reeval.csv -s FBcompSol_DVs.csv" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$PROJECT_DIR$" PASS_PARENT_ENVS_2="true" PROJECT_NAME="WaterPaths_Original" TARGET_NAME="WaterPaths_Original" CONFIG_NAME="WaterPaths_Original" RUN_TARGET_PROJECT_NAME="WaterPaths_Original" RUN_TARGET_NAME="WaterPaths_Original">
       <method v="2">
         <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
       </method>
@@ -120,7 +142,11 @@
       <workItem from="1762754612004" duration="4000" />
       <workItem from="1762776315055" duration="28578000" />
       <workItem from="1763109781698" duration="8020000" />
-      <workItem from="1763365430407" duration="3744000" />
+      <workItem from="1763365430407" duration="4344000" />
+      <workItem from="1763572852869" duration="3140000" />
+      <workItem from="1763636350914" duration="3958000" />
+      <workItem from="1763649307010" duration="2692000" />
+      <workItem from="1763716898908" duration="1807000" />
     </task>
     <servers />
   </component>

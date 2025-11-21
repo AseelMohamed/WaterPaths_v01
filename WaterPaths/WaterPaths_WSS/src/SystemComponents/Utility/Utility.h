@@ -230,7 +230,9 @@ public:
 
     double getInsurance_payout() const; //checked
 
-    vector<int> getInfrastructure_built() const; //checked
+    vector<int> getInfrastructure_built() const;
+    
+    vector<vector<int>> getAllAndClearInfraBuilt() const; //checked
 
     double getTotal_storage_capacity() const; //check --- 
 

@@ -1,5 +1,5 @@
-CFLAGS=-std=c++14 -fsanitize=address -fno-omit-frame-pointer -fopenmp #-fno-sanitize-address-use-after-scope
-LDFLAGS=-lstdc++ -fsanitize=address -fopenmp
+CFLAGS=-std=c++14 -fopenmp #-fno-sanitize-address-use-after-scope
+LDFLAGS=-lstdc++ -fopenmp
 
 # List of sources and objects (include all .cpp files)
 SOURCES=$(shell find ./src -name "*.cpp")
@@ -9,15 +9,15 @@ TARGET=FDBsimulation
 EXECUTABLE=$(TARGET)
 
 LIB_DIR=./lib
-LIBS=-static-libasan -lm
+LIBS=-lm
 
 all: $(SOURCES) $(TARGET)
 
 borg: CC=mpicxx
 #borg: CC=g++ # for serial borg debugging
-borg: LIBS += -lborgms
+borg: LIBS += -lborgms -static-libstdc++
 #borg: LIBS += -lborg # for serial borg debugging
-borg: CFLAGS += -DPARALLEL -fopenmp -march=native -O2
+borg: CFLAGS += -DPARALLEL -fopenmp -O2
 borg: all
 
 gcc: CC=g++
@@ -49,7 +49,7 @@ prof: all
 	$(CC) -c $(CFLAGS) $^ -o $@
 
 $(TARGET): $(OBJECTS)
-	$(CC) -I. $(LDFLAGS) $(OBJECTS) $(CFLAGS) -o $@ -L$(LIB_DIR) $(LIBS) $(DEFINES)
+	$(CC) $(OBJECTS) $(CFLAGS) -o $@ -L$(LIB_DIR) $(LIBS) $(LDFLAGS) $(DEFINES)
 
 clean:
 	rm -rf $(shell find . -name "*.o") $(EXECUTABLE)

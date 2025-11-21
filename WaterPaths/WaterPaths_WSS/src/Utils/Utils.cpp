@@ -72,8 +72,8 @@ vector<vector<double>> Utils::parse2DCsvFile(string file_name, unsigned long max
                     try {
                         record.push_back(stof(line));
                     } catch (const std::invalid_argument& e) {
-                        cout << "NaN found in file " << file_name << " line "
-                             << l << " column " << c << ": " << e.what() << endl;
+                        printf("NaN found in file %s line %d column %d: %s\n",
+                               file_name.c_str(), l, c, e.what());
                     }
                     c++;
                 }
@@ -114,7 +114,7 @@ vector<double> Utils::parse1DCsvFile(string file_name, unsigned long max_lines,
                 record = stof(ss.str());
                 data.push_back(record);
             } catch (const std::invalid_argument& e) {
-                cout << "NaN found in file " << file_name << " line " << l << ": " << e.what() << endl;
+                printf("NaN found in file %s line %lu: %s\n", file_name.c_str(), l, e.what());
             }
             if (!rows_to_read.empty())// && rows_to_read[0] != NON_INITIALIZED) 
 		    rows_to_read.erase(rows_to_read.begin());

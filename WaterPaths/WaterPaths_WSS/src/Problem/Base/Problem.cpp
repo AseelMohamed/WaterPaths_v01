@@ -43,18 +43,21 @@ void Problem::printTimeSeriesAndPathways(bool plot_time_series) {
         
         // Only print time series if requested.
         if (plot_time_series) {
-            cout << "Printing Pathways" << endl;
+            printf("Printing Pathways\n");
             this->master_data_collector->printPathways(
                 fpw + "_s" + std::to_string(solution_no) + fname_sufix);
-            cout << "Printing time series" << endl;
+            printf("Printing time series\n");
+            // Use actual collected weeks instead of configured n_weeks to avoid out-of-bounds access
+            unsigned long actual_weeks = this->master_data_collector->getActualWeeksCollected();
+            printf("Configured weeks: %lu, Actual collected weeks: %lu\n", n_weeks, actual_weeks);
             this->master_data_collector->printUtilitiesOutputCompact(
-                    0, (int) n_weeks, fu + "_s" + std::to_string(solution_no) +
+                    0, (int) actual_weeks, fu + "_s" + std::to_string(solution_no) +
                                       fname_sufix);
             this->master_data_collector->printWaterSourcesOutputCompact(
-                    0, (int) n_weeks, fws + "_s" + std::to_string(solution_no) +
+                    0, (int) actual_weeks, fws + "_s" + std::to_string(solution_no) +
                                       fname_sufix);
             this->master_data_collector->printPoliciesOutputCompact(
-                    0, (int) n_weeks, fp + "_s" + std::to_string(solution_no) +
+                    0, (int) actual_weeks, fp + "_s" + std::to_string(solution_no) +
                                       fname_sufix);
         }
         //    data_collector->printUtilitesOutputTabular(0,
@@ -317,15 +320,50 @@ Problem::setRofTables(unsigned long n_realizations, string rof_tables_directory)
                                      Matrix2D<int>(n_weeks_in_table, n_tiers)));
 
     for (unsigned long r = 0; r < n_realizations; ++r) {
-//        printf("Reading tables for realization %lu.\n", r);
+        // Flag to check if this entire realization should be skipped
+        bool skip_realization = false;
+        
         for (int u = 0; u < n_wss; ++u) {
             string file_name = rof_tables_directory + "tables_r" + to_string(r) + "_wss" + to_string(u) + ".csv";
+            
+            // Check if file exists before trying to parse
+            std::ifstream test_file(file_name);
+            if (!test_file.good()) {
+                printf("WARNING: ROF table file not found: %s\n", file_name.c_str());
+                printf("         Skipping realization %lu - will not be run in this simulation.\n", r);
+                skip_realization = true;
+                break;  // Skip remaining WSS for this realization
+            }
+            test_file.close();
+            
             auto tables_utility_week = Utils::parse2DCsvFile(file_name);
+            
+            // Check if file is empty or has insufficient data
+            if (tables_utility_week.empty() || tables_utility_week.size() < (size_t)n_weeks) {
+                printf("WARNING: ROF table file %s is empty or has insufficient data (has %zu weeks, expected %lu)\n",
+                       file_name.c_str(), tables_utility_week.size(), (unsigned long)n_weeks);
+                printf("         Skipping realization %lu - will not be run in this simulation.\n", r);
+                skip_realization = true;
+                break;  // Skip remaining WSS for this realization
+            }
 
+            // Populate the ROF tables for this WSS
             for (int w = 0; w < n_weeks; ++w) {
                 auto tables_int = vector<int>(tables_utility_week[w].begin(), tables_utility_week[w].end());
                 rof_tables[r][u].setPartialData((int)w, tables_int.data(), tables_utility_week[w].size());
             }
+        }
+        
+        // If this realization was skipped, mark it so the simulation doesn't try to run it
+        if (skip_realization) {
+            // Initialize with zeros so it doesn't crash if accidentally accessed
+            for (int u = 0; u < n_wss; ++u) {
+                for (int w = 0; w < n_weeks; ++w) {
+                    vector<int> zeros(n_tiers, 0);
+                    rof_tables[r][u].setPartialData((int)w, zeros.data(), n_tiers);
+                }
+            }
+        }
 //        u = 1;
 //        file_name = rof_tables_directory + "tables_r" + to_string(r) + "_u" + to_string(u) + ".csv";
 //        tables_utility_week = Utils::parse2DCsvFile(file_name);
@@ -335,12 +373,6 @@ Problem::setRofTables(unsigned long n_realizations, string rof_tables_directory)
 //        }
 //        u = 2;
 //        file_name = rof_tables_directory + "tables_r" + to_string(r) + "_u" + to_string(u) + ".csv";
-//        tables_utility_week = Utils::parse2DCsvFile(file_name);
-//
-//        for (int w = 0; w < n_weeks; ++w) {
-//            rof_tables[r][u].setPartialData(w, tables_utility_week[w].data(), tables_utility_week[w].size());
-//        }
-        }
     }
 
 //    printf("Loading tables took %f time.\n", omp_get_wtime() - start_time);

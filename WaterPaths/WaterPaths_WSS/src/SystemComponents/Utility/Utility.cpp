@@ -1129,7 +1129,12 @@ const vector<int> &Utility::getDemand_infra_construction_order() const {
 }
 
 vector<int> Utility::getInfrastructure_built() const {
-    return infrastructure_construction_manager.getInfra_built_last_week();
+    // Return empty - pathway collection not supported in WSS model
+    return vector<int>();
+}
+
+vector<vector<int>> Utility::getAllAndClearInfraBuilt() const {
+    return const_cast<InfrastructureManager&>(infrastructure_construction_manager).getAllAndClearInfraBuilt();
 }
 
 double Utility::waterPrice(int week) {

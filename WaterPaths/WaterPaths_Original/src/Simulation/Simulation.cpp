@@ -150,10 +150,8 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
     // Check if IDs are sequential.
     for (int ws = 1; ws < (int) water_sources.size(); ++ws) {
         if (water_sources[ws]->id != water_sources[ws - 1]->id + 1) {
-            cout << "The IDs of water sources " << water_sources[ws]->id << " "
-                                                                            "and "
-                 << water_sources[ws - 1]->id << " do not follow a "
-                                                 "unit progression." << endl;
+            printf("The IDs of water sources %d and %d do not follow a unit progression.\n", 
+                   water_sources[ws]->id, water_sources[ws - 1]->id);
             throw_with_nested(
                     invalid_argument("Improper water source ID sequencing"));
         }
@@ -161,10 +159,8 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
 
     for (int u = 1; u < (int) utilities.size(); ++u) {
         if (utilities[u]->id != utilities[u - 1]->id + 1) {
-            cout << "The IDs of utilities " << utilities[u]->id << " "
-                                                                   "and "
-                 << utilities[u - 1]->id << " do not follow a "
-                                            "unit progression." << endl;
+            printf("The IDs of utilities %d and %d do not follow a unit progression.\n", 
+                   utilities[u]->id, utilities[u - 1]->id);
             throw_with_nested(
                     invalid_argument("Improper utility ID sequencing"));
         }
@@ -190,12 +186,8 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
                           water_sources_to_utilities[u].end(),
                           ws)
                 == water_sources_to_utilities[u].end()) {
-                cout << "Water source #" << ws << " is listed in the "
-                                                  "construction order for utility "
-                     << utilities[u]->id
-                     << " (" << utilities[u]->name << ")  but is  not  "
-                                                      "present in  utility's list of water sources."
-                     << endl;
+                printf("Water source #%d is listed in the construction order for utility %d (%s) but is not present in utility's list of water sources.\n",
+                       ws, utilities[u]->id, utilities[u]->name);
                 throw invalid_argument("Utility's construction order and "
                                        "owned sources mismatch.");
             }
@@ -207,9 +199,7 @@ void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
                                 const WaterSource *
                                 obj) { return obj->id == ws; }) ==
                 water_sources.end()) {
-                cout << "Water source #" << ws << " not present in "
-                                                  "comprehensive water sources vector."
-                     << endl;
+                printf("Water source #%d not present in comprehensive water sources vector.\n", ws);
                 throw invalid_argument("Water sources declared to belong to"
                                        " a utility is not present "
                                        "in vector of water sources.");

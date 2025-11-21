@@ -43,10 +43,10 @@ void Problem::printTimeSeriesAndPathways(bool plot_time_series) {
         
         // Only print time series if requested.
         if (plot_time_series) {
-            cout << "Printing Pathways" << endl;
+            printf("Printing Pathways\n");
             this->master_data_collector->printPathways(
                 fpw + "_s" + std::to_string(solution_no) + fname_sufix);
-            cout << "Printing time series" << endl;
+            printf("Printing time series\n");
             this->master_data_collector->printUtilitiesOutputCompact(
                     0, (int) n_weeks, fu + "_s" + std::to_string(solution_no) +
                                       fname_sufix);

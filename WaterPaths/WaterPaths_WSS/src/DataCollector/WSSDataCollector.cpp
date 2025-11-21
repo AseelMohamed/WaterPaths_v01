@@ -9,7 +9,8 @@
 
 WSSDataCollector::WSSDataCollector(const WaterSupplySystems *wss, unsigned long realization)
         : DataCollector(wss->getSystemId(), wss->name, realization, UTILITY, 11 * COLUMN_WIDTH),
-          wss(wss) {
+          wss(wss),
+          owner(wss->getOwner()) {  // Store owner pointer immediately while WSS is still valid
 }
 
 string WSSDataCollector::printTabularString(int week) {
@@ -169,6 +170,16 @@ void WSSDataCollector::collect_data() {
         cumulative_contingency = contingency_fund_contribution.back();
     }
     contingency_fund_size.push_back(cumulative_contingency);
+    
+    // Collect infrastructure pathways from THIS WSS's infrastructure manager
+    // This WSS data collector points to the REALIZATION WSS where infrastructure is actually built
+    vector<vector<int>> infrastructure_pathways = 
+        const_cast<InfrastructureManager&>(wss->getInfrastructure_construction_manager())
+            .getAllAndClearInfraBuilt();
+    
+    for (const auto& pathway : infrastructure_pathways) {
+        pathways.push_back(pathway);
+    }
 
     // checkForNans();
 }
@@ -280,4 +291,12 @@ const vector<double> &WSSDataCollector::getNet_present_infrastructure_cost() con
 
 const vector<double> &WSSDataCollector::getContingency_fund_size() const {
     return contingency_fund_size;
+}
+
+const Utility *WSSDataCollector::getOwner() const {
+    return owner;
+}
+
+const vector<vector<int>> &WSSDataCollector::getPathways() const {
+    return pathways;
 }

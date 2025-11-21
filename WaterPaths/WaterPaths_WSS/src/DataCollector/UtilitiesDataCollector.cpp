@@ -158,14 +158,12 @@ string UtilitiesDataCollector::printCompactStringHeader() {
 }
 
 void UtilitiesDataCollector::collect_data() {
-    vector<int> infra_built;
-
     // Restore storage collection for reliability calculations
     // Use stored volume (actual water in storage) rather than available volume
     // (which includes flow-through sources that don't show storage depletion)
     combined_storage.push_back(utility->getTotal_stored_volume());
-    // lt_rof.push_back(utility->getLong_term_risk_of_failure());
-    // st_rof.push_back(utility->getShort_term_risk_of_failure());
+    lt_rof.push_back(0.0);  // WSS doesn't calculate LT-ROF at utility level
+    st_rof.push_back(0.0);  // WSS doesn't calculate ST-ROF at utility level
     unrestricted_demand.push_back(utility->getUnrestrictedDemand());
     restricted_demand.push_back(utility->getRestrictedDemand());
     contingency_fund_size.push_back(utility->getContingency_fund());
@@ -187,19 +185,16 @@ void UtilitiesDataCollector::collect_data() {
     insurance_contract_cost.push_back(utility->getInsurance_purchase());
     insurance_payout.push_back(utility->getInsurance_payout());
     capacity.push_back(utility->getTotal_storage_capacity());
-    // waste_water_discharge.push_back(utility->getWaste_water_discharge());
+    waste_water_discharge.push_back(0.0);  // WSS doesn't track wastewater discharge
     unfulfilled_demand.push_back(utility->getUnfulfilled_demand());
-    // net_stream_inflow.push_back(utility->getNet_stream_inflow());
+    net_stream_inflow.push_back(0.0);  // WSS doesn't track net stream inflow
     total_treatment_capacity.push_back(utility->getTotal_treatment_capacity());
 
 //    checkForNans();
 
-    infra_built = utility->getInfrastructure_built();
-    if (pathways.empty() && !infra_built.empty())
-        pathways.push_back(infra_built);
-    else
-        if (!infra_built.empty() && infra_built[2] != pathways.back()[2])
-            pathways.push_back(infra_built);
+    // Note: Pathway collection moved to WSSDataCollector since those collectors
+    // point to the actual realization WSS where infrastructure is built.
+    // Utility data collectors point to original utilities with original WSS.
 }
 
 void UtilitiesDataCollector::checkForNans() const {

@@ -32,7 +32,11 @@ private:
     vector<double> net_present_infrastructure_cost;
     vector<double> contingency_fund_size;
     
+    // Infrastructure pathways built by this WSS
+    vector<vector<int>> pathways;
+    
     const WaterSupplySystems *wss;
+    const Utility *owner;  // Store owner directly to avoid accessing deleted WSS
 
 public:
 
@@ -77,6 +81,9 @@ public:
     const vector<double> &getDebt_service_payments() const;
     const vector<double> &getNet_present_infrastructure_cost() const;
     const vector<double> &getContingency_fund_size() const;
+    
+    const Utility *getOwner() const;  // Direct access to owner (safe after WSS deletion)
+    const vector<vector<int>> &getPathways() const;
 };
 
 #endif //TRIANGLEMODEL_WSSDATACOLLECTOR_H

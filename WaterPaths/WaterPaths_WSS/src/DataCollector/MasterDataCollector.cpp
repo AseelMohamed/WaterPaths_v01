@@ -367,6 +367,7 @@ void MasterDataCollector::printWaterSourcesOutputTabular(
 
 void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesDataCollector *> &u,
         std::ofstream &outStream, vector<double> &objectives) {
+    try {
     // Create vector with restriction policies pertaining only to the
     // utility whose objectives are being calculated.
     vector<RestrictionsDataCollector *> utility_restrictions(
@@ -377,7 +378,16 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
     // Reliability - Use WSS-level calculation (utility = minimum reliability of its WSS)
     double reliability = 1.0;
     if (!wss_collectors.empty()) {
-        reliability = ObjectivesCalculator::calculateReliabilityObjective_WSS(wss_collectors, realizations_ran);
+        // CRITICAL: Filter WSS collectors to only include those belonging to this utility
+        vector<vector<WSSDataCollector *>> utility_wss_collectors;
+        isolateWSSDataCollectors(u, utility_wss_collectors);
+        
+        if (!utility_wss_collectors.empty()) {
+            reliability = ObjectivesCalculator::calculateReliabilityObjective_WSS(utility_wss_collectors, realizations_ran);
+        } else {
+            // No WSS found for this utility, fallback to utility-level calculation
+            reliability = ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran);
+        }
     } else {
         // Fallback to utility-level if WSS collectors not available
         reliability = ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran);
@@ -436,13 +446,17 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
     objectives.push_back(inf_npc);
     objectives.push_back(financial_cost);
     objectives.push_back(worse_cost);
+    } catch (const std::exception& e) {
+        printf("ERROR in printUtilityObjectivesToRowOutStream: %s\n", e.what());
+        throw;
+    }
 }
 
 vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, bool print) {
     vector<double> objectives;
 
     if (print) {
-        cout << "Calculating and printing Objectives" << endl;
+        printf("Calculating and printing Objectives\n");
         string obj_file_path = output_directory + file_name + ".out";
 //        cout << obj_file_path << endl;
 
@@ -483,8 +497,18 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
 
             // Reliability - Use WSS-level calculation (utility = minimum reliability of its WSS)
             if (!wss_collectors.empty()) {
-                objectives.push_back
-                        (ObjectivesCalculator::calculateReliabilityObjective_WSS(wss_collectors, realizations_ran));
+                // CRITICAL: Filter WSS collectors to only include those belonging to this utility
+                vector<vector<WSSDataCollector *>> utility_wss_collectors;
+                isolateWSSDataCollectors(u, utility_wss_collectors);
+                
+                if (!utility_wss_collectors.empty()) {
+                    objectives.push_back
+                            (ObjectivesCalculator::calculateReliabilityObjective_WSS(utility_wss_collectors, realizations_ran));
+                } else {
+                    // No WSS found for this utility, fallback to utility-level calculation
+                    objectives.push_back
+                            (ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran));
+                }
             } else {
                 objectives.push_back
                         (ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran));
@@ -527,6 +551,35 @@ void MasterDataCollector::isolateRestrictionDataCollectors(vector<UtilitiesDataC
                 utility_restrictions.at(i) =
                         dynamic_cast<RestrictionsDataCollector *>(p.at(i));
             }
+}
+
+void MasterDataCollector::isolateWSSDataCollectors(vector<UtilitiesDataCollector *> &u,
+                                                   vector<vector<WSSDataCollector *>> &utility_wss_collectors) const {
+    // Filter WSS collectors to include only those belonging to the specified utility
+    utility_wss_collectors.clear();
+    int utility_id = u.at(realizations_ran.at(0))->id;
+    
+    for (const auto &wss_realization_data : wss_collectors) {
+        if (!wss_realization_data.empty() && 
+            wss_realization_data[realizations_ran[0]] != nullptr) {
+            
+            // Get owner from data collector (cached during construction, safe even after WSS is deleted)
+            const Utility* owner = wss_realization_data[realizations_ran[0]]->getOwner();
+            
+            // Check owner is not null before accessing id
+            if (owner != nullptr && owner->id == utility_id) {
+                utility_wss_collectors.push_back(wss_realization_data);
+            }
+        }
+    }
+}
+
+unsigned long MasterDataCollector::getActualWeeksCollected() const {
+    if (!utility_collectors.empty() && !utility_collectors[0].empty() && 
+        !realizations_ran.empty()) {
+        return utility_collectors[0][realizations_ran[0]]->getCombined_storage().size();
+    }
+    return 0;
 }
 
 void MasterDataCollector::performBootstrapAnalysis(
@@ -678,16 +731,25 @@ void MasterDataCollector::printPathways(string file_name) {
     std::ofstream outStream;
     outStream.open(output_directory + file_name + ".out");
 
-    outStream << "Realization\tutility\tweek\tinfra." << endl;
+    outStream << "Realization\tutility\tWSS\tweek\tinfra." << endl;
 
-    for (auto &uc : utility_collectors)
+    int total_pathways = 0;
+    // Collect pathways from WSS collectors (which point to realization WSS where infrastructure is actually built)
+    for (auto &wss_collector_vec : wss_collectors)
         for (int rr = 0; rr < (int) realizations_ran.size(); ++rr) {
             auto r = realizations_ran[rr];
-            for (vector<int> infra : uc[r]->getPathways()) {
-                outStream << r << "\t" << infra[0] << "\t" << infra[1] << "\t"
-                          << infra[2] << endl;
+            if (wss_collector_vec[r]) {
+                vector<vector<int>> pathways = wss_collector_vec[r]->getPathways();
+                total_pathways += pathways.size();
+                for (const vector<int>& infra : pathways) {
+                    // Format: realization, utility_id, wss_id, week, water_source_id
+                    outStream << r << "\t" << infra[0] << "\t" << infra[1] << "\t"
+                              << infra[2] << "\t" << infra[3] << endl;
+                }
             }
         }
+    
+    printf("Total pathways printed: %d\n", total_pathways);
 
     outStream.close();
 }
@@ -697,7 +759,7 @@ void MasterDataCollector::setOutputDirectory(string io_directory) {
     if (io_directory != output_directory) {
         output_directory = io_directory + DEFAULT_OUTPUT_DIR;
         Utils::createDir(output_directory);
-        cout << "Output will be printed to folder " << output_directory << endl;
+        printf("Output will be printed to folder %s\n", output_directory.c_str());
     }
 }
 

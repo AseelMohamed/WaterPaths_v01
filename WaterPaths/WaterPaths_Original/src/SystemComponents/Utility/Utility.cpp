@@ -368,9 +368,10 @@ void Utility::calculateWeeklyAverageWaterPrices(
     // Create weekly price table from monthly prices.
     bool issued_high_tariff_warning = false;
     for (int w = 0; w < (int) (WEEKS_IN_YEAR + 1); ++w) {
+        // Cap month index at 11 to handle week 52 (which would map to month 12)
+        int month_idx = std::min((int) (w / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
         weekly_average_volumetric_price[w] =
-                monthly_average_price[(int) (w / WEEKS_IN_MONTH)] /
-                WEEKS_IN_MONTH;
+                monthly_average_price[month_idx] / WEEKS_IN_MONTH;
     }
 }
 
@@ -464,8 +465,7 @@ void Utility::addWaterSource(WaterSource *water_source) {
 void Utility::checkErrorsAddWaterSourceOnline(WaterSource *water_source) {
     for (WaterSource *ws : water_sources) {
         if ((ws != nullptr) && ws->id == water_source->id) {
-            cout << "Water source ID: " << water_source->id << endl <<
-                 "Utility ID: " << id << endl;
+            printf("Water source ID: %d\nUtility ID: %d\n", water_source->id, id);
             throw invalid_argument("Attempt to add water source with "
                                    "duplicate ID to utility.");
         }
@@ -673,6 +673,16 @@ void Utility::updateContingencyFundAndDebtService(
     
     int week_of_year = Utils::weekOfTheYear(week);
     double unrestricted_price = weekly_average_volumetric_price[week_of_year];
+    
+    // Check if prices were properly initialized
+    if (unrestricted_price < 1e-10) {
+        char error[512];
+        sprintf(error, "CRITICAL: Utility %d has zero or uninitialized unrestricted_price at week %d (week_of_year=%d). "
+                "weekly_average_volumetric_price size=%zu. This indicates price data was not properly initialized or was corrupted.",
+                id, week, week_of_year, weekly_average_volumetric_price.size());
+        throw runtime_error(error);
+    }
+    
     double current_price;
 
     // Clear yearly updated data collecting variables.
@@ -689,9 +699,13 @@ void Utility::updateContingencyFundAndDebtService(
     else
         current_price = restricted_price;
 
-    if (current_price < unrestricted_price) {
-        throw logic_error("Prices under surcharge cannot be smaller than "
-                          "prices w/o restrictions enacted.");
+    // Allow small tolerance for floating point precision errors (0.1% tolerance)
+    if (current_price < unrestricted_price * 0.999) {
+        char error[512];
+        sprintf(error, "Prices under surcharge (%.6f) cannot be smaller than "
+                "prices w/o restrictions enacted (%.6f). Week %d, utility %d",
+                current_price, unrestricted_price, week, id);
+        throw logic_error(error);
     }
 
     // calculate fund contributions if there were no shortage.

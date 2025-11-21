@@ -357,9 +357,9 @@ template<typename T>
 void Matrix3D<T>::print(int i) const {
     for (int j = 0; j < dj_; ++j) {
         for (int k = 0; k < dk_; ++k) {
-            std::cout << data_[dj_ * dk_ * i + dk_ * j + k] << " ";
+            printf("%f ", (double)data_[dj_ * dk_ * i + dk_ * j + k]);
         }
-        std::cout << std::endl;
+        printf("\n");
     }
 }
 

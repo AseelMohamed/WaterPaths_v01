@@ -151,6 +151,7 @@ public:
 //     int getUtilityId() const { return utility_id; }
 
     Utility* getOwner() const { return owner; }
+    const InfrastructureManager& getInfrastructure_construction_manager() const { return infrastructure_construction_manager; }
     const vector<WaterSource*>& getWater_sources() const; //Checked
     bool isUsedForRealization() const { return used_for_realization; }
     void setUsedForRealization(bool value) { used_for_realization = value; }
