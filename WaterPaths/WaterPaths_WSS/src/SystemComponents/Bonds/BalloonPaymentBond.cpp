@@ -42,16 +42,23 @@ BalloonPaymentBond::BalloonPaymentBond(const int id, const double cost_of_capita
  * @return
  */
 double BalloonPaymentBond::getDebtService(int week) {
+    /// CRITICAL FIX: Prevent multiple payments in the same week
+    if (last_payment_week == week) {
+        return 0.;  // Already paid this week
+    }
+    
     /// If there are still payments to be made, repayment has begun, and this is a payment week, issue payment.
     if (n_payments_made < n_payments - 1 &&
           week > week_issued + begin_repayment_after_n_years * WEEKS_IN_YEAR &&
           std::find(pay_on_weeks.begin(), pay_on_weeks.end(), Utils::weekOfTheYear(week)) != pay_on_weeks.end()) {
 
         n_payments_made++;
+        last_payment_week = week;
         return interest_payments;
     } else if (n_payments_made == n_payments - 1) {
         /// Pay principal and last interest.
         n_payments_made++;
+        last_payment_week = week;
         return interest_payments + cost_of_capital;
     } else {
         return 0.;

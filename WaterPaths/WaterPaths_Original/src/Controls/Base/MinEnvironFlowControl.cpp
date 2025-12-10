@@ -21,14 +21,14 @@ MinEnvironFlowControl::MinEnvironFlowControl(
 }
 
 void MinEnvironFlowControl::addComponents(
-        vector<WaterSource *> water_sources, vector<Utility *> utilities) {
+        vector<WaterSource *> water_sources, vector<std::shared_ptr<Utility>> utilities) {>> utilities) {
     this->water_sources = vector<WaterSource *>(water_sources.size());
 
     for (int i : water_sources_ids) {
         this->water_sources[i] = water_sources[i];
     }
 
-    this->utilities = vector<Utility *>(utilities.size());
+    this->utilities = vector<std::shared_ptr<Utility>>(utilities.size());
 
     for (int i : utilities_ids) {
         this->utilities[i] = utilities[i];

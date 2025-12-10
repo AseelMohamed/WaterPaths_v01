@@ -4,6 +4,7 @@
 #include <numeric>
 #include <algorithm>
 #include <stdexcept>
+#include <omp.h>
 #include <iostream>
 #include <cstdio>
 
@@ -49,14 +50,14 @@ WaterSupplySystems::WaterSupplySystems(
     
     // Initialize infrastructure construction manager (basic constructor with no infrastructure)
     infrastructure_construction_manager = InfrastructureManager(
-        utility_id,  // Use utility_id for pathway tracking, not system_id
+        system_id,  // Use system_id so treatment capacity lookup is correct for this WSS
         vector<double>(),  // empty construction triggers
-        vector<vector<int>>(),  // empty if_built_remove
-        0.0,  // no discount rate 
-        0.0,  // no bond term
-        0.0,  // no bond interest rate
-        vector<int>(),  // empty rof construction order
-        vector<int>()   // empty demand construction order
+        vector<vector<int>>(),  
+        0.0,  
+        0.0,  
+        0.0,  
+        vector<int>(),  
+        vector<int>()   
     );
 }
 
@@ -109,14 +110,14 @@ WaterSupplySystems::WaterSupplySystems(
     
     // Initialize infrastructure construction manager (with empty construction orders for basic constructor)
     infrastructure_construction_manager = InfrastructureManager(
-        utility_id,  // Use utility_id for pathway tracking, not system_id 
+        system_id,  // Use system_id so treatment capacity lookup is correct
         vector<double>(),  // empty construction triggers
-        vector<vector<int>>(),  // empty if_built_remove
-        0.0,  // no discount rate 
-        0.0,  // no bond term
-        0.0,  // no bond interest rate
-        vector<int>(),  // empty rof construction order
-        vector<int>()   // empty demand construction order
+        vector<vector<int>>(),  
+        0.0,  
+        0.0,  
+        0.0,  
+        vector<int>(), 
+        vector<int>()   
     );
     
     // Setup water source to WTP mapping, following Utility pattern
@@ -182,12 +183,12 @@ WaterSupplySystems::WaterSupplySystems(
     
     // Initialize infrastructure construction manager with infrastructure parameters (no financial params)
     infrastructure_construction_manager = InfrastructureManager(
-        utility_id,  // Use utility_id for pathway tracking, not system_id 
+        system_id,  // Use system_id so treatment capacity lookup is correct
         infra_construction_triggers,
-        vector<vector<int>>(),  // empty infra_if_built_remove (WSS doesn't handle complex financial rules)
-        0.0,  // no discount rate (handled by utility)
-        0.0,  // no bond term (handled by utility)
-        0.0,  // no bond interest rate (handled by utility)
+        vector<vector<int>>(),  
+        0.0,  
+        0.0,  
+        0.0,  
         rof_infra_construction_order,
         demand_infra_construction_order
     );
@@ -259,6 +260,12 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     unrestricted_demand = other.unrestricted_demand;
     n_sources = other.n_sources;
     max_capacity = other.max_capacity;
+    // Copy discount rate and bond multipliers from original - critical for realization isolation
+    infra_discount_rate = other.infra_discount_rate;
+    bond_term_multiplier = other.bond_term_multiplier;
+    bond_interest_rate_multiplier = other.bond_interest_rate_multiplier;
+    // NOTE: current_realization_id is NOT copied - it will be set correctly by setRealization() 
+    // after this copy is created, avoiding race condition from shared original WSS
     // NOTE: wss_infrastructure_npc deliberately NOT copied - realization WSS should get NPC from ROF WSS via references
     
     // Deep copy all vectors (these are value types, so std::vector handles deep copy)
@@ -266,15 +273,13 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     non_priority_draw_water_source = other.non_priority_draw_water_source;
     weekly_peaking_factor = other.weekly_peaking_factor;
     
-    // CRITICAL FIX: NEVER copy demand_series_realization from source
-    // Always initialize as empty - setRealization() will properly populate it
     // This prevents copying uninitialized or partially initialized vectors during parallel execution
     demand_series_realization = vector<double>();
     
     wss_owned_wtp_capacities = other.wss_owned_wtp_capacities;
     water_source_to_wtp = other.water_source_to_wtp;
     
-    // CRITICAL: Initialize empty water_sources vector
+    // Initialize empty water_sources vector
     // The actual water source pointers will be set later via addWaterSource() calls
     // in ContinuityModel constructor. DO NOT copy pointers directly as they're owned
     // by ContinuityModel and will be different copies for realization vs ROF models.
@@ -285,25 +290,13 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     // Note: The id in infrastructure_construction_manager should be utility_id, not system_id
     infrastructure_construction_manager = other.infrastructure_construction_manager;
     
-    // Deep copy the dynamically allocated array for available_treated_flow_rate
-    if (n_storage_sources > 0) {
-        available_treated_flow_rate = new double[n_storage_sources];
-        for (int i = 0; i < n_storage_sources; ++i) {
-            available_treated_flow_rate[i] = other.available_treated_flow_rate[i];
-        }
-    } else {
-        available_treated_flow_rate = nullptr;  // No allocation needed for empty array
-    }
+    // Deep copy the vector for available_treated_flow_rate
+    available_treated_flow_rate = other.available_treated_flow_rate;
 }
 
 WaterSupplySystems::~WaterSupplySystems() {
     water_sources.clear();
-    
-    // Clean up the dynamically allocated array
-    if (available_treated_flow_rate != nullptr) {
-        delete[] available_treated_flow_rate;
-        available_treated_flow_rate = nullptr;
-    }
+    // No manual cleanup needed - std::vector handles its own memory
 }
 
 ///////////   =============================================== ///////////
@@ -348,8 +341,7 @@ void WaterSupplySystems::updateTreatmentAndNumberOfStorageSources() {
     }
     
     n_storage_sources = actual_storage_sources.size();
-    // delete[] available_treated_flow_rate;
-    available_treated_flow_rate = new double[n_storage_sources];
+    available_treated_flow_rate.assign(n_storage_sources, 0.0);
     for (int i = 0; i < n_storage_sources; ++i) {
         auto ws = water_sources[actual_storage_sources[i]];
         available_treated_flow_rate[i] = wss_owned_wtp_capacities[water_source_to_wtp[ws->id]];
@@ -365,10 +357,14 @@ void WaterSupplySystems::updateTotalAvailableVolume() {
     total_available_volume = 0.0;
     total_stored_volume = 0.0;
     net_stream_inflow = 0.0;
+    double priority_vol = 0.0;
+    double non_priority_vol = 0.0;
 
     for (int ws : priority_draw_water_source) {
         if (ws < water_sources.size() && water_sources[ws] != nullptr) {
-            total_available_volume += max(1.0e-6, water_sources[ws]->getAvailableAllocatedVolume(system_id));
+            double vol = max(1.0e-6, water_sources[ws]->getAvailableAllocatedVolume(system_id));
+            total_available_volume += vol;
+            priority_vol += vol;
             net_stream_inflow += water_sources[ws]->getAllocatedInflow(system_id);
         }
     }
@@ -380,6 +376,7 @@ void WaterSupplySystems::updateTotalAvailableVolume() {
             double stored_volume = max(1.0e-6, ws->getAvailableAllocatedVolume(system_id));
             total_available_volume += stored_volume;
             total_stored_volume += stored_volume;
+            non_priority_vol += stored_volume;
             net_stream_inflow += ws->getAllocatedInflow(system_id);
         }
     }
@@ -394,7 +391,6 @@ void WaterSupplySystems::clearWaterSources() {
  * @param water_source
  */
 void WaterSupplySystems::addWaterSource(WaterSource* water_source) {
-    
     checkErrorsAddWaterSourceOnline(water_source);
 
     // Add water sources with their IDs matching the water sources vector
@@ -598,7 +594,7 @@ void WaterSupplySystems::splitDemands(
 
         treatment_capacity_violation = idealDemandSplitUnconstrained(
                 split_demands.data(),
-                available_treated_flow_rate,
+                available_treated_flow_rate.data(),
                 demand_non_priority_sources,
                 storages.data(),
                 total_stored_volume,
@@ -630,7 +626,7 @@ void WaterSupplySystems::splitDemands(
                         split_demands.data(),
                         over_allocated_array,
                         has_spare_flow_rate_array,
-                        available_treated_flow_rate,
+                        available_treated_flow_rate.data(),
                         remainder_demand,
                         storages.data(),
                         total_stored_volume,
@@ -685,12 +681,19 @@ void WaterSupplySystems::setDemand_offset(double demand_offset, double offset_ra
     this->offset_rate_per_volume = offset_rate_per_volume;
 }
 
+double WaterSupplySystems::getOffset_rate_per_volume() const {
+    return offset_rate_per_volume;
+}
+
 /**
  * Get time series corresponding to realization index and eliminate reference to
  * comprehensive demand data set.
  * @param r
  */
 void WaterSupplySystems::setRealization(unsigned long r, vector<double> &rdm_factors) {
+    // Store which realization this WSS copy belongs to (for bond tracking)
+    current_realization_id = r;
+    
     // BOUNDS CHECK: Verify realization index is valid
     if (r >= demands_all_realizations.size()) {
         char error_msg[512];
@@ -707,6 +710,25 @@ void WaterSupplySystems::setRealization(unsigned long r, vector<double> &rdm_fac
         }
         
         throw std::out_of_range(error_msg);
+    }
+    
+    // Store realization-specific discount rate and bond multipliers for infrastructure NPC calculations
+    // rdm_factors[1] = bond_interest_rate_multiplier
+    // rdm_factors[2] = bond_term_multiplier  
+    // rdm_factors[3] = infra_discount_rate_multiplier
+    if (owner && rdm_factors.size() > 3) {
+        double base_rate = owner->getBaseInfraDiscountRate();
+        double rdm_multiplier = rdm_factors.at(3);
+        infra_discount_rate = base_rate * rdm_multiplier;
+        bond_interest_rate_multiplier = rdm_factors.at(1);
+        bond_term_multiplier = rdm_factors.at(2);
+    } else {
+        // Fallback: if no owner or insufficient RDM factors, use default
+        char error_msg[512];
+        sprintf(error_msg, "WARNING: WSS %d setRealization(%lu): Cannot set discount rate (owner=%p, rdm_size=%zu)",
+                system_id, r, (void*)owner, rdm_factors.size());
+        fprintf(stderr, "%s\n", error_msg);
+        infra_discount_rate = 0.05;  // Fallback default rate
     }
     
     // Simple, clean implementation like the original
@@ -800,7 +822,7 @@ void WaterSupplySystems::setRisk_of_failure(double risk_of_failure) {
 }
 
 double WaterSupplySystems::getTotal_treatment_capacity() const { 
-    return total_treatment_capacity; 
+    return total_treatment_capacity;
 }
 
 void WaterSupplySystems::setDemand_multiplier(double demand_multiplier) {
@@ -875,9 +897,9 @@ double WaterSupplySystems::getNet_stream_inflow() const {
     return net_stream_inflow; 
 }
 
-// double WaterSupplySystems::getShort_term_risk_of_failure() const {
-//     return short_term_risk_of_failure;
-// }
+double WaterSupplySystems::getShort_term_risk_of_failure() const {
+    return short_term_risk_of_failure;
+}
 
 // double WaterSupplySystems::getTotal_storage_treatment_capacity() const {
 //     return total_storage_treatment_capacity;
@@ -939,7 +961,9 @@ int WaterSupplySystems::infrastructureConstructionHandler(double long_term_rof, 
                     if (!bond.isIssued()) {
                         // Issue bond directly on the infrastructure source using utility's method
                         // but searching only in this WSS (which has the source)
-                        owner->issueBond(new_infra_triggered, week, this);
+                        // Pass the realization-specific discount rate and bond multipliers
+                        owner->issueBond(new_infra_triggered, week, this, infra_discount_rate,
+                                        bond_term_multiplier, bond_interest_rate_multiplier);
                     } 
                 } catch (const std::exception& e) {
                     printf("ERROR [WSS] Failed to access bond for infrastructure %d in WSS %d: %s\n", 
@@ -979,12 +1003,12 @@ void WaterSupplySystems::setInfrastructureParameters(const vector<int>& rof_infr
                                                      const vector<double>& infra_construction_triggers) {
     // Recreate the infrastructure manager with the provided parameters
     infrastructure_construction_manager = InfrastructureManager(
-        utility_id,  // Use utility_id for pathway tracking, not system_id
+        system_id,  // Use system_id so treatment capacity lookup is correct
         infra_construction_triggers,
-        vector<vector<int>>(),  // empty infra_if_built_remove (WSS doesn't handle complex financial rules)
-        0.0,  // no discount rate (handled by utility)
-        0.0,  // no bond term (handled by utility)
-        0.0,  // no bond interest rate (handled by utility)
+        vector<vector<int>>(),  
+        0.0,  
+        0.0,  
+        0.0, 
         rof_infra_construction_order,
         demand_infra_construction_order
     );
@@ -1027,12 +1051,13 @@ void WaterSupplySystems::setWssInfrastructureNPC(double npc) {
     // Validate input to catch corruption at source
     if (std::isnan(npc) || std::isinf(npc) || npc < -1e100 || npc > 1e100) {
         char error[512];
-        sprintf(error, "Attempting to set invalid NPC value %.2e for WSS %d (system_id=%d). "
+        sprintf(error, "Attempting to add invalid NPC value %.2e to WSS %d (system_id=%d). "
                 "Previous value: %.2e. This indicates memory corruption or calculation error.",
                 npc, utility_id, system_id, wss_infrastructure_npc);
         throw std::runtime_error(error);
     }
-    wss_infrastructure_npc = npc;
+    // ACCUMULATE instead of overwrite to avoid race conditions
+    wss_infrastructure_npc += npc;
 }
 
 double WaterSupplySystems::getWssGrossRevenue() const {

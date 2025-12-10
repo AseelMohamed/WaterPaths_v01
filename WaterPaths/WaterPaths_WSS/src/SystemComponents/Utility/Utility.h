@@ -21,10 +21,11 @@ class WaterSupplySystems; // forward declaration
 class Utility {
 private:
     vector<double> weekly_average_volumetric_price;
+    // NOTE: base_weekly_average_volumetric_price and price_rdm_multiplier removed to match Original model
+    // Prices are no longer scaled by RDM factors
     // Financial and strategic variables (kept in Utility)
     double gross_revenue = 0;
     
-    double price_rdm_multiplier = 1.;
     bool used_for_realization = true;
     WwtpDischargeRule wwtp_discharge_rule;
     vector<WaterSource *> water_sources;
@@ -75,8 +76,7 @@ private:
     // Maps bond_key -> NPC value
     static std::map<std::string, double> globally_issued_bond_npcs;
     
-    // THREAD-SAFE: Track infrastructure costs per realization to avoid shared state corruption
-    // Maps realization_id -> accumulated NPC for that realization
+    // THREAD-SAFE: Track per-realization infrastructure costs to avoid shared state corruption
     std::map<unsigned long, double> realization_infra_costs;
     unsigned long current_realization_id = NON_INITIALIZED;
 
@@ -101,7 +101,9 @@ public:
             double demand_buffer,
             vector<vector<int>> water_source_to_wtp,
             vector<double> utility_owned_wtp_capacities,
-            double infra_discount_rate); 
+            double infra_discount_rate,
+            double bond_term = 15,
+            double bond_interest_rate = 0.12); 
 
     Utility(const char *name, int id,
             vector<vector<double>> &demands_all_realizations,
@@ -169,6 +171,10 @@ public:
     void clearWaterSupplySystems();
 
     void setRealization(unsigned long r, vector<double> &rdm_factors);
+    
+    // THREAD-SAFE: Clear global bond tracking before running realizations
+    // Must be called BEFORE parallel region starts, not during setRealization
+    static void clearGlobalBondTracking();
 
 //     int infrastructureConstructionHandler(double long_term_rof, int week); //checked 
 
@@ -176,7 +182,7 @@ public:
 
     void purchaseInsurance(double insurance_price); //checked
 
-    double updateCurrent_debt_payment(int week); //checked
+    double updateCurrent_debt_payment(int week, const std::vector<WaterSupplySystems*>& current_wss); //checked
 
     void setNoFinancialCalculations();
     
@@ -193,7 +199,8 @@ public:
     void issueBond(int new_infra_triggered, int week); //checked
 
     //  Overloaded version to issue bond for infrastructure in specific WSS
-    void issueBond(int new_infra_triggered, int week, WaterSupplySystems* target_wss); //NEW
+    void issueBond(int new_infra_triggered, int week, WaterSupplySystems* target_wss, double discount_rate,
+                   double bond_term_mult, double bond_interest_rate_mult); 
 
     void resetDroughtMitigationVariables(); //Checked
 
@@ -253,6 +260,10 @@ public:
     const InfrastructureManager &getInfrastructure_construction_manager() const;
 
     double getInfraDiscountRate() const;
+    
+    double getBaseInfraDiscountRate() const;
+    
+    void resetFinancialState();
 
     bool isUsedForRealization() const; // Getter for realization flag
 

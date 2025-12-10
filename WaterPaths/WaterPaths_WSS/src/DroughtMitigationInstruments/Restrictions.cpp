@@ -59,58 +59,47 @@ Restrictions::~Restrictions() {}
 
 void Restrictions::applyPolicy(int week) {
 
-    current_multiplier = 1.0;
-    unsigned long stage = 0;
-    /// Loop through restriction stage rof triggers to see which stage should be applied, if any.
-    for (unsigned long i = 0; i < stage_triggers.size(); ++i) {
-        if (realization_wss[0]->getRisk_of_failure() > stage_triggers[i]) {
-            /// Demand multiplier to be applied, based on the rofs.
-            current_multiplier = stage_multipliers[i];
-            stage = i + 1;
-        } else
-            break;
-    }
-    
     // SAFETY: Verify we have a valid triggering WSS
     if (realization_wss.empty() || realization_wss[0] == nullptr) {
         cerr << "ERROR: Restrictions policy has no valid WSS assigned. Cannot apply policy." << endl;
         return;
     }
     
-    // Get the owner utility to apply restrictions utility-wide
-    Utility* owner_utility = realization_wss[0]->getOwner();
-    if (owner_utility == nullptr) {
-        cerr << "ERROR: WSS has no owner utility. Cannot apply restrictions." << endl;
-        return;
-    }
+    // Check this policy's triggering WSS (index 0) against its own triggers
+    current_multiplier = 1.0;
+    unsigned long stage = 0;
     
-    // Apply operational restrictions to ALL WSS in the owner utility
-    // This ensures system-wide consistency when restrictions are triggered
-    const vector<WaterSupplySystems*>& all_wss = owner_utility->getWSSReferences();
-    if (!all_wss.empty()) {
-        // Use WSS references if available (realization-specific copies)
-        for (size_t i = 0; i < all_wss.size(); ++i) {
-            WaterSupplySystems* wss = all_wss[i];
-            if (wss != nullptr) {
-                wss->setDemand_multiplier(current_multiplier);
-            }
-        }
-    } else {
-        // Fallback to owned WSS if references not set
-        const auto& owned_wss = owner_utility->getWaterSupplySystems();
-        for (size_t i = 0; i < owned_wss.size(); ++i) {
-            const auto& wss = owned_wss[i];
-            if (wss != nullptr) {
-                wss->setDemand_multiplier(current_multiplier);
-            }
+    double wss_rof = realization_wss[0]->getRisk_of_failure();
+    
+    for (unsigned long i = 0; i < stage_triggers.size(); ++i) {
+        if (wss_rof > stage_triggers[i]) {
+            current_multiplier = stage_multipliers[i];
+            stage = i + 1;
+        } else {
+            break;
         }
     }
     
-    // Apply financial restriction (price surcharge) at utility level
+    // Apply this policy's determined restriction to ALL WSS in the utility (stored in realization_wss)
+    // Check each WSS's current multiplier and only apply if this is MORE restrictive
+    for (WaterSupplySystems* wss : realization_wss) {
+        if (wss != nullptr) {
+            double current_wss_multiplier = wss->getDemand_multiplier();
+            // Apply the more restrictive multiplier (lower value = more restrictive)
+            if (current_multiplier < current_wss_multiplier) {
+                wss->setDemand_multiplier(current_multiplier);
+            }
+        }
+    }
+    
+    // Apply financial restriction (price surcharge) at utility level if this stage is active
     if (!restricted_weekly_average_volumetric_price.empty() && stage > 0) {
-        int week_of_year = Utils::weekOfTheYear(week);
-        owner_utility->setRestricted_price(
-                restricted_weekly_average_volumetric_price[stage - 1][week_of_year]);
+        Utility* owner_utility = realization_wss[0]->getOwner();
+        if (owner_utility != nullptr) {
+            int week_of_year = Utils::weekOfTheYear(week);
+            owner_utility->setRestricted_price(
+                    restricted_weekly_average_volumetric_price[stage - 1][week_of_year]);
+        }
     }
 }
 
@@ -121,17 +110,41 @@ double Restrictions::getCurrent_multiplier() const {
 void Restrictions::addSystemComponents(vector<WaterSupplySystems *> systems_wss,
                                        vector<WaterSource *> water_sources,
                                        vector<MinEnvFlowControl *> min_env_flow_controls) {
-    /// Get WSS whose IDs correspond to restriction policy ID.
+    /// Store all realization WSS for utility-wide restriction application
+    /// The triggering WSS (matching this policy's ID) will be at index 0
+    WaterSupplySystems* triggering_wss = nullptr;
+    int owner_utility_id = -1;
+    
+    // First, find the WSS that triggers this policy and get its owner utility ID
     for (WaterSupplySystems *w : systems_wss) {
         if (w->system_id == id) {
-            if (!realization_wss.empty())
-                throw std::logic_error("This restriction policy already has a WSS assigned to it.");
-            /// Link WSS to policy.
-            this->realization_wss.push_back(w);
+            triggering_wss = w;
+            Utility* owner = w->getOwner();
+            if (owner != nullptr) {
+                owner_utility_id = owner->id;
+            }
+            break;
         }
     }
-    if (systems_wss.empty())
-        throw std::invalid_argument("Restriction policy ID must match WSS's ID.");
+    
+    if (triggering_wss == nullptr) {
+        throw std::invalid_argument("Restriction policy ID must match a WSS's system_id.");
+    }
+    
+    // Store triggering WSS first
+    this->realization_wss.push_back(triggering_wss);
+    
+    // Then store ALL other WSS from the same utility (by utility ID) for utility-wide application
+    if (owner_utility_id >= 0) {
+        for (WaterSupplySystems *w : systems_wss) {
+            if (w != triggering_wss) {
+                Utility* w_owner = w->getOwner();
+                if (w_owner != nullptr && w_owner->id == owner_utility_id) {
+                    this->realization_wss.push_back(w);
+                }
+            }
+        }
+    }
 }
 
 /**

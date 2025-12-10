@@ -16,7 +16,7 @@ MinEnvFlowControl::MinEnvFlowControl(int water_source_id,
 MinEnvFlowControl::MinEnvFlowControl(
         const MinEnvFlowControl &min_env_control) :
         water_sources(vector<WaterSource *>()),
-        utilities(vector<Utility *>()),
+        utilities(vector<std::shared_ptr<Utility>>()),
         water_sources_ids(min_env_control.water_sources_ids),
         utilities_ids(min_env_control.utilities_ids),
         water_source_id(min_env_control.water_source_id),
@@ -24,14 +24,14 @@ MinEnvFlowControl::MinEnvFlowControl(
 
 
 void MinEnvFlowControl::addComponents(
-        vector<WaterSource *> water_sources, vector<Utility *> utilities) {
+        vector<WaterSource *> water_sources, vector<std::shared_ptr<Utility>> utilities) {
     this->water_sources = vector<WaterSource *>(water_sources.size());
 
     for (int i : water_sources_ids) {
         this->water_sources[i] = water_sources[i];
     }
 
-    this->utilities = vector<Utility *>(utilities.size());
+    this->utilities = vector<std::shared_ptr<Utility>>(utilities.size());
 
     for (int i : utilities_ids) {
         this->utilities[i] = utilities[i];

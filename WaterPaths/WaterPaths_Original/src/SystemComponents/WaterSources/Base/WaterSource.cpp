@@ -736,6 +736,7 @@ const double WaterSource::getConstruction_time() const {
 }
 
 int WaterSource::randomConstructionTime(double t0, double tf) {
+    // Random construction time implementation with seeding support
     std::mt19937 rng(std::random_device{}());
     if (seed > NON_INITIALIZED) {
         rng.seed((unsigned long) id + seed);

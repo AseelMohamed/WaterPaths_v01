@@ -19,7 +19,7 @@ protected:
     DroughtMitigationPolicy(const DroughtMitigationPolicy &drought_mitigation_policy);
 
     vector<int> utilities_ids;
-    vector<Utility *> realization_utilities;
+    vector<std::shared_ptr<Utility>> realization_utilities;
     vector<WaterSource *> realization_water_sources;
     vector<MinEnvFlowControl *> realization_min_env_flow_controls;
     vector<vector<double>> *rdm_factors_all;
@@ -36,7 +36,7 @@ public:
 
     virtual void applyPolicy(int week)= 0;
 
-    virtual void addSystemComponents(vector<Utility *> utilities,
+    virtual void addSystemComponents(vector<std::shared_ptr<Utility>> utilities,
                                          vector<WaterSource *> water_sources,
                                          vector<MinEnvFlowControl *> min_env_flow_controls)= 0;
 

@@ -175,6 +175,8 @@ public:
 
     Bond &getBond(int utility_id);
 
+    const vector<Bond *> &getBonds() const;
+
     void checkForInputErrorsConstruction();
 
     int randomConstructionTime(double t0, double tf);

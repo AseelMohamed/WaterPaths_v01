@@ -11,21 +11,27 @@ ContinuityModelRealization::ContinuityModelRealization(
         vector<WaterSource *> &water_sources,
         const Graph &water_sources_graph,
         const vector<vector<int>> &water_sources_to_wss,
-        vector<WaterSupplySystems *> &wss,
+        vector<std::unique_ptr<WaterSupplySystems>> &&wss,
         const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
         vector<MinEnvFlowControl *> &min_env_flow_control,
         vector<double>& wss_rdm,
         vector<double>& water_sources_rdm,
         vector<double>& policy_rdm,
         const unsigned int realization_id)
-        : ContinuityModel(water_sources, wss, min_env_flow_control, water_sources_graph,
+        : ContinuityModel(water_sources, std::move(wss), min_env_flow_control, water_sources_graph,
                           water_sources_to_wss, wss_rdm, water_sources_rdm,
                           realization_id),
           drought_mitigation_policies(drought_mitigation_policies) {
 
+    // Create raw pointer vector for drought mitigation instruments (they don't take ownership)
+    vector<WaterSupplySystems*> wss_raw;
+    for (const auto& wss_ptr : continuity_wss) {
+        wss_raw.push_back(wss_ptr.get());
+    }
+    
     // Pass corresponding wss to drought mitigation instruments.
     for (DroughtMitigationPolicy *dmp : this->drought_mitigation_policies) {
-        dmp->addSystemComponents(wss, water_sources, min_env_flow_control);
+        dmp->addSystemComponents(wss_raw, water_sources, min_env_flow_control);
         dmp->setRealization(realization_id, wss_rdm, water_sources_rdm,
                             policy_rdm);
     }
@@ -89,12 +95,22 @@ void ContinuityModelRealization::setLongTermROFs(const vector<double> &risks_of_
     // that infrastructure option (which will only happen it the listed
     // option is in the list of sources to be built for other wss.
     if (!new_infra_triggered.empty())
-        for (WaterSupplySystems *w : continuity_wss) {
+        for (auto& w : continuity_wss) {
             w->getOwner()->forceInfrastructureConstruction(week, new_infra_triggered);
         }
 }
 
 void ContinuityModelRealization::applyDroughtMitigationPolicies(int week) {
+    // Reset all WSS demand multipliers to 1.0 before applying policies
+    // This ensures restrictions don't persist from previous weeks unless re-triggered
+    // match Original model behavior and test impact on transfer patterns
+    for (auto& wss : continuity_wss) {
+        if (wss != nullptr) {
+            wss->setDemand_multiplier(1.0);
+        }
+    }
+    
+    // Apply all drought mitigation policies
     for (DroughtMitigationPolicy* dmp : drought_mitigation_policies) {
         dmp->applyPolicy(week);
     }

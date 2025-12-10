@@ -5,6 +5,7 @@
 #include <iostream>
 #include <numeric>
 #include <algorithm>
+#include <omp.h>
 #include "Utility.h"
 #include "../../Utils/Utils.h"
 
@@ -314,23 +315,24 @@ bool Utility::operator>(const Utility *other) const {
     return id > other->id;
 }
 
-bool Utility::compById(Utility *a, Utility *b) {
+bool Utility::compById(const std::shared_ptr<Utility>& a, const std::shared_ptr<Utility>& b) {
     return a->id < b->id;
 }
 
 void Utility::updateTreatmentAndNumberOfStorageSources() {
     n_storage_sources = non_priority_draw_water_source.size();
-    delete[] available_treated_flow_rate;
-    available_treated_flow_rate = new double[non_priority_draw_water_source.size()];
+    available_treated_flow_rate.assign(n_storage_sources, 0.0);
+    
+    total_storage_treatment_capacity = 0.0;
     for (int i = 0; i < n_storage_sources; ++i) {
         auto ws = water_sources[non_priority_draw_water_source[i]];
         available_treated_flow_rate[i] = utility_owned_wtp_capacities[water_source_to_wtp[ws->id]];
         total_storage_treatment_capacity += available_treated_flow_rate[i];
     }
 
-    total_treatment_capacity = accumulate(utility_owned_wtp_capacities.begin(),
-                                          utility_owned_wtp_capacities.end(),
-                                          0.);
+    total_treatment_capacity = std::accumulate(utility_owned_wtp_capacities.begin(),
+                                               utility_owned_wtp_capacities.end(),
+                                               0.0);
 
     //TODO: IMPLEMENT QP HERE
 //    P_x = new double[n_storage_sources];
@@ -430,7 +432,7 @@ void Utility::clearWaterSources() {
  * Connects a reservoir to the utility.
  * @param water_source
  */
-void Utility::addWaterSource(WaterSource *water_source) {
+void Utility::addWaterSource(WaterSource *water_source) {    
     checkErrorsAddWaterSourceOnline(water_source);
 
     // Add water sources with their IDs matching the water sources vector
@@ -595,7 +597,7 @@ void Utility::splitDemands(
 
         treatment_capacity_violation = idealDemandSplitUnconstrained(
                 split_demands,
-                available_treated_flow_rate,
+                available_treated_flow_rate.data(),
                 demand_non_priority_sources,
                 storages,
                 total_stored_volume,
@@ -627,7 +629,7 @@ void Utility::splitDemands(
                         split_demands,
                         over_allocated,
                         has_spare_flow_rate,
-                        available_treated_flow_rate,
+                        available_treated_flow_rate.data(),
                         remainder_demand,
                         storages,
                         total_stored_volume,
@@ -803,7 +805,13 @@ void Utility::issueBond(int new_infra_triggered, int week) {
                            bond_interest_rate_multiplier);
             issued_bonds.push_back(&bond);
             double npc = bond.getNetPresentValueAtIssuance(infra_discount_rate, week);
+            
+            // printf("DEBUG BOND [Original]: Thread=%d, Util=%d, Infra=%d, Week=%d, NPC=%.6e, discount_rate=%.6f\n",
+            //        omp_get_thread_num(), id, new_infra_triggered, week, npc, infra_discount_rate);
+            double old_util_npc = infra_net_present_cost;
             infra_net_present_cost += npc;
+            // printf("DEBUG ACCUM [Original]: Thread=%d, Util=%d, OldNPC=%.6e, AddNPC=%.6e, NewNPC=%.6e\n",
+            //        omp_get_thread_num(), id, old_util_npc, npc, infra_net_present_cost);
         }
     }
 }

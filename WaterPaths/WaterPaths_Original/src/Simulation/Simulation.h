@@ -28,7 +28,7 @@ private:
     vector<WaterSource *> &water_sources;
     Graph &water_sources_graph;
     const vector<vector<int>> &water_sources_to_utilities;
-    vector<Utility *> &utilities;
+    vector<std::shared_ptr<Utility>> &utilities;
     const vector<DroughtMitigationPolicy *> &drought_mitigation_policies;
     vector<MinEnvFlowControl *> &min_env_flow_controls;
     vector<vector<double>>& utilities_rdm;
@@ -47,7 +47,7 @@ public:
     Simulation(
             vector<WaterSource *> &water_sources, Graph &water_sources_graph,
             const vector<vector<int>> &water_sources_to_utilities,
-            vector<Utility *> &utilities,
+            vector<std::shared_ptr<Utility>> &utilities,
             const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
             vector<MinEnvFlowControl *> &min_env_flow_controls,
             vector<vector<double>>& utilities_rdm,
@@ -58,7 +58,7 @@ public:
 
     Simulation(vector<WaterSource *> &water_sources, Graph &water_sources_graph,
                const vector<vector<int>> &water_sources_to_utilities,
-               vector<Utility *> &utilities,
+               vector<std::shared_ptr<Utility>> &utilities,
                const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                vector<MinEnvFlowControl *> &min_env_flow_controls,
                vector<vector<double>> &utilities_rdm,
@@ -72,7 +72,7 @@ public:
 
     Simulation(vector<WaterSource *> &water_sources, Graph &water_sources_graph,
                const vector<vector<int>> &water_sources_to_utilities,
-               vector<Utility *> &utilities,
+               vector<std::shared_ptr<Utility>> &utilities,
                const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                vector<MinEnvFlowControl *> &min_env_flow_controls,
                vector<vector<double>> &utilities_rdm,
@@ -89,7 +89,7 @@ public:
     MasterDataCollector *runFullSimulation(unsigned long n_threads, double *vars);
 
     void setupSimulation(vector<WaterSource *> &water_sources, Graph &water_sources_graph,
-                             const vector<vector<int>> &water_sources_to_utilities, vector<Utility *> &utilities,
+                             const vector<vector<int>> &water_sources_to_utilities, vector<std::shared_ptr<Utility>> &utilities,
                              const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                              vector<MinEnvFlowControl *> &min_env_flow_controls,
                              vector<vector<double>> &utilities_rdm, vector<vector<double>> &water_sources_rdm,

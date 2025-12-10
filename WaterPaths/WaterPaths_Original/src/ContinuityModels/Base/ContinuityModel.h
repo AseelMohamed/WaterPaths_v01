@@ -20,7 +20,7 @@ class ContinuityModel {
 protected:
 
     vector<WaterSource *> continuity_water_sources;
-    vector<Utility *> continuity_utilities;
+    vector<std::shared_ptr<Utility>> continuity_utilities;
     vector<MinEnvFlowControl *> min_env_flow_controls;
     Graph water_sources_graph;
     vector<vector<int> > water_sources_to_utilities;
@@ -41,7 +41,7 @@ protected:
 public:
     const unsigned long realization_id;
 
-    ContinuityModel(vector<WaterSource *> &water_sources, vector<Utility *> &utilities,
+    ContinuityModel(vector<WaterSource *> &water_sources, vector<std::shared_ptr<Utility>> &utilities,
                     vector<MinEnvFlowControl *> &min_env_flow_controls,
                     const Graph &water_sources_graph,
                     const vector<vector<int>> &water_sources_to_utilities,
@@ -64,7 +64,7 @@ public:
 
     const vector<WaterSource *> &getContinuity_water_sources() const;
 
-    const vector<Utility *> &getContinuity_utilities() const;
+    const vector<std::shared_ptr<Utility>> &getContinuity_utilities() const;
 };
 
 

@@ -12,7 +12,7 @@
 ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
                                        const Graph &water_sources_graph,
                                        const vector<vector<int>> &water_sources_to_utilities,
-                                       vector<Utility *> utilities,
+                                       vector<std::shared_ptr<Utility>> utilities,
                                        vector<MinEnvFlowControl *> min_env_flow_controls,
                                        vector<double> &utilities_rdm,
                                        vector<double> &water_sources_rdm,
@@ -27,7 +27,7 @@ ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
           n_topo_sources((int) sources_topological_order.size()),
           use_precomputed_rof_tables(use_precomputed_rof_tables) {
     // update utilities' total stored volume
-    for (Utility *u : this->continuity_utilities) {
+    for (auto& u : this->continuity_utilities) {
         u->updateTotalAvailableVolume();
         u->setNoFinaicalCalculations();
     }
@@ -176,6 +176,7 @@ vector<double> ContinuityModelROF::calculateShortTermROFTable(int week) {
                 risk_of_failure[u] = 1.;
             } else {
                 auto x = ut_storage_to_rof_table[u](week, r);
+                
                 if (tier < (double) NO_OF_INSURANCE_STORAGE_TIERS - x) {
                     risk_of_failure[u] += 0.5 / NUMBER_REALIZATIONS_ROF;
                 }
@@ -233,6 +234,7 @@ vector<double> ContinuityModelROF::calculateShortTermROFFullCalcs(int week) {
                 auto treatment_condition =
                         continuity_utilities[u]->getUnrestrictedDemand() >
                         0.9 * continuity_utilities[u]->getTotal_treatment_capacity();
+                
                 if (storage_condition || treatment_condition) {
                     year_failure[u] = FAILURE;
                 }
@@ -445,7 +447,7 @@ void ContinuityModelROF::resetUtilitiesAndReservoirs(int rof_type) {
         }
 
     // update utilities combined storage.
-    for (Utility *u : continuity_utilities) {
+    for (auto& u : continuity_utilities) {
         u->updateTotalAvailableVolume();
     }
 }
@@ -467,7 +469,7 @@ void ContinuityModelROF::connectRealizationWaterSources(
  * @param realization_utilities
  */
 void ContinuityModelROF::connectRealizationUtilities(
-        const vector<Utility *> &realization_utilities) {
+        const vector<std::shared_ptr<Utility>> &realization_utilities) {
     ContinuityModelROF::realization_utilities = realization_utilities;
 }
 

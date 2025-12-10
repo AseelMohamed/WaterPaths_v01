@@ -211,18 +211,18 @@ vector<WaterSource *> Utils::copyWaterSourceVector(
     return water_sources_new;
 }
 
-vector<Utility *> Utils::copyUtilityVector(vector<Utility *> utility_original,
-                                           bool clear_water_sources) {
-    vector<Utility *> utility_new;
+vector<std::shared_ptr<Utility>> Utils::copyUtilityVector(
+        const vector<std::shared_ptr<Utility>>& utility_original,
+        bool clear_water_sources) {
+    vector<std::shared_ptr<Utility>> utility_new;
+    utility_new.reserve(utility_original.size());
 
-    for (Utility *u : utility_original) {
-        utility_new.push_back(new Utility(*u));
+    for (auto& u : utility_original) {
+        auto copy = std::make_shared<Utility>(*u);
+        if (clear_water_sources)
+            copy->clearWaterSources();
+        utility_new.push_back(std::move(copy));
     }
-
-    if (clear_water_sources)
-        for (Utility *u : utility_new) {
-            u->clearWaterSources();
-        }
 
     return utility_new;
 }

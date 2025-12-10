@@ -22,7 +22,7 @@ protected:
 
     vector<WaterSource *> continuity_water_sources;
     // vector<Utility *> continuity_wss;
-    vector<WaterSupplySystems *> continuity_wss;
+    vector<std::unique_ptr<WaterSupplySystems>> continuity_wss;
     vector<MinEnvFlowControl *> min_env_flow_controls;
     Graph water_sources_graph;
     vector<vector<int> > water_sources_to_wss;
@@ -43,7 +43,7 @@ protected:
 public:
     const unsigned long realization_id;
 
-    ContinuityModel(vector<WaterSource *> &water_sources, vector<WaterSupplySystems *> &wss,
+    ContinuityModel(vector<WaterSource *> &water_sources, vector<std::unique_ptr<WaterSupplySystems>> &&wss,
                     vector<MinEnvFlowControl *> &min_env_flow_controls,
                     const Graph &water_sources_graph,
                     const vector<vector<int>> &water_sources_to_wss,
@@ -66,7 +66,7 @@ public:
 
     const vector<WaterSource *> &getContinuity_water_sources() const;
 
-    const vector<WaterSupplySystems *> &getContinuity_wss() const;
+    const vector<std::unique_ptr<WaterSupplySystems>> &getContinuity_wss() const;
 };
 
 

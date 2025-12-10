@@ -48,6 +48,16 @@ void TransfersBilateral::applyPolicy(int week) {
         return;
     }
 
+    // Reset demand_offset to 0 for both WSS every week (will be set if transfer occurs)
+    realization_wss[0]->setDemand_offset(0.0, 0.0);
+    realization_wss[1]->setDemand_offset(0.0, 0.0);
+
+    // if (week >= 320 && week <= 328) {
+    //     printf("[WSS] Week %d: WSS0_ROF=%.4f (trig=%.4f), WSS1_ROF=%.4f (trig=%.4f)\n",
+    //            week, realization_wss[0]->getRisk_of_failure(), transfer_triggers[realization_wss[0]->system_id],
+    //            realization_wss[1]->getRisk_of_failure(), transfer_triggers[realization_wss[1]->system_id]);
+    // }
+
     double transfer_volume = performTransfer(realization_wss[0],
                                       realization_wss[1],
                                       pipe_transfer_capacities[1], week);
@@ -60,6 +70,11 @@ void TransfersBilateral::applyPolicy(int week) {
                                           pipe_transfer_capacities[0], week);
         transfered_volumes = {transfer_volume, -transfer_volume};
     }
+
+    // if (week >= 320 && week <= 328) {
+    //     printf("[WSS] Week %d: Final transfer_volume=%.4f, transfered_volumes=[%.4f, %.4f]\n",
+    //            week, transfer_volume, transfered_volumes[0], transfered_volumes[1]);
+    // }
 }
 
 double TransfersBilateral::performTransfer(WaterSupplySystems *sender, WaterSupplySystems *receiver,
@@ -91,13 +106,19 @@ double TransfersBilateral::performTransfer(WaterSupplySystems *sender, WaterSupp
         transfer_volume = max(min(available_transfer_volume,
                               pumping_capacity), 0.);
 
-        // Perform transfer and apply tariffs
+        // For within-utility transfers: only operational costs, no benefit to sender
+        // Receiver pays operational cost (transfer_overhead factor)
+        // Sender has zero cost/benefit (no pricing mechanism for internal transfers)
         int price_week = Utils::weekOfTheYear(week);
-        receiver->setDemand_offset(transfer_volume,
-                                   sender->getOwner()->waterPrice(price_week) *
-                                   transfer_overhead);
-        sender->setDemand_offset(-transfer_volume,
-                                 2. * sender->getOwner()->waterPrice(price_week));
+        double operational_cost_per_volume = sender->getOwner()->waterPrice(price_week) * 
+                                             transfer_overhead;
+        
+        // Receiver: positive offset with operational cost rate
+        receiver->setDemand_offset(transfer_volume, operational_cost_per_volume);
+        
+        // Sender: negative offset with SAME rate as base price (zero net cost/benefit)
+        sender->setDemand_offset(-transfer_volume, 
+                                 sender->getOwner()->waterPrice(price_week));
     }
 
     return transfer_volume;

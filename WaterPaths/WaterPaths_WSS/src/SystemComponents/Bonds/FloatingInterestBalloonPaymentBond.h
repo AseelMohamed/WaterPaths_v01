@@ -13,6 +13,7 @@ private:
     vector<double> interest_rate_series;
     const int begin_repayment_after_n_years;
     int n_payments_made = 0;
+    int last_payment_week = NON_INITIALIZED;
 
 public:
     FloatingInterestBalloonPaymentBond(const int id, const double cost_of_capital, const double n_payments,
@@ -27,6 +28,8 @@ public:
     double getNetPresentValueAtIssuance(double yearly_discount_rate, int week) const override;
 
     void issueBond(int week, int construction_time, double bond_term_multiplier, double bond_interest_rate_multiplier) override;
+    
+    void resetForRealization() override { Bond::resetForRealization(); n_payments_made = 0; last_payment_week = NON_INITIALIZED; }
 };
 
 

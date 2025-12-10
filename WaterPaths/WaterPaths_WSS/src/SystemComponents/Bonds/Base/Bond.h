@@ -49,6 +49,9 @@ public:
     bool isIssued() const;
 
     void setIssued();
+    
+    // Reset bond state for a new realization (clear payment history from ROF generation)
+    virtual void resetForRealization() { issued = false; week_issued = NON_INITIALIZED; }
 
 };
 

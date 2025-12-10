@@ -61,7 +61,7 @@ public:
     void addRealization(
             vector<WaterSource *> water_sources_realization,
             vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization,
-            vector<Utility *> utilities_realization, unsigned long r);
+            vector<std::shared_ptr<Utility>> utilities_realization, unsigned long r);
 
     void removeRealization(unsigned long r);
 

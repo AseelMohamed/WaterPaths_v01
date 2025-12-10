@@ -7,6 +7,7 @@
 
 #include "Base/DataCollector.h"
 #include "../SystemComponents/Utility/WaterSupplySystems.h"
+#include "../SystemComponents/Utility/Utility.h"
 
 class WSSDataCollector : public DataCollector {
 private:
@@ -23,6 +24,8 @@ private:
     vector<double> total_treatment_capacity;
     vector<double> total_storage_treatment_capacity;
     vector<int> water_sources_count;
+    vector<double> short_term_rof;
+    vector<double> long_term_rof;
     
     // Financial data vectors (WSS-level)
     vector<double> gross_revenues;
@@ -37,6 +40,7 @@ private:
     
     const WaterSupplySystems *wss;
     const Utility *owner;  // Store owner directly to avoid accessing deleted WSS
+    int owner_id;  // Store owner ID to avoid dangling pointer access
 
 public:
 
@@ -83,6 +87,7 @@ public:
     const vector<double> &getContingency_fund_size() const;
     
     const Utility *getOwner() const;  // Direct access to owner (safe after WSS deletion)
+    int getOwnerId() const;  // Get stored owner ID (safe even after WSS deletion)
     const vector<vector<int>> &getPathways() const;
 };
 

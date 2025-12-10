@@ -561,6 +561,8 @@ void WaterSource::setRealization(unsigned long r, vector<double> &rdm_factors) {
     vector<double> construction_cost_multiplier_vec = vector<double>(1, construction_cost_multiplier);
     for (Bond *bond : bonds) {
         bond->setRealizationWaterSource(r, construction_cost_multiplier_vec);
+        // Reset bond state for new realization to clear payment history from ROF generation
+        bond->resetForRealization();
     }
 }
 
@@ -730,11 +732,16 @@ Bond &WaterSource::getBond(int utility_id) {
     }
 }
 
+const vector<Bond *> &WaterSource::getBonds() const {
+    return bonds;
+}
+
 const double WaterSource::getConstruction_time() const {
     return construction_time;
 }
 
 int WaterSource::randomConstructionTime(double t0, double tf) {
+    // Random construction time implementation with seeding support
     std::mt19937 rng(std::random_device{}());
     if (seed > NON_INITIALIZED) {
         rng.seed((unsigned long) id + seed);

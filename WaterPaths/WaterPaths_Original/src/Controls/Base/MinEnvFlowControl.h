@@ -13,7 +13,7 @@ class MinEnvFlowControl {
 protected:
     vector<WaterSource *> water_sources;
     vector<Catchment *> catchments;
-    vector<Utility* > utilities;
+    vector<std::shared_ptr<Utility>> utilities;
 
 public:
     const vector<int> water_sources_ids;
@@ -32,7 +32,7 @@ public:
     virtual double getRelease(int week) = 0;
 
     void addComponents(
-            vector<WaterSource *> water_sources, vector<Utility *> utilities);
+            vector<WaterSource *> water_sources, vector<std::shared_ptr<Utility>> utilities);
 
     virtual void setRealization(unsigned long r, vector<double> &rdm_factors);
 };

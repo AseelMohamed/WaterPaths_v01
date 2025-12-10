@@ -96,6 +96,27 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double caesb_tortoSM_transfer_trigger = vars[5]; //gatilho para acionar transferência de água para o Descoberto
     double caesb_descoberto_annual_payment = vars[6]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
     double caesb_tortoSM_annual_payment = vars[7]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
+    // CRITICAL FIX: Calculate weighted average instead of sum to match Original model behavior
+    // Each WSS has its own percentage, utility uses demand-weighted average
+    double total_demand_descoberto = 0.0;
+    double total_demand_tortoSM = 0.0;
+    // Sum demands across all realizations to get average weights
+    for (const auto& realization : demand_caesb_descoberto) {
+        for (double weekly_demand : realization) {
+            total_demand_descoberto += weekly_demand;
+        }
+    }
+    for (const auto& realization : demand_caesb_tortoSM) {
+        for (double weekly_demand : realization) {
+            total_demand_tortoSM += weekly_demand;
+        }
+    }
+    double total_demand = total_demand_descoberto + total_demand_tortoSM;
+    // Weighted average percentage based on relative demands
+    double caesb_weighted_contingency_percent = 
+        (caesb_descoberto_annual_payment * total_demand_descoberto + 
+         caesb_tortoSM_annual_payment * total_demand_tortoSM) / total_demand;
+    
     double caesb_descoberto_inftrigger = vars[8]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Descoberto
     double caesb_tortoSM_inftrigger = vars[9]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Torto/SM
     if (import_export_rof_tables == EXPORT_ROF_TABLES) {
@@ -714,16 +735,18 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     rofs_infra_caesb_descoberto.push_back(1.1);
     
     // Create the single CAESB utility (handles finances and decisions only)
+    // NOTE: Using TortoSM price data for the unified utility (as per alignment with Original model)
     Utility caesb((char *) "CAESB", 0,
                   demand_caesb_descoberto, // Placeholder, will be managed by WSS
                   demand_n_weeks,
-                  (caesb_descoberto_annual_payment + caesb_tortoSM_annual_payment),
-                  caesbDescobertoDemandClassesFractions, // Placeholder
-                  caesbDescobertoUserClassesWaterPrices, // Placeholder
+                  caesb_weighted_contingency_percent,  // Use weighted average, NOT sum
+                  caesbDescobertoDemandClassesFractions, // Using Descoberto data for unified utility
+                  caesbDescobertoUserClassesWaterPrices, // Using Descoberto data for unified utility
                   wwtp_discharge_caesb_descoberto, // Placeholder
                   caesb_descoberto_inf_buffer, // Placeholder
-                  {}, {}, // Empty vectors
-                  0.04); // Infrastructure discount rate (taxa de desconto)
+                  {}, {}, // Empty vectors for water_source_to_wtp and utility_owned_wtp_capacities
+                  0.04, // Infrastructure discount rate (taxa de desconto)
+                  15, 0.12); // bond_term and bond_interest_rate to match Original model
 
     // Add Descoberto water supply system (system_id=0)
     caesb.addWaterSupplySystem("Descoberto", 0, 0,
@@ -821,7 +844,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                          &caesbDescobertoUserClassesWaterPrices,
                                          &caesbPriceRestrictionMultipliers);
 
-    Restrictions restrictions_tortoSM(0,  // utility_id=0, targets system_id=1 (TortoSM)
+    Restrictions restrictions_tortoSM(1,  // utility_id=0, targets system_id=1 (TortoSM)
                                       restriction_stage_multipliers_caesb_tortoSM,
                                       restriction_stage_triggers_caesb_tortoSM,
                                       &caesbTortoSMDemandClassesFractions,
@@ -854,13 +877,15 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 //    drought_mitigation_policies.push_back(&transfer_tortoSM_descoberto);
 //    drought_mitigation_policies.push_back(&transfer_descoberto_tortoSM);
 
-    vector<double> transfer_rofs = {caesb_tortoSM_transfer_trigger,
-                                    caesb_descoberto_transfer_trigger};
-    vector<double> transfer_capacities = {0.5e-6 * 3600 * 24 * 7,
-                                          0.7e-6 * 3600 * 24 * 7};
-    vector<int> tranfers_utils_ids = {0, 0};  // Both systems belong to utility id=0
+    // FIXME: Order must match Original model (illogically swapped): [0]=TortoSM trigger, [1]=Descoberto trigger
+    // But IDs are still [0]=Descoberto, [1]=TortoSM, so constructor assigns them backwards
+    vector<double> transfer_rofs = {caesb_tortoSM_transfer_trigger,      // [0] assigned to system_id 0 (Descoberto)
+                                    caesb_descoberto_transfer_trigger};  // [1] assigned to system_id 1 (TortoSM)
+    vector<double> transfer_capacities = {0.5e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
+                                          0.7e-6 * 3600 * 24 * 7};        // Capacity Descoberto→TortoSM
+    vector<int> tranfers_wss_ids = {0, 1};  // system_id 0=Descoberto, system_id 1=TortoSM
     TransfersBilateral transfers(0, transfer_capacities, 0.1, 1.1,
-                                 transfer_rofs, tranfers_utils_ids);
+                                 transfer_rofs, tranfers_wss_ids);
     drought_mitigation_policies.push_back(&transfers);
 
     /// Creates simulation object depending on use (or lack thereof) ROF tables
@@ -918,15 +943,23 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     printf("Simulation took %fs\n", realization_end - realization_start);
 
     /// Calculate objectives and store them in Borg decision variables array.
-#ifdef  PARALLEL
     objectives = calculateAndPrintObjectives(false);
 
-	objs[0] = -min(objectives[0], objectives[5]);
-	objs[1] = max(objectives[1], objectives[6]);
-	objs[2] = max(objectives[2], objectives[7]);
-	objs[3] = max(objectives[3], objectives[8]);
-	objs[4] = max(objectives[4], objectives[9]);       
- 
+    // With WSS architecture, there is only ONE utility (CAESB) with 2 WSS.
+    // The objectives vector has 5 elements (not 10):
+    // [0] = Reliability (minimum across both WSS)
+    // [1] = Restriction Frequency
+    // [2] = Infrastructure NPC 
+    // [3] = Peak Financial Cost
+    // [4] = Worst Case Costs
+    
+	objs[0] = -objectives[0];  // Negative reliability (Borg minimizes)
+	objs[1] = objectives[1];   // Restriction frequency
+	objs[2] = objectives[2];   // Infrastructure NPC
+	objs[3] = objectives[3];   // Peak financial cost
+	objs[4] = objectives[4];   // Worst case costs
+
+#ifdef  PARALLEL      
         if (s != nullptr) {	 // != significa "diferente de"
             delete s;
     }

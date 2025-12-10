@@ -52,7 +52,7 @@ public:
     void setRealization(unsigned long realization_id, vector<double> &wss_rdm,
                         vector<double> &water_sources_rdm, vector<double> &policy_rdm) override;
 
-    vector<double> calculateShortTermROFTable(int week, const vector<WaterSupplySystems *> &wss, const int &n_wss);
+    vector<double> calculateShortTermROFTable(int week);
 
     void updateOnlineInfrastructure(int week) override;
 };

@@ -74,11 +74,11 @@ double Restrictions::getCurrent_multiplier() const {
     return current_multiplier;
 }
 
-void Restrictions::addSystemComponents(vector<Utility *> systems_utilities,
+void Restrictions::addSystemComponents(vector<std::shared_ptr<Utility>> systems_utilities,
                                        vector<WaterSource *> water_sources,
                                        vector<MinEnvFlowControl *> min_env_flow_controls) {
     /// Get utility whose IDs correspond to restriction policy ID.
-    for (Utility *u : systems_utilities) {
+    for (auto& u : systems_utilities) {
         if (u->id == id) {
             if (!realization_utilities.empty())
                 throw std::logic_error("This restriction policy already has a systems_utilities assigned to it.");

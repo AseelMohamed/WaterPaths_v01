@@ -7,7 +7,7 @@
 #include "UtilitiesDataCollector.h"
 
 
-UtilitiesDataCollector::UtilitiesDataCollector(const Utility *utility, unsigned long realization)
+UtilitiesDataCollector::UtilitiesDataCollector(std::shared_ptr<const Utility> utility, unsigned long realization)
         : DataCollector(utility->id, utility->name, realization, UTILITY, 15 * COLUMN_WIDTH),
           utility(utility) {
 }
@@ -83,6 +83,12 @@ string UtilitiesDataCollector::printCompactString(int week) {
               << net_present_infrastructure_cost[week]
               << ","
               << debt_service_payments[week]
+              << ","
+              << gross_revenues[week]
+              << ","
+              << contingency_fund_contribution[week]
+              << ","
+              << drought_mitigation_cost[week]
               << ",";
 
     return outStream.str();
@@ -151,7 +157,10 @@ string UtilitiesDataCollector::printCompactStringHeader() {
               << id << "ins_pout" << ","
               << id << "ins_price" << ","
               << id << "infra_npv" << ","
-              << id << "debt_serv" << ",";
+              << id << "debt_serv" << ","
+              << id << "gross_rev" << ","
+              << id << "cont_contrib" << ","
+              << id << "drought_cost" << ",";
 
     return outStream.str();
 }
@@ -297,5 +306,5 @@ const vector<double> &UtilitiesDataCollector::getRestricted_demand() const {
 }
 
 const Utility *UtilitiesDataCollector::getUtility() const {
-    return utility;
+    return utility.get();
 }

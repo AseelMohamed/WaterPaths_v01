@@ -28,6 +28,8 @@ public:
     static vector<WaterSource *> copyWaterSourceVector(vector<WaterSource *> water_sources_original);
 
     static vector<WaterSupplySystems *> copyWSSVector(vector<WaterSupplySystems *> wss_original, bool clear_water_sources = false);
+    
+    static vector<std::unique_ptr<WaterSupplySystems>> copyWSSVectorUnique(const vector<std::unique_ptr<WaterSupplySystems>> &wss_original, bool clear_water_sources = false);
 
     static vector<DroughtMitigationPolicy *> copyDroughtMitigationPolicyVector(
             vector<DroughtMitigationPolicy *> drought_mitigation_policy_original);

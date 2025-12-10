@@ -10,7 +10,7 @@ ContinuityModelRealization::ContinuityModelRealization(
         vector<WaterSource *> &water_sources,
         const Graph &water_sources_graph,
         const vector<vector<int>> &water_sources_to_utilities,
-        vector<Utility *> &utilities,
+        vector<std::shared_ptr<Utility>> &utilities,
         const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
         vector<MinEnvFlowControl *> &min_env_flow_control,
         vector<double>& utilities_rdm,
@@ -72,7 +72,7 @@ void ContinuityModelRealization::setLongTermROFs(const vector<double> &risks_of_
     // that infrastructure option (which will only happen it the listed
     // option is in the list of sources to be built for other utilities.
     if (!new_infra_triggered.empty())
-        for (Utility *u : continuity_utilities) {
+        for (auto& u : continuity_utilities) {
             u->forceInfrastructureConstruction(week, new_infra_triggered);
         }
 }

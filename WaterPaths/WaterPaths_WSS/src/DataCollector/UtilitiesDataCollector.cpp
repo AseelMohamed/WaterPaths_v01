@@ -8,36 +8,17 @@
 #include "UtilitiesDataCollector.h"
 
 
-UtilitiesDataCollector::UtilitiesDataCollector(const Utility *utility, unsigned long realization)
-        : DataCollector(utility->id, utility->name, realization, UTILITY, 15 * COLUMN_WIDTH),
-          utility(utility) {
+UtilitiesDataCollector::UtilitiesDataCollector(const Utility *utility, unsigned long realization, double discount_rate)
+        : DataCollector(utility->id, utility->name, realization, UTILITY, 12 * COLUMN_WIDTH),
+          utility(utility),
+          infra_discount_rate(discount_rate) {
 }
 
 string UtilitiesDataCollector::printTabularString(int week) {
 
     stringstream outStream;
 
-    outStream << setw(2 * COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-              << combined_storage[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-              << capacity[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-	          << net_stream_inflow[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-              << st_rof[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-              << lt_rof[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-              << unfulfilled_demand[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-              << restricted_demand[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-              << unrestricted_demand[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-              << waste_water_discharge[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
-              << total_treatment_capacity[week]
-              << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
+    outStream << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
               << contingency_fund_size[week]
               << setw(COLUMN_WIDTH) << setprecision(COLUMN_PRECISION)
               << insurance_payout[week]
@@ -53,29 +34,31 @@ string UtilitiesDataCollector::printTabularString(int week) {
 
 string UtilitiesDataCollector::printCompactString(int week) {
 
+#ifndef NDEBUG
+    // Debug-mode bounds checking to catch uninitialized memory access
+    auto check = [week, this](const std::vector<double> &v, const char *name) {
+        if (week < 0 || (size_t)week >= v.size()) {
+            std::ostringstream oss;
+            oss << "Week index " << week << " out of range for " << name
+                << " (size=" << v.size() << "), utility id=" << id
+                << ", realization=" << realization;
+            throw std::out_of_range(oss.str());
+        }
+    };
+
+    check(contingency_fund_size, "contingency_fund_size");
+    check(insurance_payout, "insurance_payout");
+    check(insurance_contract_cost, "insurance_contract_cost");
+    check(net_present_infrastructure_cost, "net_present_infrastructure_cost");
+    check(debt_service_payments, "debt_service_payments");
+    check(gross_revenues, "gross_revenues");
+    check(contingency_fund_contribution, "contingency_fund_contribution");
+    check(drought_mitigation_cost, "drought_mitigation_cost");
+#endif
+
     stringstream outStream;
 
-    outStream << combined_storage[week]
-              << ","
-              << capacity[week]
-              << ","
-	          << net_stream_inflow[week]
-              << ","
-              << st_rof[week]
-              << ","
-              << lt_rof[week]
-              << ","
-              << restricted_demand[week]
-              << ","
-              << unrestricted_demand[week]
-              << ","
-              << unfulfilled_demand[week]
-              << ","
-              << waste_water_discharge[week]
-              << ","
-              << total_treatment_capacity[week]
-              << ","
-              << contingency_fund_size[week]
+    outStream << contingency_fund_size[week]
               << ","
               << insurance_payout[week]
               << ","
@@ -84,6 +67,12 @@ string UtilitiesDataCollector::printCompactString(int week) {
               << net_present_infrastructure_cost[week]
               << ","
               << debt_service_payments[week]
+              << ","
+              << gross_revenues[week]
+              << ","
+              << contingency_fund_contribution[week]
+              << ","
+              << drought_mitigation_cost[week]
               << ",";
     
     return outStream.str();
@@ -93,17 +82,7 @@ string UtilitiesDataCollector::printTabularStringHeaderLine1() {
 
     stringstream outStream;
 
-    outStream << setw(2 * COLUMN_WIDTH) << "Stored"
-              << setw(COLUMN_WIDTH) << " "
-              << setw(COLUMN_WIDTH) << "Net"
-              << setw(COLUMN_WIDTH) << " "
-              << setw(COLUMN_WIDTH) << " "
-              << setw(COLUMN_WIDTH) << "Rest."
-              << setw(COLUMN_WIDTH) << "Unrest."
-              << setw(COLUMN_WIDTH) << "Unfulf."
-              << setw(COLUMN_WIDTH) << "W. Water"
-              << setw(COLUMN_WIDTH) << "Treatment"
-              << setw(COLUMN_WIDTH) << "Conting."
+    outStream << setw(COLUMN_WIDTH) << "Conting."
               << setw(COLUMN_WIDTH) << "Insurance"
               << setw(COLUMN_WIDTH) << "Insurance"
               << setw(COLUMN_WIDTH) << "Infra."
@@ -116,17 +95,7 @@ string UtilitiesDataCollector::printTabularStringHeaderLine2() {
 
     stringstream outStream;
 
-    outStream << setw(2 * COLUMN_WIDTH) << "Volume"
-              << setw(COLUMN_WIDTH) << "Capacity"
-              << setw(COLUMN_WIDTH) << "Inflow"
-              << setw(COLUMN_WIDTH) << "ST-ROF"
-              << setw(COLUMN_WIDTH) << "LT-ROF"
-              << setw(COLUMN_WIDTH) << "Demand"
-              << setw(COLUMN_WIDTH) << "Demand"
-              << setw(COLUMN_WIDTH) << "Demand"
-              << setw(COLUMN_WIDTH) << "Discharge"
-              << setw(COLUMN_WIDTH) << "Capacity"
-              << setw(COLUMN_WIDTH) << "Fund"
+    outStream << setw(COLUMN_WIDTH) << "Fund"
               << setw(COLUMN_WIDTH) << "Payout"
               << setw(COLUMN_WIDTH) << "Price"
               << setw(COLUMN_WIDTH) << "NPV"
@@ -138,57 +107,80 @@ string UtilitiesDataCollector::printTabularStringHeaderLine2() {
 string UtilitiesDataCollector::printCompactStringHeader() {
     stringstream outStream;
 
-    outStream << id << "st_vol" << ","
-              << id << "capacity" << ","
-              << id << "net_inf" << ","
-              << id << "st_rof" << ","
-              << id << "lt_rof" << ","
-              << id << "rest_demand" << ","
-              << id << "unrest_demand" << ","
-              << id << "unfulf_demand" << ","
-              << id << "wastewater" << ","
-              << id << "treat_capacity" << ","
-              << id << "cont_fund" << ","
+    outStream << id << "cont_fund" << ","
               << id << "ins_pout" << ","
               << id << "ins_price" << ","
               << id << "infra_npv" << ","
-              << id << "debt_serv" << ",";
+              << id << "debt_serv" << ","
+              << id << "gross_rev" << ","
+              << id << "cont_contrib" << ","
+              << id << "drought_cost" << ",";
     
     return outStream.str();
 }
 
 void UtilitiesDataCollector::collect_data() {
-    // Restore storage collection for reliability calculations
-    // Use stored volume (actual water in storage) rather than available volume
-    // (which includes flow-through sources that don't show storage depletion)
-    combined_storage.push_back(utility->getTotal_stored_volume());
-    lt_rof.push_back(0.0);  // WSS doesn't calculate LT-ROF at utility level
-    st_rof.push_back(0.0);  // WSS doesn't calculate ST-ROF at utility level
-    unrestricted_demand.push_back(utility->getUnrestrictedDemand());
-    restricted_demand.push_back(utility->getRestrictedDemand());
-    contingency_fund_size.push_back(utility->getContingency_fund());
-    net_present_infrastructure_cost.push_back(utility->getInfrastructure_net_present_cost());
+    // Collect operational data for internal use (objectives, NetCDF, reliability calculations)
+    // but these won't be printed in CSV output - only WSS files will show them
+    double total_storage = 0.0;
+    double total_capacity = 0.0;
+    double total_net_inflow = 0.0;
+    double total_rest_demand = 0.0;
+    double total_unrest_demand = 0.0;
+    double total_unfulf_demand = 0.0;
+    double total_wastewater = 0.0;
+    double total_treatment_cap = 0.0;
     
-    // Track when infrastructure cost data is collected each week
-    static int debug_week_counter = 0;
-    double gr = utility->getGrossRevenue();
-    double dsp = utility->getCurrent_debt_payment();
-    double cfc = utility->getCurrent_contingency_fund_contribution();
-    double dmc = utility->getDrought_mitigation_cost();
+    // Aggregate from owned WSSs
+    const auto& wss_refs = utility->getWSSReferences();
+    for (const auto* wss : wss_refs) {
+        if (wss != nullptr) {
+            total_storage += wss->getTotal_stored_volume();
+            total_capacity += wss->getTotal_storage_capacity();
+            total_net_inflow += wss->getNet_stream_inflow();
+            total_rest_demand += wss->getRestrictedDemand();
+            total_unrest_demand += wss->getUnrestrictedDemand();
+            total_unfulf_demand += wss->getUnfulfilled_demand();
+            total_wastewater += wss->getWaste_water_discharge();
+            total_treatment_cap += wss->getTotal_treatment_capacity();
+        }
+    }
     
-    debug_week_counter++;
+    // Store operational data (for internal calculations, not CSV output)
+    combined_storage.push_back(total_storage);
+    capacity.push_back(total_capacity);
+    net_stream_inflow.push_back(total_net_inflow);
+    restricted_demand.push_back(total_rest_demand);
+    unrestricted_demand.push_back(total_unrest_demand);
+    unfulfilled_demand.push_back(total_unfulf_demand);
+    waste_water_discharge.push_back(total_wastewater);
+    total_treatment_capacity.push_back(total_treatment_cap);
+    st_rof.push_back(0.0);  // WSS doesn't calculate ROF at utility level
+    lt_rof.push_back(0.0);  // WSS doesn't calculate ROF at utility level
     
+    // Collect financial data - copy atomically from shared utility to avoid race conditions
+    // Each thread reads from shared utility, so serialize the reads
+    double cf, npc, gr, dsp, cfc, dmc, ins_cost, ins_payout;
+    #pragma omp critical(utility_financial_read)
+    {
+        cf = utility->getContingency_fund();
+        npc = utility->getInfrastructure_net_present_cost();
+        gr = utility->getGrossRevenue();
+        dsp = utility->getCurrent_debt_payment();
+        cfc = utility->getCurrent_contingency_fund_contribution();
+        dmc = utility->getDrought_mitigation_cost();
+        ins_cost = utility->getInsurance_purchase();
+        ins_payout = utility->getInsurance_payout();
+    }
+    
+    contingency_fund_size.push_back(cf);
+    net_present_infrastructure_cost.push_back(npc);
     gross_revenues.push_back(gr);
     debt_service_payments.push_back(dsp);
     contingency_fund_contribution.push_back(cfc);
     drought_mitigation_cost.push_back(dmc);
-    insurance_contract_cost.push_back(utility->getInsurance_purchase());
-    insurance_payout.push_back(utility->getInsurance_payout());
-    capacity.push_back(utility->getTotal_storage_capacity());
-    waste_water_discharge.push_back(0.0);  // WSS doesn't track wastewater discharge
-    unfulfilled_demand.push_back(utility->getUnfulfilled_demand());
-    net_stream_inflow.push_back(0.0);  // WSS doesn't track net stream inflow
-    total_treatment_capacity.push_back(utility->getTotal_treatment_capacity());
+    insurance_contract_cost.push_back(ins_cost);
+    insurance_payout.push_back(ins_payout);
 
 //    checkForNans();
 

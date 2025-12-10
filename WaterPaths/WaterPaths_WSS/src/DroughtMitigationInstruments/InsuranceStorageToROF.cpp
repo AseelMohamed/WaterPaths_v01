@@ -5,6 +5,19 @@
 #include "InsuranceStorageToROF.h"
 #include "../Utils/Utils.h"
 
+// Helper to convert raw pointer vector to unique_ptr vector
+static vector<std::unique_ptr<WaterSupplySystems>> convertToUniquePtr(const vector<WaterSupplySystems*>& wss_raw, bool clear_water_sources) {
+    vector<std::unique_ptr<WaterSupplySystems>> result;
+    for (auto* wss : wss_raw) {
+        auto wss_copy = std::make_unique<WaterSupplySystems>(*wss);
+        if (clear_water_sources) {
+            wss_copy->clearWaterSources();
+        }
+        result.push_back(std::move(wss_copy));
+    }
+    return result;
+}
+
 InsuranceStorageToROF::InsuranceStorageToROF(const int id, vector<WaterSource *> &water_sources,
                                              const Graph &water_sources_graph,
                                              const vector<vector<int>> &water_sources_to_wss,
@@ -18,7 +31,7 @@ InsuranceStorageToROF::InsuranceStorageToROF(const int id, vector<WaterSource *>
                                              unsigned long total_simulation_time)
         : DroughtMitigationPolicy(id, INSURANCE_STORAGE_ROF),
           ContinuityModelROF(Utils::copyWaterSourceVector(water_sources), water_sources_graph,
-                             water_sources_to_wss, Utils::copyWSSVector(wss, true),
+                             water_sources_to_wss, convertToUniquePtr(wss, true),
                              Utils::copyMinEnvFlowControlVector(min_env_flow_controls), wss_rdm.at(0),
                              water_sources_rdm.at(0), total_simulation_time, false, (unsigned int) NON_INITIALIZED),
           rof_triggers(rof_triggers),
@@ -33,7 +46,7 @@ InsuranceStorageToROF::InsuranceStorageToROF(const int id, vector<WaterSource *>
 
     for (WaterSupplySystems *w : wss) wss_ids.push_back(w->system_id);
 
-    for (WaterSupplySystems *w : continuity_wss) {
+    for (auto& w : continuity_wss) {
         w->clearWaterSources();
         w->resetTotal_storage_capacity();
     }
@@ -57,7 +70,7 @@ InsuranceStorageToROF::InsuranceStorageToROF(
         ContinuityModelROF(Utils::copyWaterSourceVector(insurance.continuity_water_sources),
                            insurance.water_sources_graph,
                            insurance.water_sources_to_wss,
-                           Utils::copyWSSVector(insurance.continuity_wss, true),
+                           Utils::copyWSSVectorUnique(insurance.continuity_wss, true),
                            Utils::copyMinEnvFlowControlVector(insurance.min_env_flow_controls),
                            insurance.wss_rdm,
                            insurance.water_sources_rdm,
@@ -160,10 +173,9 @@ void InsuranceStorageToROF::priceInsurance(int week) {
             continuityStep(w, r);
 
             // Get WSS' approximate rof from storage-rof-table.
-            auto wss_rofs = InsuranceStorageToROF::calculateShortTermROFTable(
-                        w, continuity_wss, n_wss);
+            auto wss_rofs = InsuranceStorageToROF::calculateShortTermROFTable(w);
 
-            for (int u = 0; u < continuity_wss.size(); ++u) {
+            for (size_t u = 0; u < continuity_wss.size(); ++u) {
                 continuity_wss[u]->setRisk_of_failure(wss_rofs[u]);
             }
 
@@ -201,9 +213,15 @@ void InsuranceStorageToROF::setRealization(unsigned long realization_id, vector<
                                            vector<double> &water_sources_rdm, vector<double> &policy_rdm) {
     ContinuityModel::setRealization(realization_id, wss_rdm, water_sources_rdm);
 
+    // Create raw pointer vector for drought mitigation policies (they don't take ownership)
+    vector<WaterSupplySystems*> wss_raw;
+    for (const auto& wss_ptr : continuity_wss) {
+        wss_raw.push_back(wss_ptr.get());
+    }
+    
     // Pass corresponding wss to drought mitigation instruments.
     for (DroughtMitigationPolicy *dmp : this->drought_mitigation_policies) {
-        dmp->addSystemComponents(continuity_wss, continuity_water_sources, min_env_flow_controls);
+        dmp->addSystemComponents(wss_raw, continuity_water_sources, min_env_flow_controls);
         dmp->setRealization(realization_id, wss_rdm, water_sources_rdm,
                             policy_rdm);
     }
@@ -216,19 +234,17 @@ void InsuranceStorageToROF::setRealization(unsigned long realization_id, vector<
  * @todo This is mostly a copy and paste from ContinuityModelROF.cpp, so
  * although I'm now on a fix this should be done in a better way at some point.
  */
-vector<double> InsuranceStorageToROF::calculateShortTermROFTable(int week,
-                                                              const vector<WaterSupplySystems *> &wss,
-                                                              const int &n_wss) {
+vector<double> InsuranceStorageToROF::calculateShortTermROFTable(int week) {
     // vector where risks of failure will be stored.
     vector<double> risk_of_failure((unsigned long) n_wss, 0.0);
     double m;
-    for (int u = 0; u < n_wss; ++u) {
+    for (size_t u = 0; u < continuity_wss.size(); ++u) {
         // Get current stored volume for wss u.
         double wss_storage =
-                wss[u]->getTotal_stored_volume();
+                continuity_wss[u]->getTotal_stored_volume();
         // Ratio of current and status-quo wss storage capacities
         //        double m = current_and_base_storage_capacity_ratio[u];
-        m = wss[u]->getTotal_storage_capacity() /
+        m = continuity_wss[u]->getTotal_storage_capacity() /
             wss_base_storage_capacity[u];
         // Calculate base table tier that contains the desired ROF by
         // shifting the table around based on new infrastructure -- the

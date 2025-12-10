@@ -32,7 +32,7 @@ private:
     double unfulfilled_demand = 0;
     double net_stream_inflow = 0;
     double price_rdm_multiplier = 1.;
-    double *available_treated_flow_rate = new double[0];
+    vector<double> available_treated_flow_rate;
     bool used_for_realization = true;
     unsigned short n_storage_sources = 0;
     vector<WaterSource *> water_sources;
@@ -130,7 +130,7 @@ public:
 
     bool operator>(const Utility *other) const;
 
-    static bool compById(Utility *a, Utility *b);
+    static bool compById(const std::shared_ptr<Utility>& a, const std::shared_ptr<Utility>& b);
 
     void setRisk_of_failure(double risk_of_failure);
 

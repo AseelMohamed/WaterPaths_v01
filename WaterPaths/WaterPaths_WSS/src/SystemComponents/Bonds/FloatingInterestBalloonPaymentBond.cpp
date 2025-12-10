@@ -41,12 +41,18 @@ FloatingInterestBalloonPaymentBond::FloatingInterestBalloonPaymentBond(const int
  * @return
  */
 double FloatingInterestBalloonPaymentBond::getDebtService(int week) {
+    /// CRITICAL FIX: Prevent multiple payments in the same week
+    if (last_payment_week == week) {
+        return 0.;  // Already paid this week
+    }
+    
     /// If there are still payments to be made, repayment has begun, and this is a payment week, issue payment.
     if (n_payments_made < n_payments &&
         week > week_issued + begin_repayment_after_n_years * WEEKS_IN_YEAR  - 1 &&
         std::find(pay_on_weeks.begin(), pay_on_weeks.end(), Utils::weekOfTheYear(week)) != pay_on_weeks.end()) {
 
         n_payments_made++;
+        last_payment_week = week;
         try {
             return cost_of_capital * interest_rate_series.at((unsigned long) n_payments_made - 1);
         } catch(out_of_range &e) {

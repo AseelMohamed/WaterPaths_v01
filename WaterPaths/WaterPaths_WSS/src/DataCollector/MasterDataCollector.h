@@ -56,6 +56,9 @@ public:
     void
     printWaterSourcesOutputTabular(int week_i, int week_f, string file_name);
 
+    void
+    printWSSOutputCompact(int week_i, int week_f, string file_name);
+
     void setOutputDirectory(string io_directory);
 
     void printPathways(string file_name);
@@ -64,8 +67,9 @@ public:
             vector<WaterSource *> water_sources_realization,
             vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization,
             vector<Utility *> utilities_realization,
-            vector<WaterSupplySystems *> wss_realization,
-            unsigned long r);
+            const vector<std::unique_ptr<WaterSupplySystems>> &wss_realization,
+            unsigned long r,
+            const vector<double> &rdm_factors = vector<double>());
 
     void removeRealization(unsigned long r);
 

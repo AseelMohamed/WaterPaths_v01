@@ -13,14 +13,14 @@
 ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
                                        const Graph &water_sources_graph,
                                        const vector<vector<int>> &water_sources_to_wss,
-                                       vector<WaterSupplySystems *> wss,
+                                       vector<std::unique_ptr<WaterSupplySystems>> &&wss,
                                        vector<MinEnvFlowControl *> min_env_flow_controls,
                                        vector<double> &wss_rdm,
                                        vector<double> &water_sources_rdm,
                                        unsigned long total_weeks_simulation,
                                        const int use_precomputed_rof_tables,
                                        const unsigned long realization_id)
-        : ContinuityModel(water_sources, wss, min_env_flow_controls,
+        : ContinuityModel(water_sources, std::move(wss), min_env_flow_controls,
                           water_sources_graph, water_sources_to_wss,
                           wss_rdm,
                           water_sources_rdm,
@@ -28,11 +28,11 @@ ContinuityModelROF::ContinuityModelROF(vector<WaterSource *> water_sources,
           n_topo_sources((int) sources_topological_order.size()),
           use_precomputed_rof_tables(use_precomputed_rof_tables) {
     // update wss' total stored volume
-    for (WaterSupplySystems *u : this->continuity_wss) {
+    for (const auto& u : this->continuity_wss) {
         u->updateTotalAvailableVolume();
         // Mark ROF WSS as not used for realization to prevent bond issuance
         // ROF models should only calculate risks, not issue actual bonds
-        const_cast<WaterSupplySystems*>(u)->setUsedForRealization(false);
+        u->setUsedForRealization(false);
     }
 
     for (int u = 0; u < n_wss; ++u) {
@@ -117,11 +117,25 @@ vector<double> ContinuityModelROF::calculateLongTermROF(int week) {
             // than the fail ration, increase the number of failed years of
             // that WSS by 1 (FAILURE).
             for (int u = 0; u < n_wss; ++u) {
-                double total_stored_volume = continuity_wss[u]->getTotal_stored_volume();
-                double total_storage_capacity = continuity_wss[u]->getTotal_storage_capacity();
                 double storage_ratio = continuity_wss[u]->getStorageToCapacityRatio();
-                double unrestricted_demand = continuity_wss[u]->getUnrestrictedDemand();
                 double treatment_capacity = continuity_wss[u]->getTotal_treatment_capacity();
+                
+                // DEBUG: For WSS 1 at week 401, show detailed capacity breakdown
+                if (week == 401 && yr == 0 && u == 1) {
+                    printf("\n[CAPACITY-DEBUG-IMPORTED] WSS=%d, week=%d, yr=%d:\n", u, week, yr);
+                    printf("  Total treatment capacity reported: %.17f MGD\n", treatment_capacity);
+                    printf("  Number of water sources: %zu\n", continuity_wss[u]->getWater_sources().size());
+                    int ws_idx = 0;
+                    for (const auto* ws : continuity_wss[u]->getWater_sources()) {
+                        printf("    WS[%d]: id=%d, capacity=%.17f MGD\n", 
+                               ws_idx++, ws->id, ws->getTotal_treatment_capacity());
+                    }
+                    printf("\n");
+                }
+                
+                // Get demand, but use current week's demand if actual_week is out of bounds
+                // This happens near end of simulation when looking ahead for ROF
+                double unrestricted_demand = continuity_wss[u]->getUnrestrictedDemand();
                 
                 auto storage_condition = storage_ratio <= STORAGE_CAPACITY_RATIO_FAIL;
                 auto treatment_condition = unrestricted_demand > 0.9 * treatment_capacity;
@@ -270,11 +284,12 @@ vector<double> ContinuityModelROF::calculateShortTermROFFullCalcs(int week) {
             // than the fail ration, increase the number of failed years of
             // that utility by 1 (FAILURE).
             for (int u = 0; u < n_wss; ++u) {
-                double total_stored_volume = continuity_wss[u]->getTotal_stored_volume();
-                double total_storage_capacity = continuity_wss[u]->getTotal_storage_capacity();
                 double storage_ratio = continuity_wss[u]->getStorageToCapacityRatio();
-                double unrestricted_demand = continuity_wss[u]->getUnrestrictedDemand();
                 double treatment_capacity = continuity_wss[u]->getTotal_treatment_capacity();
+                
+                // Get demand, but use current week's demand if actual_week is out of bounds
+                // This happens near end of simulation when looking ahead for ROF
+                double unrestricted_demand = continuity_wss[u]->getUnrestrictedDemand();
                 
                 auto storage_condition = storage_ratio <= STORAGE_CAPACITY_RATIO_FAIL;
                 auto treatment_condition = unrestricted_demand > 0.9 * treatment_capacity;
@@ -493,13 +508,13 @@ void ContinuityModelROF::resetWSSAndReservoirs(int rof_type) {
         }
 
     // update wss combined storage.
-    for (WaterSupplySystems *u : continuity_wss) {
+    for (auto& u : continuity_wss) {
         u->updateTotalAvailableVolume();
     }
     
     // Synchronize updated values from continuity WSS to realization WSS
     // This ensures data collection gets the updated values
-    for (int i = 0; i < continuity_wss.size() && i < realization_wss.size(); ++i) {
+    for (size_t i = 0; i < continuity_wss.size() && i < realization_wss.size(); ++i) {
         double continuity_volume = continuity_wss[i]->getTotal_available_volume();
         realization_wss[i]->setTotal_available_volume(continuity_volume);
     }
@@ -522,8 +537,12 @@ void ContinuityModelROF::connectRealizationWaterSources(
  * @param realization_wss
  */
 void ContinuityModelROF::connectRealizationWSS(
-        const vector<WaterSupplySystems *> &realization_wss) {
-    ContinuityModelROF::realization_wss = realization_wss;
+        const vector<std::unique_ptr<WaterSupplySystems>> &realization_wss_unique) {
+    // Convert unique_ptr vector to raw pointer vector (ROF doesn't own, just observes)
+    realization_wss.clear();
+    for (const auto& wss_ptr : realization_wss_unique) {
+        realization_wss.push_back(wss_ptr.get());
+    }
 }
 
 /**

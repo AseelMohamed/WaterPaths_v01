@@ -4,6 +4,7 @@
 
 #include <numeric>
 #include <algorithm>
+#include <limits>
 #include "ObjectivesCalculator.h"
 #include "Utils.h"
 
@@ -54,21 +55,17 @@ double ObjectivesCalculator::calculateReliabilityObjective(
                                        0.0);
 
     // Returns year with most realization failures, divided by the number of realizations (reliability objective).
-    if (check_non_zero > 0) {
-        double obj_value =
-                1. - (double) *max_element(year_reliabilities.begin(),
-                                           year_reliabilities.end()) /
-                     n_realizations;
+    double obj_value =
+            1. - (double) *max_element(year_reliabilities.begin(),
+                                       year_reliabilities.end()) /
+                 n_realizations;
 
-        if (std::isinf(obj_value)) {
-            string error_inf = "Infinite reliability.";
-            throw logic_error(error_inf.c_str());
-        } else {
-            return obj_value;
-        }
-    } else {
-        return 1.;
+    if (std::isinf(obj_value)) {
+        string error_inf = "Infinite reliability.";
+        throw logic_error(error_inf.c_str());
     }
+    
+    return obj_value;
 }
 
 double ObjectivesCalculator::calculateRestrictionFrequencyObjective(
@@ -130,12 +127,12 @@ double ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective(
     }
 
     double infrastructure_npc = 0;
-    // WSS FIX: Infrastructure cost is cumulative and stored weekly
-    // We only need the FINAL value (last week), not the sum of all weeks
-    // The cost accumulates as bonds are issued, so the last value = total NPC
+    // NPC is cumulative, so take only the final value (last week)
     for (const unsigned long &r : realizations) {
-        if (!utility_data[r]->getNet_present_infrastructure_cost().empty()) {
-            infrastructure_npc += utility_data[r]->getNet_present_infrastructure_cost().back();
+        const auto& npc_vector = utility_data[r]->getNet_present_infrastructure_cost();
+        if (!npc_vector.empty()) {
+            double realization_npc = npc_vector.back();
+            infrastructure_npc += realization_npc;
         }
     }
     return infrastructure_npc / n_realizations;
@@ -154,10 +151,31 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
         n_realizations = realizations.size();
     }
 
-    unsigned long n_weeks = utility_data[realizations[0]]->getGross_revenues().size();
-    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
-    double discount_rate = utility_data[0]->getUtility()->getInfraDiscountRate();
+    // Use minimum n_weeks across all realizations to prevent reading uninitialized memory
+    unsigned long n_weeks = std::numeric_limits<unsigned long>::max();
+    for (const auto &r : realizations) {
+        n_weeks = std::min(n_weeks,
+                           (unsigned long)utility_data[r]->getGross_revenues().size());
+    }
+    if (n_weeks == std::numeric_limits<unsigned long>::max()) {
+        throw std::runtime_error("No weeks available for peak financial cost objective.");
+    }
 
+#ifndef NDEBUG
+    // In debug builds, ensure consistency across all realizations
+    unsigned long first_weeks = utility_data[realizations[0]]->getGross_revenues().size();
+    for (const auto &r : realizations) {
+        const auto &g = utility_data[r]->getGross_revenues();
+        if (g.size() != first_weeks) {
+            fprintf(stderr, "Warning: Inconsistent number of weeks between realizations in calculatePeakFinancialCostsObjective. "
+                    "Realization %lu has %lu weeks, realization %lu has %lu weeks.\n",
+                    realizations[0], first_weeks, r, (unsigned long)g.size());
+        }
+    }
+#endif
+
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
+    double discount_rate = utility_data[0]->getInfraDiscountRate();
     double realizations_year_debt_payment = 0;
     double realizations_year_cont_fund_contribution = 0;
     double realizations_year_gross_revenue = 1e-6;
@@ -170,15 +188,6 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
     for (const unsigned long &r : realizations) {
         year_financial_costs.assign(n_years, 0.0);
         y = 0;
-        
-        // Check vector sizes and sample values for first realization
-        if (r == 0) {
-            auto &debt = utility_data[r]->getDebt_service_payments();
-            auto &cont = utility_data[r]->getContingency_fund_contribution();
-            auto &rev = utility_data[r]->getGross_revenues();
-            auto &ins = utility_data[r]->getInsurance_contract_cost();
-        }
-        
         for (unsigned long w = 0; w < n_weeks; ++w) {
             // accumulate year's info by summing weekly amounts.
             realizations_year_debt_payment +=
@@ -214,6 +223,7 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
         realization_financial_costs[r] =
                 *max_element(year_financial_costs.begin(),
                              year_financial_costs.end());
+        
         if (realization_financial_costs[r] > 1e10) {
             printf("Absurdly high financial cost in realization %lu.\n", r);
         }
@@ -244,7 +254,29 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
         n_realizations = realizations.size();
     }
 
-    unsigned long n_weeks = utility_data[realizations[0]]->getGross_revenues().size();
+    // Use minimum n_weeks across all realizations to prevent reading uninitialized memory
+    unsigned long n_weeks = std::numeric_limits<unsigned long>::max();
+    for (const auto &r : realizations) {
+        n_weeks = std::min(n_weeks,
+                           (unsigned long)utility_data[r]->getGross_revenues().size());
+    }
+    if (n_weeks == std::numeric_limits<unsigned long>::max()) {
+        throw std::runtime_error("No weeks available for worse case cost objective.");
+    }
+
+#ifndef NDEBUG
+    // In debug builds, ensure consistency across all realizations
+    unsigned long first_weeks = utility_data[realizations[0]]->getGross_revenues().size();
+    for (const auto &r : realizations) {
+        const auto &g = utility_data[r]->getGross_revenues();
+        if (g.size() != first_weeks) {
+            fprintf(stderr, "Warning: Inconsistent number of weeks between realizations in calculateWorseCaseCostsObjective. "
+                    "Realization %lu has %lu weeks, realization %lu has %lu weeks.\n",
+                    realizations[0], first_weeks, r, (unsigned long)g.size());
+        }
+    }
+#endif
+
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
     double discount_rate = utility_data[0]->getUtility()->getInfraDiscountRate();
 
@@ -280,17 +312,19 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
             }
         }
         // store highest year cost as the drought mitigation cost of the realization.
-        worse_year_financial_costs.push_back(*max_element(
-                year_financial_costs.begin(),
-                year_financial_costs.end()));
+        double max_cost = *max_element(
+            year_financial_costs.begin(), 
+            year_financial_costs.end());
+
+        worse_year_financial_costs.push_back(max_cost);
     }
 
     // sort costs to get the worse 1 percentile.
     sort(worse_year_financial_costs.begin(),
          worse_year_financial_costs.end());
 
-    double obj_value = worse_year_financial_costs.at(
-            (unsigned long) floor(WORSE_CASE_COST_PERCENTILE * n_realizations));
+    unsigned long percentile_index = (unsigned long) floor(WORSE_CASE_COST_PERCENTILE * n_realizations);
+    double obj_value = worse_year_financial_costs.at(percentile_index);
 
     if (std::isinf(obj_value)) {
         string error_inf = "Infinite worse case cost.";
@@ -326,115 +360,27 @@ double ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective_WSS(
     
     double total_infrastructure_npc = 0.0;
     
-    // Loop through each WSS
-    for (const auto& wss_realization_data : wss_data) {
-        // Loop through selected realizations for this WSS
-        for (const unsigned long &r : realizations) {
+    // Loop through realizations first, then sum across WSS within each realization
+    for (const unsigned long &r : realizations) {
+        double realization_npc = 0.0;
+        
+        // Sum NPC across all WSS for this realization
+        int wss_idx = 0;
+        for (const auto& wss_realization_data : wss_data) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                // Infrastructure NPC accumulates weekly, so take the final value
+                // NPC is cumulative, so take only the final value (last week)
                 const auto& npc_vector = wss_realization_data[r]->getNet_present_infrastructure_cost();
                 if (!npc_vector.empty()) {
-                    total_infrastructure_npc += npc_vector.back();
+                    double wss_npc = npc_vector.back();
+                    realization_npc += wss_npc;
                 }
             }
+            wss_idx++;
         }
+        total_infrastructure_npc += realization_npc;
     }
-    
-    // Return average across all WSS and realizations
+    // Return average across realizations
     return total_infrastructure_npc / n_realizations;
-}
-
-/**
- * Calculate worst case cost at WSS level, then aggregate across all WSS.
- * For each realization, sum worst case costs across all WSS, then take the 99th percentile.
- * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
- * @param utility_data Utility data collectors (used to safely get discount rate)
- * @param realizations Optional vector of realization indices to include
- * @return 99th percentile worst case cost across realizations
- */
-double ObjectivesCalculator::calculateWorseCaseCostsObjective_WSS(
-        const vector<vector<WSSDataCollector *>>& wss_data,
-        const vector<UtilitiesDataCollector *>& utility_data,
-        vector<unsigned long> realizations) {
-    
-    if (wss_data.empty() || wss_data[0].empty()) {
-        return 0.0;
-    }
-    
-    unsigned long n_realizations = wss_data[0].size();
-    if (realizations.empty()) {
-        realizations = vector<unsigned long>(n_realizations);
-        iota(realizations.begin(), realizations.end(), 0);
-    } else {
-        n_realizations = realizations.size();
-    }
-    
-    unsigned long n_weeks = wss_data[0][realizations[0]]->getGross_revenues().size();
-    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
-    
-    // Get discount rate safely from utility data collector
-    double discount_rate = 0.05; // Default fallback
-    if (!utility_data.empty() && utility_data[realizations[0]] != nullptr &&
-        utility_data[realizations[0]]->getUtility() != nullptr) {
-        discount_rate = utility_data[realizations[0]]->getUtility()->getInfraDiscountRate();
-    }
-    
-    vector<double> worse_year_financial_costs;
-    
-    // For each realization, calculate worst case cost
-    for (const unsigned long &r : realizations) {
-        vector<double> year_financial_costs(n_years, 0.0);
-        
-        // Aggregate financial data across all WSS for this realization
-        for (int y = 0; y < (int)n_years; ++y) {
-            double year_drought_mitigation_cost = 0.0;
-            double year_gross_revenue = 1e-6;
-            double year_end_contingency_fund = 0.0;
-            
-            // Sum weekly values for each WSS across the year
-            for (const auto& wss_realization_data : wss_data) {
-                if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                    for (int w = (int) round(y * WEEKS_IN_YEAR);
-                         w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
-                        
-                        year_drought_mitigation_cost += 
-                            wss_realization_data[r]->getDrought_mitigation_cost()[w];
-                        year_gross_revenue += 
-                            wss_realization_data[r]->getGross_revenues()[w];
-                        
-                        // Contingency fund is utility-wide, but stored in each WSS
-                        // Use the value from the last week of the year
-                        if (w == (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)) - 1) {
-                            year_end_contingency_fund = 
-                                wss_realization_data[r]->getContingency_fund_size()[w];
-                        }
-                    }
-                }
-            }
-            
-            // Calculate year cost: max(drought_cost - contingency_fund, 0) / (revenue * discount_factor)
-            year_financial_costs[y] = 
-                max(year_drought_mitigation_cost - year_end_contingency_fund, 0.0) / 
-                (year_gross_revenue * (1.0 + pow(1.0 + discount_rate, y)));
-        }
-        
-        // Store the worst (maximum) year cost for this realization
-        worse_year_financial_costs.push_back(*max_element(
-            year_financial_costs.begin(), year_financial_costs.end()));
-    }
-    
-    // Sort costs to get the 99th percentile
-    sort(worse_year_financial_costs.begin(), worse_year_financial_costs.end());
-    
-    double obj_value = worse_year_financial_costs.at(
-        (unsigned long) floor(WORSE_CASE_COST_PERCENTILE * n_realizations));
-    
-    if (std::isinf(obj_value)) {
-        string error_inf = "Infinite worse case cost (WSS-level).";
-        throw logic_error(error_inf.c_str());
-    } else {
-        return obj_value;
-    }
 }
 
 /**
@@ -448,8 +394,8 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         const vector<vector<WSSDataCollector *>>& wss_data,
         vector<unsigned long> realizations) {
     
-    if (wss_data.empty() || wss_data[0].empty()) {
-        return 1.0; // No WSS means perfect reliability (no failure)
+    if (wss_data.empty()) {
+        throw std::runtime_error("ERROR: wss_data is empty in calculateReliabilityObjective_WSS");
     }
     
     unsigned long n_realizations = wss_data[0].size();
@@ -460,13 +406,69 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         n_realizations = realizations.size();
     }
     
+    if (realizations.empty()) {
+        throw std::runtime_error("ERROR: realizations vector is empty in calculateReliabilityObjective_WSS");
+    }
+    
+    // Check if first realization data exists
+    if (realizations[0] >= wss_data[0].size() || wss_data[0][realizations[0]] == nullptr) {
+        char error[512];
+        sprintf(error, "ERROR: First realization %lu is invalid or nullptr in wss_data[0] (size=%zu)",
+                realizations[0], wss_data[0].size());
+        throw std::runtime_error(error);
+    }
+    
     unsigned long n_weeks = wss_data[0][realizations[0]]->getCombined_storage().size();
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
     
     vector<double> wss_reliabilities; // Store reliability for each WSS
+    int wss_skipped_no_data = 0;
+    int wss_skipped_no_storage = 0;
+    int wss_processed = 0;
     
     // Calculate reliability for EACH WSS independently
     for (const auto& wss_realization_data : wss_data) {
+        // Check if this WSS has any storage capacity > 0 (actual storage, not flow-through)
+        bool has_storage_data = false;
+        bool has_any_data = false;
+        
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
+                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                
+                if (!storage_vec.empty() && !capacity_vec.empty()) {
+                    has_any_data = true;
+                    
+                    // Check if ANY capacity value is > 0 (actual storage exists)
+                    // Only need to find one non-zero capacity to know this WSS has storage
+                    for (const auto& cap : capacity_vec) {
+                        if (cap > 0.0) {
+                            has_storage_data = true;
+                            break;
+                        }
+                    }
+                    if (has_storage_data) break;
+                }
+            }
+        }
+        
+        // Skip WSS with no storage capacity (e.g., flow-through intakes)
+        // We only skip if we found data but all capacities are zero
+        // If we found NO data at all, something is wrong - don't skip silently
+        if (!has_any_data) {
+            wss_skipped_no_data++;
+            continue;
+        }
+        
+        if (!has_storage_data) {
+            // This WSS has data but no storage capacity - it's a flow-through system
+            wss_skipped_no_storage++;
+            continue;
+        }
+        
+        wss_processed++;
+        
         vector<vector<int>> realizations_year_reliabilities(
                 n_realizations, vector<int>(n_years, NON_INITIALIZED));
         vector<int> year_reliabilities(n_years, 0);
@@ -477,15 +479,9 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
                 const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
                 const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
                 
-                // CRITICAL: Check if data was actually collected (vectors not empty)
+                // Skip if empty
                 if (storage_vec.empty() || capacity_vec.empty()) {
-                    char error[512];
-                    sprintf(error, "ERROR: WSS data collector has empty storage vectors for realization %lu. "
-                            "This means collectData() was not called during simulation. "
-                            "Storage size=%zu, Capacity size=%zu. "
-                            "Check if import_export_rof_tables == EXPORT_ROF_TABLES is skipping data collection.",
-                            r, storage_vec.size(), capacity_vec.size());
-                    throw std::runtime_error(error);
+                    continue;
                 }
                 
                 for (unsigned long y = 0; y < n_years; ++y) {
@@ -527,20 +523,34 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         double check_non_zero = accumulate(year_reliabilities.begin(),
                                            year_reliabilities.end(), 0.0);
         
-        double wss_reliability;
-        if (check_non_zero > 0) {
-            int max_failures = *max_element(year_reliabilities.begin(),
-                                           year_reliabilities.end());
-            wss_reliability = 1.0 - (double)max_failures / n_realizations;
-        } else {
-            wss_reliability = 1.0; // No failures
+        int max_failures = *max_element(year_reliabilities.begin(),
+                                       year_reliabilities.end());
+        
+        // Validate max_failures doesn't exceed n_realizations
+        if (max_failures > (int)n_realizations) {
+            char error[512];
+            sprintf(error, "ERROR: max_failures (%d) exceeds n_realizations (%lu). "
+                    "This indicates a counting error in reliability calculation.",
+                    max_failures, (unsigned long)n_realizations);
+            throw std::runtime_error(error);
         }
         
+        double wss_reliability = 1.0 - (double)max_failures / n_realizations;
         wss_reliabilities.push_back(wss_reliability);
     }
     
-    // Utility reliability = MINIMUM reliability among all its WSS
-    // (utility is only as reliable as its weakest system)
+    // Utility is only as reliable as its weakest system (among those with storage)
+    // Check if wss_reliabilities is empty before calling min_element
+    if (wss_reliabilities.empty()) {
+        // No WSS with storage found - this can happen when:
+        // 1. All WSS are flow-through (no storage capacity)
+        // 2. Data collection was skipped (e.g., during ROF table export mode)
+        // 3. WSS data collectors are not properly initialized
+        // No WSS with storage found - return worst-case reliability
+        // This can happen when data collection was skipped or all WSS are flow-through
+        return 0.0;
+    }
+    
     double utility_reliability = *min_element(wss_reliabilities.begin(),
                                               wss_reliabilities.end());
     

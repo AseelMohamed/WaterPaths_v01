@@ -23,14 +23,17 @@ LevelDebtServiceBond::~LevelDebtServiceBond() = default;
 double LevelDebtServiceBond::getDebtService(int week) {
     /// If there are still payments to be made, repayment has begun,
     /// and this is a payment week, issue payment.
-    if (n_payments_made < n_payments &&
-            week > week_issued + begin_repayment_after_n_years
-                                 * WEEKS_IN_YEAR - 1 &&
-            std::find(pay_on_weeks.begin(), pay_on_weeks.end(),
-                      Utils::weekOfTheYear(week))
-            != pay_on_weeks.end()) {
-
+    bool payments_remaining = n_payments_made < n_payments;
+    bool repayment_started = week > week_issued + begin_repayment_after_n_years * WEEKS_IN_YEAR - 1;
+    bool is_payment_week = std::find(pay_on_weeks.begin(), pay_on_weeks.end(),
+                      Utils::weekOfTheYear(week)) != pay_on_weeks.end();
+    
+    // CRITICAL FIX: Prevent multiple payments in the same week (called multiple times by different WSS)
+    bool already_paid_this_week = (last_payment_week == week);
+    
+    if (payments_remaining && repayment_started && is_payment_week && !already_paid_this_week) {
         n_payments_made++;
+        last_payment_week = week;
         return level_debt_service_payment;
     } else {
         return 0.;

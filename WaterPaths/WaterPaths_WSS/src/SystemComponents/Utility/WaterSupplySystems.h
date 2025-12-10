@@ -155,11 +155,13 @@ public:
     const vector<WaterSource*>& getWater_sources() const; //Checked
     bool isUsedForRealization() const { return used_for_realization; }
     void setUsedForRealization(bool value) { used_for_realization = value; }
+    unsigned long getCurrentRealizationId() const { return current_realization_id; }
 
     // Operational drought response
     void setDemand_multiplier(double demand_multiplier); //checked
     void setDemand_offset(double demand_offset, double offset_rate_per_volume); //checked
     double getRestrictedDemand() const; //checked
+    double getOffset_rate_per_volume() const; //NEW - for transfer cost calculations
     
     // Financial data storage (calculated by Utility, stored in WSS)
     void setWssGrossRevenue(double revenue);
@@ -189,7 +191,11 @@ private:
     double waste_water_discharge = 0;
     double unfulfilled_demand = 0.0;
     double net_stream_inflow = 0.0;
-    double *available_treated_flow_rate = new double[0];
+    double infra_discount_rate = 0.0;  // Realization-specific discount rate for bond NPC calculations
+    unsigned long current_realization_id = 0;  // Track which realization this WSS copy belongs to
+    double bond_term_multiplier = 1.0;  // Realization-specific bond term multiplier
+    double bond_interest_rate_multiplier = 1.0;  // Realization-specific bond interest rate multiplier
+    vector<double> available_treated_flow_rate;
     bool used_for_realization = true;
     unsigned short n_storage_sources = 0;
     vector<WaterSource*> water_sources;

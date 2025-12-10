@@ -21,7 +21,7 @@ private:
 protected:
     int beginning_tier = 0;
     vector<WaterSource *> realization_water_sources;
-    vector<Utility *> realization_utilities;
+    vector<std::shared_ptr<Utility>> realization_utilities;
     vector<Matrix2D<int>> ut_storage_to_rof_table;
 
     vector<vector<double>> table_storage_shift;
@@ -32,7 +32,7 @@ protected:
 
 public:
     ContinuityModelROF(vector<WaterSource *> water_sources, const Graph &water_sources_graph,
-                       const vector<vector<int>> &water_sources_to_utilities, vector<Utility *> utilities,
+                       const vector<vector<int>> &water_sources_to_utilities, vector<std::shared_ptr<Utility>> utilities,
                        vector<MinEnvFlowControl *> min_env_flow_controls, vector<double>& utilities_rdm,
                        vector<double>& water_sources_rdm, unsigned long total_weeks_simulation,
                        const int use_precomputed_rof_tables, const unsigned long realization_id);
@@ -51,7 +51,7 @@ public:
 
     void connectRealizationWaterSources(const vector<WaterSource *> &realization_water_sources);
 
-    void connectRealizationUtilities(const vector<Utility *> &realization_utilities);
+    void connectRealizationUtilities(const vector<std::shared_ptr<Utility>> &realization_utilities);
 
     virtual void updateOnlineInfrastructure(int week);
 

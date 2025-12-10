@@ -708,7 +708,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     rof_triggered_infra_order_caesb_descoberto.push_back(13);
     rofs_infra_caesb_descoberto.push_back(1.1);
-    Utility caesb_descoberto((char *) "CAESB Descoberto", 0,
+    auto caesb_descoberto = std::make_shared<Utility>((char *) "CAESB Descoberto", 0,
                              demand_caesb_descoberto, demand_n_weeks,
                              caesb_descoberto_annual_payment,
                              caesbDescobertoDemandClassesFractions,
@@ -722,7 +722,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                              0.04, // taxa de desconto
                              15, 0.12);
 
-    Utility caesb_tortoSM((char *) "CAESB Torto/Santa Maria", 1,
+    auto caesb_tortoSM = std::make_shared<Utility>((char *) "CAESB Torto/Santa Maria", 1,
                           demand_caesb_tortoSM, demand_n_weeks,
                           caesb_tortoSM_annual_payment,
                           caesbTortoSMDemandClassesFractions,
@@ -737,9 +737,9 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                           15, 0.12);
 
 
-    vector<Utility *> utilities; //vetor que junta as companhias criadas acima
-    utilities.push_back(&caesb_descoberto);
-    utilities.push_back(&caesb_tortoSM);
+    vector<std::shared_ptr<Utility>> utilities; //vetor que junta as companhias criadas acima
+    utilities.push_back(caesb_descoberto);
+    utilities.push_back(caesb_tortoSM);
 
     // Water-source-utility connectivity matrix (each row corresponds to a utility and numbers are water
     // sources IDs.

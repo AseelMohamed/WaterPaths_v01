@@ -32,7 +32,7 @@ public:
 
     void applyPolicy(int week) override;
 
-    void addSystemComponents(vector<Utility *> systems_utilities,
+    void addSystemComponents(vector<std::shared_ptr<Utility>> systems_utilities,
                                  vector<WaterSource *> water_sources,
                                  vector<MinEnvFlowControl *> min_env_flow_controls) override;
 

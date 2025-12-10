@@ -30,11 +30,11 @@ private:
     vector<double> net_stream_inflow;
     vector<double> total_treatment_capacity;
     vector<vector<int>> pathways;
-    const Utility *utility;
+    std::shared_ptr<const Utility> utility;
 
 public:
 
-    explicit UtilitiesDataCollector(const Utility *utility, unsigned long realization);
+    explicit UtilitiesDataCollector(std::shared_ptr<const Utility> utility, unsigned long realization);
 
     UtilitiesDataCollector &operator=(const UtilitiesDataCollector &utility_data_collector);
 

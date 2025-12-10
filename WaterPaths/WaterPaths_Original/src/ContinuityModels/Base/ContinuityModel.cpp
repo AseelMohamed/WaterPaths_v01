@@ -9,7 +9,7 @@
 #include "ContinuityModel.h"
 #include "../../SystemComponents/WaterSources/SequentialJointTreatmentExpansion.h"
 
-ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Utility *> &utilities,
+ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<std::shared_ptr<Utility>> &utilities,
                                  vector<MinEnvFlowControl *> &min_env_flow_controls,
                                  const Graph &water_sources_graph,
                                  const vector<vector<int>> &water_sources_to_utilities,
@@ -81,7 +81,7 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Ut
 
     // Populate vector with utilities capacities and check if all utilities
     // have storage capacity.
-    for (Utility *u : continuity_utilities) {
+    for (auto& u : continuity_utilities) {
         utilities_capacities.push_back(u->getTotal_storage_capacity());
         if (utilities_capacities.back() == 0) {
             char error[1000];
@@ -132,10 +132,7 @@ ContinuityModel::~ContinuityModel() {
         delete ws;
     }
 
-    /// Delete utilities
-    for (auto u : continuity_utilities) {
-        delete u;
-    }
+    /// Utilities are now managed by shared_ptr and will be automatically deleted
 
     /// Delete min env flow controls
     for (auto mef : min_env_flow_controls){
@@ -172,7 +169,7 @@ void ContinuityModel::continuityStep(
      * with the total unrestricted_demand for that week for that water
      * source, and (2) sums the flow contributions of upstream reservoirs.
      */
-    for (Utility *u : continuity_utilities) {
+    for (auto& u : continuity_utilities) {
         u->calculateWastewater_releases(week_demand, wastewater_discharges);
         u->splitDemands(week_demand, demands, apply_demand_buffer);
     }
@@ -212,7 +209,7 @@ void ContinuityModel::continuityStep(
     }
 
     // updates combined storage for utilities.
-    for (Utility *u : continuity_utilities) {
+    for (auto& u : continuity_utilities) {
         u->updateTotalAvailableVolume();
     }
 
@@ -223,7 +220,7 @@ void ContinuityModel::continuityStep(
 void ContinuityModel::setRealization(unsigned long realization_id, vector<double> &utilities_rdm,
                                      vector<double> &water_sources_rdm) {
     if (realization_id != (unsigned) NON_INITIALIZED) {
-        for (Utility *u : continuity_utilities)
+        for (auto& u : continuity_utilities)
             u->setRealization(realization_id, utilities_rdm);
         for (WaterSource *ws : continuity_water_sources)
             ws->setRealization(realization_id, water_sources_rdm);
@@ -255,6 +252,6 @@ const vector<WaterSource *> &ContinuityModel::getContinuity_water_sources() cons
     return continuity_water_sources;
 }
 
-const vector<Utility *> &ContinuityModel::getContinuity_utilities() const {
+const vector<std::shared_ptr<Utility>> &ContinuityModel::getContinuity_utilities() const {
     return continuity_utilities;
 }

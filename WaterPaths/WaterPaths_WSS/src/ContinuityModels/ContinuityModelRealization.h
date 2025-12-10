@@ -18,7 +18,7 @@ public:
             vector<WaterSource *> &water_sources,
             const Graph &water_sources_graph,
             const vector<vector<int>> &water_sources_to_wss,
-            vector<WaterSupplySystems *> &wss,
+            vector<std::unique_ptr<WaterSupplySystems>> &&wss,
             const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
             vector<MinEnvFlowControl *> &min_env_flow_control,
             vector<double>& wss_rdm,

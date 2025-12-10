@@ -32,10 +32,11 @@ private:
     vector<double> total_treatment_capacity;
     vector<vector<int>> pathways;
     const Utility *utility;
+    double infra_discount_rate;  // Store at construction to avoid reading from shared utility during parallel objective calculation
 
 public:
 
-    explicit UtilitiesDataCollector(const Utility *utility, unsigned long realization);
+    explicit UtilitiesDataCollector(const Utility *utility, unsigned long realization, double discount_rate = 0.05);
 
     UtilitiesDataCollector &operator=(const UtilitiesDataCollector &utility_data_collector);
 
@@ -76,6 +77,8 @@ public:
     const vector<double> &getLt_rof() const;
 
     const vector<double> &getRestricted_demand() const;
+    
+    double getInfraDiscountRate() const { return infra_discount_rate; }
 
     void checkForNans() const;
 

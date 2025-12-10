@@ -32,7 +32,7 @@ protected:
 
 public:
     ContinuityModelROF(vector<WaterSource *> water_sources, const Graph &water_sources_graph,
-                       const vector<vector<int>> &water_sources_to_wss, vector<WaterSupplySystems *> wss,
+                       const vector<vector<int>> &water_sources_to_wss, vector<std::unique_ptr<WaterSupplySystems>> &&wss,
                        vector<MinEnvFlowControl *> min_env_flow_controls, vector<double>& wss_rdm,
                        vector<double>& water_sources_rdm, unsigned long total_weeks_simulation,
                        const int use_precomputed_rof_tables, const unsigned long realization_id);
@@ -60,7 +60,7 @@ public:
 
     void connectRealizationWaterSources(const vector<WaterSource *> &realization_water_sources);
 
-    void connectRealizationWSS(const vector<WaterSupplySystems *> &realization_wss);
+    void connectRealizationWSS(const vector<std::unique_ptr<WaterSupplySystems>> &realization_wss_unique);
 
     virtual void updateOnlineInfrastructure(int week);
 

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <sstream>
+#include <omp.h>
 #include "Utility.h"
 #include "WaterSupplySystems.h"
 #include "../../Utils/Utils.h"
@@ -42,14 +43,18 @@ Utility::Utility(
         double demand_buffer,
         vector<vector<int>> water_source_to_wtp,
         vector<double> utility_owned_wtp_capacities,
-        double infra_discount_rate) :
+        double infra_discount_rate,
+        double bond_term,
+        double bond_interest_rate) :
         // Removed operational variables - now in WaterSupplySystems
         wwtp_discharge_rule(wwtp_discharge_rule),
         demands_all_realizations(demands_all_realizations),
         infra_discount_rate(infra_discount_rate),  // Set from constructor parameter
         base_infra_discount_rate(infra_discount_rate),  // Store base rate for RDM multiplication
-        bond_term_multiplier(NON_INITIALIZED),
-        bond_interest_rate_multiplier(NON_INITIALIZED),
+        bond_term_multiplier(bond_term),
+        bond_interest_rate_multiplier(bond_interest_rate),
+        base_bond_term_multiplier(bond_term),
+        base_bond_interest_rate_multiplier(bond_interest_rate),
         id(id),
         number_of_week_demands(number_of_week_demands),
         name(name),
@@ -391,6 +396,8 @@ void Utility::calculateWeeklyAverageWaterPrices(
                 monthly_average_price[month_index] /
                 WEEKS_IN_MONTH;
     }
+    
+    // NOTE: base_weekly_average_volumetric_price storage removed - no RDM scaling applied (matches Original model)
 }
 
 /**
@@ -510,11 +517,8 @@ void Utility::updateContingencyFundAndDebtService(
     if (week_of_year == 0) {
         insurance_purchase = 0.;
     } else if (week_of_year == 1) {
-        //  Only reset infra_net_present_cost for realization models
-        // ROF models should not reset this to avoid corrupting shared bond data
-        if (used_for_realization) {
-            infra_net_present_cost = 0.;
-        }
+        // NOTE: infra_net_present_cost should NOT be reset - it accumulates throughout simulation
+        // Only reset current_debt_payment which is a per-week value
         current_debt_payment = 0.;
     }
 
@@ -566,9 +570,9 @@ void Utility::updateContingencyFundAndDebtService(
 
     resetDroughtMitigationVariables();
 
-    // Calculate current debt payment to be made on that week (if first
-    // week of year), if any.
-    current_debt_payment = updateCurrent_debt_payment(week);
+    // NOTE: current_debt_payment calculation moved to updateUtilityFinancialCalculations()
+    // to avoid duplicate calls that would exhaust bond payments prematurely.
+    // Do NOT call updateCurrent_debt_payment(week) here!
     
 }
 
@@ -615,6 +619,10 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
     double total_wss_drought_cost = 0.0;
     double avg_demand_multiplier = 0.0;
     double total_demand_offset = 0.0;
+    // Track aggregated losses for contingency fund (instead of recalculating with averages)
+    double total_revenue_losses = 0.0;
+    double total_transfer_costs = 0.0;
+    double total_recouped = 0.0;
     
     // Use passed realization WSS (thread-safe - each realization has its own copies)
     size_t num_wss = realization_wss.size();
@@ -646,6 +654,7 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         double wss_unfulfilled = wss->getUnfulfilled_demand();
         double wss_demand_mult = wss->getDemand_multiplier();
         double wss_offset = wss->getDemand_offset();
+        double wss_offset_rate = wss->getOffset_rate_per_volume();
         
         // Calculate WSS-specific gross revenue
         double wss_gross_revenue = wss_restricted * current_price;
@@ -653,8 +662,9 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         // Calculate WSS-specific drought mitigation costs
         double lost_demand_vol_sales = (wss_unrestricted * (1 - wss_demand_mult) + wss_unfulfilled);
         double revenue_losses = lost_demand_vol_sales * unrestricted_price;
-        double transfer_costs = wss_offset * (offset_rate_per_volume - unrestricted_price);
+        double transfer_costs = wss_offset * (wss_offset_rate - unrestricted_price);
         double recouped_loss_price_surcharge = wss_restricted * (current_price - unrestricted_price);
+        // NOTE: Do NOT subtract insurance_payout here - it gets subtracted once at utility level
         double wss_drought_cost = max(revenue_losses + transfer_costs - recouped_loss_price_surcharge, 0.0);
         
         // Store WSS-level financial data (for data collection and objective calculations)
@@ -669,6 +679,10 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         total_wss_drought_cost += wss_drought_cost;
         avg_demand_multiplier += wss_demand_mult;
         total_demand_offset += wss_offset;
+        // Aggregate actual losses (don't recalculate with averages later)
+        total_revenue_losses += revenue_losses;
+        total_transfer_costs += transfer_costs;
+        total_recouped += recouped_loss_price_surcharge;
     }
     
     // Calculate average demand multiplier
@@ -691,9 +705,8 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
     if (week_of_year == 0) {
         insurance_purchase = 0.0;
     } else if (week_of_year == 1) {
-        if (used_for_realization) {
-            infra_net_present_cost = 0.0;
-        }
+        // NOTE: infra_net_present_cost should NOT be reset - it accumulates throughout simulation
+        // Only reset current_debt_payment which is a per-week value
         current_debt_payment = 0.0;
     }
     
@@ -701,16 +714,16 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
     double projected_fund_contribution = percent_contingency_fund_contribution *
                                         total_unrestricted_demand * unrestricted_price;
     
-    double total_revenue_losses = total_unrestricted_demand * unrestricted_price - total_wss_gross_revenue;
-    double total_transfer_costs = total_demand_offset * (offset_rate_per_volume - unrestricted_price);
-    double total_recouped = total_restricted_demand * (current_price - unrestricted_price);
+    // Use aggregated losses from WSS calculations (already computed above)
+    // Do NOT recalculate with averaged demand_multiplier - that causes incorrect results
+    // The total_revenue_losses, total_transfer_costs, and total_recouped were summed from each WSS
     
     // Update contingency fund (utility-wide)
     contingency_fund = max(contingency_fund + projected_fund_contribution -
                           total_revenue_losses - total_transfer_costs + total_recouped, 0.0);
     
-    // Update drought mitigation cost (aggregated from WSS)
-    drought_mitigation_cost = total_wss_drought_cost;
+    // Update drought mitigation cost (aggregated from WSS, subtract insurance at utility level)
+    drought_mitigation_cost = max(total_wss_drought_cost - insurance_payout, 0.0);
     
     // Fund contribution calculation
     fund_contribution = projected_fund_contribution - total_revenue_losses - 
@@ -719,37 +732,51 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
     resetDroughtMitigationVariables();
     
     // Calculate current debt payment
-    current_debt_payment = updateCurrent_debt_payment(week);
+    current_debt_payment = updateCurrent_debt_payment(week, realization_wss);
+    
 }
 
 void Utility::resetDroughtMitigationVariables() {
     restricted_price = NON_INITIALIZED;
     offset_rate_per_volume = NONE;
     this->demand_offset = NONE;
+    insurance_payout = 0.0;  // Reset payout so it doesn't persist across weeks
 }
 
 /**
  * Calculates total debt payments to be made in a week, if that's the first week
  * of the year.
  * @param week
- * @param debt_payment_streams
- * @return
+ * @param current_wss The water supply systems for the current model (realization or ROF)
+ * @return Total debt payment for this week
  */
-double Utility::updateCurrent_debt_payment(int week) {
+double Utility::updateCurrent_debt_payment(int week, const std::vector<WaterSupplySystems*>& current_wss) {
     double updated_debt_payment = 0;
 
-    // Checks if it's the first week of the year, when outstanding debt
-    // payments should be made.
-    for (Bond *bond : issued_bonds) {
-        updated_debt_payment += bond->getDebtService(week);
+    // THREAD-SAFE FIX: Instead of using global issued_bonds list (which contains bonds from ALL models),
+    // iterate through bonds from the CURRENT model's water sources only.
+    // This prevents accessing deleted bonds when parallel threads destroy their ContinuityModel instances.
+    for (const auto& wss : current_wss) {
+        if (wss == nullptr) continue;
+        
+        const auto& sources = wss->getWater_sources();
+        for (const auto& source : sources) {
+            if (source == nullptr) continue;
+            
+            // Access bonds from the water source using getter method
+            const auto& source_bonds = source->getBonds();
+            for (Bond* bond : source_bonds) {
+                if (bond != nullptr) {
+                    double debt_service = bond->getDebtService(week);
+                    updated_debt_payment += debt_service;
+                }
+            }
+        }
     }
-
+    
     return updated_debt_payment;
 }
 
-/////////////////////////////////////////////////
-// --------------- CHECK THIS --------------- //
-///////////////////////////////////////////////
 
 void Utility::issueBond(int new_infra_triggered, int week) {
     // THREAD-SAFE: Use critical section to prevent race conditions on bond issuance
@@ -817,6 +844,8 @@ void Utility::issueBond(int new_infra_triggered, int week) {
                         
                         bond.issueBond(week, (int) construction_time, bond_term_multiplier,
                                        bond_interest_rate_multiplier);
+                        
+                        // Add bond to issued_bonds so debt service can be calculated
                         issued_bonds.push_back(&bond);
                         
                         // Calculate NPC first
@@ -858,21 +887,23 @@ void Utility::issueBond(int new_infra_triggered, int week) {
 }
 
 // Overloaded version to issue bond for infrastructure in specific WSS
-void Utility::issueBond(int new_infra_triggered, int week, WaterSupplySystems* target_wss) {
+void Utility::issueBond(int new_infra_triggered, int week, WaterSupplySystems* target_wss, double discount_rate,
+                        double bond_term_mult, double bond_interest_rate_mult) {
     // THREAD-SAFE: Use critical section to prevent race conditions on bond issuance
     #pragma omp critical(bond_issuance)
     {
         if (new_infra_triggered != NON_INITIALIZED && target_wss != nullptr) {
-            // Create unique key for global tracking: "utility_id:source_id:wss_id"
+            // Create unique key for global tracking: "utility_id:source_id:wss_id:realization_id"
+            // Including realization_id allows each realization to issue bonds independently
             char bond_key[64];
-            sprintf(bond_key, "%d:%d:%d", id, new_infra_triggered, target_wss->getSystemId());
+            sprintf(bond_key, "%d:%d:%d:%lu", id, new_infra_triggered, target_wss->getSystemId(), 
+                    target_wss->getCurrentRealizationId());
             std::string bond_key_str(bond_key);
             
             // Check if this bond has already been issued globally
             bool should_skip = (globally_issued_bonds.find(bond_key_str) != globally_issued_bonds.end());
             
             if (should_skip) {
-                
                 // THREAD-SAFE: Even though bond was already issued, this realization needs its cost recorded
                 if (used_for_realization && current_realization_id != (unsigned long)NON_INITIALIZED) {
                     auto npc_it = globally_issued_bond_npcs.find(bond_key_str);
@@ -885,8 +916,6 @@ void Utility::issueBond(int new_infra_triggered, int week, WaterSupplySystems* t
                             double current_wss_npc = target_wss->getWssInfrastructureNPC();
                             target_wss->setWssInfrastructureNPC(current_wss_npc + npc);
                         }
-                    } else {
-                        // printf("ERROR [WSS] Bond %s marked as issued but NPC not found in global map!\n", bond_key);
                     }
                 }
             } else {
@@ -902,7 +931,6 @@ void Utility::issueBond(int new_infra_triggered, int week, WaterSupplySystems* t
             }
             
             if (target_source) {
-                
                 // Issue bond from thread-local source but don't add pointer to issued_bonds
                 // This avoids the problem of persistent storage while still tracking costs
                 try {
@@ -910,30 +938,37 @@ void Utility::issueBond(int new_infra_triggered, int week, WaterSupplySystems* t
                     if (!bond.isIssued()) {
                         double construction_time = target_source->construction_time;
                         
-                        bond.issueBond(week, (int) construction_time, bond_term_multiplier,
-                                       bond_interest_rate_multiplier);
+                        // Use passed multipliers (realization-specific from WSS) instead of member variables (shared)
+                        bond.issueBond(week, (int) construction_time, bond_term_mult,
+                                       bond_interest_rate_mult);
                         
-                        // Calculate NPC first
-                        double npc = bond.getNetPresentValueAtIssuance(infra_discount_rate, week);
+                        // Add bond to issued_bonds so debt service can be calculated
+                        issued_bonds.push_back(&bond);
+                        
+                        // Calculate NPC using realization-specific discount rate passed from WSS
+                        double npc = bond.getNetPresentValueAtIssuance(discount_rate, week);
                         
                         // Mark this bond as globally issued and store its NPC
                         globally_issued_bonds.insert(bond_key_str);
                         globally_issued_bond_npcs[bond_key_str] = npc;
                         
-                        // THREAD-SAFE: Only accumulate costs for realization models
+                        // THREAD-SAFE: Accumulate NPC in WSS object (realization-isolated)
+                        // Each realization has its own WSS copy, so no race condition
+                        target_wss->setWssInfrastructureNPC(npc);  // setWssInfrastructureNPC now accumulates
+                        // double old_wss_npc = target_wss->getWssInfrastructureNPC();
+                        
+                        // LEGACY: Also track in utility for backwards compatibility
+                        // But note: this will have race conditions if used across realizations
                         if (used_for_realization) {
+                            double old_util_npc = infra_net_present_cost;
                             infra_net_present_cost += npc;
-                            
-                            // THREAD-SAFE: Also track per-realization cost
-                            if (current_realization_id != (unsigned long)NON_INITIALIZED) {
-                                realization_infra_costs[current_realization_id] += npc;
-                            }
-                            
-                            // NEW: Track infrastructure NPC at WSS level
-                            if (target_wss) {
-                                double current_wss_npc = target_wss->getWssInfrastructureNPC();
-                                target_wss->setWssInfrastructureNPC(current_wss_npc + npc);
-                            }
+                            // THREAD-SAFE: Track per-realization cost using WSS's realization ID (not utility's)
+                            // Use target_wss->getCurrentRealizationId() because utility's current_realization_id
+                            // is shared and gets overwritten by multiple threads
+                            unsigned long wss_realization_id = target_wss->getCurrentRealizationId();
+                            if (wss_realization_id != (unsigned long)NON_INITIALIZED) {
+                                double old_real_npc = realization_infra_costs[wss_realization_id];
+                                realization_infra_costs[wss_realization_id] += npc;                            }
                         }
                     } else {
                         // Still mark it globally to prevent future attempts
@@ -986,6 +1021,19 @@ void Utility::setDemand_offset(double demand_offset, double offset_rate_per_volu
  * @param r
  */
 void Utility::setRealization(unsigned long r, vector<double> &rdm_factors) {
+    // THREAD-SAFE: DO NOT clear global bond tracking here!
+    // globally_issued_bonds and globally_issued_bond_npcs are shared across ALL realizations
+    // to prevent duplicate bond issuance. Clearing them here causes race conditions where
+    // different threads see inconsistent state.
+    //
+    // These globals should only be cleared ONCE before running all realizations (in Problem),
+    // not per-realization. Each realization will check if a bond was globally issued and either:
+    // 1) Issue it for the first time and mark it globally
+    // 2) Reuse the NPC from the global map if already issued
+    //
+    // issued_bonds can still be cleared per-utility since each thread gets its own utility objects
+    issued_bonds.clear();
+    
     // Prefer operating on non-owning WSS references that point to realization-specific
     // WaterSupplySystems copies (populated by Simulation::createContinuityModels).
     // Fall back to owned water_supply_systems if refs are not set.
@@ -1026,18 +1074,48 @@ void Utility::setRealization(unsigned long r, vector<double> &rdm_factors) {
         realization_infra_costs[r] = 0.0;
     }
     
+    // Reset all financial state variables to prevent accumulation across realizations
+    // Since utilities are shared across threads, each realization must start with clean state
+    gross_revenue = 0.0;
+    current_debt_payment = 0.0;
+    fund_contribution = 0.0;
+    contingency_fund = 0.0;
+    drought_mitigation_cost = 0.0;
+    insurance_payout = 0.0;
+    insurance_purchase = 0.0;
+    infra_net_present_cost = 0.0;
+    
     bond_interest_rate_multiplier = rdm_factors.at(1);
     bond_term_multiplier = rdm_factors.at(2);
     
     // THREAD-SAFE FIX: Apply RDM multiplier to BASE discount rate (not accumulated)
     // This prevents accumulation when setRealization is called multiple times on shared utility
     infra_discount_rate = base_infra_discount_rate * rdm_factors.at(3);
-    price_rdm_multiplier = rdm_factors.at(4);
+    // NOTE: price_rdm_multiplier (rdm_factors.at(4)) is NOT applied to match Original model behavior
+    // Prices remain at their base values without RDM scaling
 
-    for (double &awp : weekly_average_volumetric_price) {
-        awp *= price_rdm_multiplier;
-    }
+}
 
+void Utility::clearGlobalBondTracking() {
+    // Clear global bond tracking before running realizations
+    // This must be called ONCE before the parallel region starts, not per-realization
+    globally_issued_bonds.clear();
+    globally_issued_bond_npcs.clear();
+}
+
+void Utility::resetFinancialState() {
+    // Reset all financial state variables to zero
+    // Called at the start of each realization in ordered fashion to prevent race conditions
+    gross_revenue = 0.0;
+    current_debt_payment = 0.0;
+    fund_contribution = 0.0;
+    contingency_fund = 0.0;
+    drought_mitigation_cost = 0.0;
+    insurance_payout = 0.0;
+    insurance_purchase = 0.0;
+    infra_net_present_cost = 0.0;
+    utility_unrestricted_demand = 0.0;
+    utility_restricted_demand = 0.0;
 }
 
 //========================= GETTERS AND SETTERS =============================//
@@ -1084,18 +1162,8 @@ double Utility::getGrossRevenue() const {
 }
 
 double Utility::getInfrastructure_net_present_cost() const {
-    // THREAD-SAFE: Return per-realization cost if realization ID is set
-    // This isolates costs for each realization's data collector
-    if (current_realization_id != (unsigned long)NON_INITIALIZED) {
-        auto it = realization_infra_costs.find(current_realization_id);
-        if (it != realization_infra_costs.end()) {
-            return it->second;
-        }
-        // If realization not found in map yet, return 0 (no costs accumulated yet)
-        return 0.0;
-    }
-    
-    // Fall back to global accumulated cost if no realization is set
+    // Return the main accumulated infrastructure net present cost
+    // This value is accumulated whenever bonds are issued (in used_for_realization mode)
     return infra_net_present_cost;
 }
 
@@ -1142,11 +1210,15 @@ double Utility::waterPrice(int week) {
 }
 
 void Utility::setRestricted_price(double restricted_price) {
-    Utility::restricted_price = restricted_price * price_rdm_multiplier;
+    // NOTE: price_rdm_multiplier NOT applied to match Original model behavior
+    Utility::restricted_price = restricted_price;
 }
 
 void Utility::setNoFinancialCalculations() {
     used_for_realization = false;
+    // Clear any bonds that may have been issued during ROF table generation
+    // ROF models should not persist bonds into realization runs
+    issued_bonds.clear();
 }
 
 double Utility::getUnfulfilled_demand() const {
@@ -1163,6 +1235,10 @@ const InfrastructureManager &Utility::getInfrastructure_construction_manager() c
 
 double Utility::getInfraDiscountRate() const {
     return infra_discount_rate;
+}
+
+double Utility::getBaseInfraDiscountRate() const {
+    return base_infra_discount_rate;
 }
 
 double Utility::getTotal_storage_capacity() const {

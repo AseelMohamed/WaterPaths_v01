@@ -38,11 +38,6 @@ public:
             const vector<vector<WSSDataCollector *>>& wss_data,
             const vector<UtilitiesDataCollector *>& utility_data,
             vector<unsigned long> realizations = vector<unsigned long>(0));
-
-    static double calculateWorseCaseCostsObjective_WSS(
-            const vector<vector<WSSDataCollector *>>& wss_data,
-            const vector<UtilitiesDataCollector *>& utility_data,
-            vector<unsigned long> realizations = vector<unsigned long>(0));
     
     static double calculateReliabilityObjective_WSS(
             const vector<vector<WSSDataCollector *>>& wss_data,

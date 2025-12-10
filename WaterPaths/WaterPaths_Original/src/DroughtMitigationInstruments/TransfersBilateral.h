@@ -28,7 +28,7 @@ public:
 
     void applyPolicy(int week) override;
 
-    void addSystemComponents(vector<Utility *> utilities,
+    void addSystemComponents(vector<std::shared_ptr<Utility>> utilities,
                              vector<WaterSource *> water_sources,
                              vector<MinEnvFlowControl *> min_env_flow_controls) override;
 
@@ -37,7 +37,7 @@ public:
                    vector<double> &water_sources_rdm,
                    vector<double> &policy_rdm) override;
 
-    double performTransfer(Utility *sender, Utility *receiver,
+    double performTransfer(const std::shared_ptr<Utility>& sender, const std::shared_ptr<Utility>& receiver,
                          double pumping_capacity,
                          int week) const;
 

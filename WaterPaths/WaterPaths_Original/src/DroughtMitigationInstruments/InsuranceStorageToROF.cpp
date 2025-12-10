@@ -6,10 +6,10 @@
 #include "InsuranceStorageToROF.h"
 #include "../Utils/Utils.h"
 
-InsuranceStorageToROF::InsuranceStorageToROF(const int id, vector<WaterSource *> &water_sources,
+InsuranceStorageToROF::InsuranceStorageToROF(int id, vector<WaterSource *> &water_sources,
                                              const Graph &water_sources_graph,
                                              const vector<vector<int>> &water_sources_to_utilities,
-                                             vector<Utility *> &utilities,
+                                             vector<std::shared_ptr<Utility>> &utilities,
                                              vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                                              vector<MinEnvFlowControl *> min_env_flow_controls,
                                              vector<vector<double>>& utilities_rdm,
@@ -32,9 +32,9 @@ InsuranceStorageToROF::InsuranceStorageToROF(const int id, vector<WaterSource *>
           drought_mitigation_policies(Utils::copyDroughtMitigationPolicyVector(drought_mitigation_policies))
 {
 
-    for (Utility *u : utilities) utilities_ids.push_back(u->id);
+    for (auto& u : utilities) utilities_ids.push_back(u->id);
 
-    for (Utility *u : continuity_utilities) {
+    for (auto& u : continuity_utilities) {
         u->clearWaterSources();
         u->resetTotal_storage_capacity();
     }
@@ -120,15 +120,12 @@ void InsuranceStorageToROF::applyPolicy(int week) {
     }
 }
 
-void InsuranceStorageToROF::addSystemComponents(vector<Utility *> utilities,
+void InsuranceStorageToROF::addSystemComponents(vector<std::shared_ptr<Utility>> utilities,
                                                 vector<WaterSource *> water_sources,
                                                 vector<MinEnvFlowControl *> min_env_flow_controls) {
-    DroughtMitigationPolicy::realization_utilities = vector<Utility *>(utilities.size());
-    for (int i : utilities_ids) {
-        DroughtMitigationPolicy::realization_utilities[i] = utilities[i];
-    }
+    DroughtMitigationPolicy::realization_utilities = utilities;
 
-    for (Utility *u : utilities) {
+    for (auto& u : utilities) {
         utility_base_storage_capacity.push_back(u->getTotal_storage_capacity());
     }
     current_storage_table_shift = vector<double>(utilities.size());
@@ -218,7 +215,7 @@ void InsuranceStorageToROF::setRealization(unsigned long realization_id, vector<
  * although I'm now on a fix this should be done in a better way at some point.
  */
 vector<double> InsuranceStorageToROF::calculateShortTermROFTable(int week,
-                                                              const vector<Utility *> &utilities,
+                                                              const vector<std::shared_ptr<Utility>> &utilities,
                                                               const int &n_utilities) {
     // vector where risks of failure will be stored.
     vector<double> risk_of_failure((unsigned long) n_utilities, 0.0);

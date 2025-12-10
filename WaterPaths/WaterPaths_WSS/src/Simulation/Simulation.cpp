@@ -237,7 +237,7 @@ void Simulation::createContinuityModels(unsigned long realization,
                     drought_mitigation_policies);
     
     // Extract water supply systems from utilities for realization model
-    vector<WaterSupplySystems *> wss_realization;
+    vector<std::unique_ptr<WaterSupplySystems>> wss_realization;
     vector<MinEnvFlowControl *> min_env_flow_controls_realization;
     vector<vector<int>> water_sources_to_wss_mapping;
 
@@ -249,8 +249,8 @@ void Simulation::createContinuityModels(unsigned long realization,
         // Copy WSS from utilities
         for (auto* utility : utilities) {
             for (const auto& wss : utility->getWaterSupplySystems()) {
-                // Create copies of WSS for this realization
-                wss_realization.push_back(new WaterSupplySystems(*wss));
+                // Create copies of WSS for this realization using unique_ptr
+                wss_realization.push_back(std::make_unique<WaterSupplySystems>(*wss));
             }
         }
         
@@ -264,7 +264,7 @@ void Simulation::createContinuityModels(unsigned long realization,
                 water_sources_realization,
                 water_sources_graph,
                 water_sources_to_wss_mapping,  // Now properly maps water sources to individual WSS
-                wss_realization,
+                std::move(wss_realization),
                 drought_mitigation_policies_realization,
                 min_env_flow_controls_realization,
                 wss_rdm.at(realization),
@@ -283,14 +283,14 @@ void Simulation::createContinuityModels(unsigned long realization,
                 Utils::copyWaterSourceVector(water_sources);
         
         // Create fresh WSS copies for ROF model (from original utilities, not realization)
-        vector<WaterSupplySystems *> wss_rof;
+        vector<std::unique_ptr<WaterSupplySystems>> wss_rof;
         for (auto* utility : utilities) {
             for (const auto& wss : utility->getWaterSupplySystems()) {
-                WaterSupplySystems* wss_copy = new WaterSupplySystems(*wss);
+                auto wss_copy = std::make_unique<WaterSupplySystems>(*wss);
                 // Mark ROF WSS as NOT used for realization BEFORE passing to constructor
                 // This prevents them from trying to access realization-specific demand data they don't need
                 wss_copy->setUsedForRealization(false);
-                wss_rof.push_back(wss_copy);
+                wss_rof.push_back(std::move(wss_copy));
             }
         }
         
@@ -302,7 +302,7 @@ void Simulation::createContinuityModels(unsigned long realization,
                 water_sources_rof,
                 water_sources_graph,
                 water_sources_to_wss_mapping,  // Use the same WSS-level mapping as realization model
-                wss_rof,
+                std::move(wss_rof),
                 min_env_flow_controls_rof,
                 wss_rdm.at(realization),
                 water_sources_rdm.at(realization),
@@ -313,10 +313,9 @@ void Simulation::createContinuityModels(unsigned long realization,
         // Initialize rof models by connecting it to realization water sources and WSS for observation
         rof_model->connectRealizationWaterSources(water_sources_realization);
         
-        // Connect ROF model to realization WSS INSIDE critical section
-        // This prevents race conditions where one thread accesses wss_realization pointers
-        // while another thread is still initializing the demand_series_realization vectors
-        rof_model->connectRealizationWSS(wss_realization);
+        // Connect ROF model to realization WSS (now owned by realization_model) INSIDE critical section
+        // Access the WSS from the realization model that now owns them
+        rof_model->connectRealizationWSS(realization_model->getContinuity_wss());
     }
 
     // Pass ROF tables to continuity model
@@ -416,6 +415,11 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
     string error_file_name = "error_reals";
     string error_file_content = "#";
 
+    // THREAD-SAFE: Clear global bond tracking BEFORE parallel region starts
+    // This ensures all realizations start with clean state and prevents race conditions
+    // where one thread clears globals while another thread is reading them
+    Utility::clearGlobalBondTracking();
+
     // Run realizations.
 #pragma omp parallel for ordered num_threads(n_threads) shared(had_catch, realizations_to_run_unique, error_m, error_file_name, error_file_content) default(none)
     for (unsigned long r = 0; r < realizations_to_run_unique.size(); ++r) {
@@ -433,7 +437,8 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
                 realization_model->getDrought_mitigation_policies(),
                 utilities,
                 realization_model->getContinuity_wss(),  // Realization WSS where bonds are issued
-                realization);
+                realization,
+                wss_rdm.at(realization));  // Pass RDM factors for deterministic discount rate
 
             for (int w = 0; w < (int) total_simulation_time; ++w) {
                 if (w % 52 == 0) {  // Print every year

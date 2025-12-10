@@ -223,6 +223,22 @@ vector<WaterSupplySystems *> Utils::copyWSSVector(vector<WaterSupplySystems *> w
     return wss_new;
 }
 
+vector<std::unique_ptr<WaterSupplySystems>> Utils::copyWSSVectorUnique(const vector<std::unique_ptr<WaterSupplySystems>> &wss_original,
+                                                                         bool clear_water_sources) {
+    vector<std::unique_ptr<WaterSupplySystems>> wss_new;
+
+    for (const auto& u : wss_original) {
+        wss_new.push_back(std::make_unique<WaterSupplySystems>(*u));
+    }
+
+    if (clear_water_sources)
+        for (auto& u : wss_new) {
+            u->clearWaterSources();
+        }
+
+    return wss_new;
+}
+
 vector<DroughtMitigationPolicy *>
 Utils::copyDroughtMitigationPolicyVector(
         vector<DroughtMitigationPolicy *> drought_mitigation_policy_original) {

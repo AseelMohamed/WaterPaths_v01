@@ -23,7 +23,7 @@ private:
     vector<double> conveyed_volumes;
     vector<double> buyers_transfer_triggers;
     vector<double> flow_rates_and_allocations;
-    Utility *source_utility = nullptr;
+    std::shared_ptr<Utility> source_utility = nullptr;
     WaterSource *transfer_water_source = nullptr;
     Matrix<double> H, Aeq, A;
     Vector<double> f, beq, b, allocations_aux, lb, ub;
@@ -47,7 +47,7 @@ public:
 
     void applyPolicy(int week) override;
 
-    void addSystemComponents(vector<Utility *> system_utilities,
+    void addSystemComponents(vector<std::shared_ptr<Utility>> system_utilities,
                                  vector<WaterSource *> water_sources,
                                  vector<MinEnvFlowControl *> min_env_flow_controls) override;
 

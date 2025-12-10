@@ -49,9 +49,11 @@ void Problem::printTimeSeriesAndPathways(bool plot_time_series) {
             printf("Printing time series\n");
             // Use actual collected weeks instead of configured n_weeks to avoid out-of-bounds access
             unsigned long actual_weeks = this->master_data_collector->getActualWeeksCollected();
-            printf("Configured weeks: %lu, Actual collected weeks: %lu\n", n_weeks, actual_weeks);
             this->master_data_collector->printUtilitiesOutputCompact(
                     0, (int) actual_weeks, fu + "_s" + std::to_string(solution_no) +
+                                      fname_sufix);
+            this->master_data_collector->printWSSOutputCompact(
+                    0, (int) actual_weeks, "WSS_s" + std::to_string(solution_no) +
                                       fname_sufix);
             this->master_data_collector->printWaterSourcesOutputCompact(
                     0, (int) actual_weeks, fws + "_s" + std::to_string(solution_no) +

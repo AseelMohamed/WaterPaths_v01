@@ -28,7 +28,7 @@ public:
     InsuranceStorageToROF(const int id, vector<WaterSource *> &water_sources,
                               const Graph &water_sources_graph,
                               const vector<vector<int>> &water_sources_to_utilities,
-                              vector<Utility *> &utilities,
+                              vector<std::shared_ptr<Utility>> &utilities,
                               vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                               vector<MinEnvFlowControl *> min_env_flow_controls,
                               vector<vector<double>>& utilities_rdm,
@@ -45,14 +45,14 @@ public:
 
     void applyPolicy(int week) override;
 
-    void addSystemComponents(vector<Utility *> utilities,
+    void addSystemComponents(vector<std::shared_ptr<Utility>> utilities,
                                  vector<WaterSource *> water_sources,
                                  vector<MinEnvFlowControl *> min_env_flow_controls) override;
 
     void setRealization(unsigned long realization_id, vector<double> &utilities_rdm,
                         vector<double> &water_sources_rdm, vector<double> &policy_rdm) override;
 
-    vector<double> calculateShortTermROFTable(int week, const vector<Utility *> &utilities, const int &n_utilities);
+    vector<double> calculateShortTermROFTable(int week, const vector<std::shared_ptr<Utility>> &utilities, const int &n_utilities);
 
     void updateOnlineInfrastructure(int week) override;
 };

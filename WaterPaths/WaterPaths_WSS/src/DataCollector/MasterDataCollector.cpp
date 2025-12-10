@@ -170,7 +170,61 @@ int MasterDataCollector::printNETCDFUtilities(string base_file_name) {
 
 void MasterDataCollector::printPoliciesOutputCompact(
         int week_i, int week_f, string file_name) {
-    if (!drought_mitigation_policy_collectors.empty()) {
+    // Print ACTUAL WSS restriction multipliers (what was applied to each WSS)
+    // NOT the policy decisions (which are misleading since policies apply to all WSS)
+    if (!wss_collectors.empty()) {
+#pragma omp parallel for
+        for (int rr = 0; rr < (int) realizations_ran.size(); ++rr) {
+            auto r = realizations_ran[rr];
+            std::ofstream out_stream;
+            out_stream.open(output_directory + file_name + "_r"
+                            + std::to_string(r) + ".csv");
+
+            // Build header: WSS restriction multipliers + any other policy data (transfers, etc.)
+            string line = "";
+            // First, add WSS restriction multipliers
+            for (const auto& wss_vec : wss_collectors) {
+                if (wss_vec[r] != nullptr) {
+                    line += std::to_string(wss_vec[r]->id) + "rest_m,";
+                }
+            }
+            // Then add non-restriction policies (transfers, insurance, etc.)
+            for (vector<DataCollector *> p : drought_mitigation_policy_collectors) {
+                if (p[r]->type != RESTRICTIONS) {
+                    line += p[r]->printCompactStringHeader();
+                }
+            }
+            if (!line.empty() && line.back() == ',') line.pop_back();
+            out_stream << line << endl;
+
+            // Print data for each week
+            for (int w = week_i; w < week_f; ++w) {
+                line = "";
+                // First, print WSS restriction multipliers (actual applied values)
+                for (const auto& wss_vec : wss_collectors) {
+                    if (wss_vec[r] != nullptr) {
+                        const auto& demand_mults = wss_vec[r]->getDemand_multiplier();
+                        if (w < (int)demand_mults.size()) {
+                            line += std::to_string(demand_mults[w]) + ",";
+                        } else {
+                            line += "1.0,";  // Default if data not available
+                        }
+                    }
+                }
+                // Then print other policy data (transfers, etc.)
+                for (vector<DataCollector *> p : drought_mitigation_policy_collectors) {
+                    if (p[r]->type != RESTRICTIONS) {
+                        line += p[r]->printCompactString(w);
+                    }
+                }
+                if (!line.empty() && line.back() == ',') line.pop_back();
+                out_stream << line << endl;
+            }
+
+            out_stream.close();
+        }
+    } else if (!drought_mitigation_policy_collectors.empty()) {
+        // Fallback to old behavior if no WSS collectors (shouldn't happen in WSS model)
 #pragma omp parallel for
         for (int rr = 0; rr < (int) realizations_ran.size(); ++rr) {
             auto r = realizations_ran[rr];
@@ -365,13 +419,56 @@ void MasterDataCollector::printWaterSourcesOutputTabular(
     }
 }
 
+void MasterDataCollector::printWSSOutputCompact(
+        int week_i, int week_f, string file_name) {
+    // Only print if WSS collectors exist
+    if (wss_collectors.empty()) {
+        printf("No WSS collectors available - skipping WSS output files.\\n");
+        return;
+    }
+
+#pragma omp parallel for
+    for (int rr = 0; rr < (int) realizations_ran.size(); ++rr) {
+        auto r = realizations_ran[rr];
+        try {
+            std::ofstream out_stream;
+            out_stream.open(output_directory + file_name + "_r"
+                            + std::to_string(r) + ".csv");
+
+            // Print header
+            string line;
+            for (vector<WSSDataCollector *> &wss_vec : wss_collectors)
+                line += wss_vec[r]->printCompactStringHeader();
+            line.pop_back();  // Remove trailing comma
+            out_stream << line << endl;
+
+            // Print data for each week
+            for (int w = week_i; w < week_f; ++w) {
+                line = "";
+                for (vector<WSSDataCollector *> &wss_vec : wss_collectors)
+                    line += wss_vec[r]->printCompactString(w);
+                line.pop_back();  // Remove trailing comma
+                out_stream << line << endl;
+            }
+
+            out_stream.close();
+        } catch (...) {
+            char error_msg[256];
+            sprintf(error_msg,
+                    "Error printing WSS output for realization %lu\\n", r);
+            throw runtime_error(error_msg);
+        }
+    }
+}
+
 void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesDataCollector *> &u,
         std::ofstream &outStream, vector<double> &objectives) {
     try {
     // Create vector with restriction policies pertaining only to the
     // utility whose objectives are being calculated.
     vector<RestrictionsDataCollector *> utility_restrictions(
-            *max_element(realizations_ran.begin(), realizations_ran.end()) + 1
+            *max_element(realizations_ran.begin(), realizations_ran.end()) + 1,
+            nullptr
     );
     isolateRestrictionDataCollectors(u, utility_restrictions);
 
@@ -405,7 +502,7 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
         inf_npc = ObjectivesCalculator::
         calculateNetPresentCostInfrastructureObjective_WSS(wss_collectors, u, realizations_ran);
         worse_cost = ObjectivesCalculator::
-        calculateWorseCaseCostsObjective_WSS(wss_collectors, u, realizations_ran);
+        calculateWorseCaseCostsObjective(u, realizations_ran);
     } else {
         // Fallback to utility-level if WSS collectors not available
         inf_npc = ObjectivesCalculator::
@@ -414,7 +511,7 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
         calculateWorseCaseCostsObjective(u, realizations_ran);
     }
     
-    /// Peak Financial Cost - Still uses utility-level data (debt, contingency are utility-wide)
+    /// Peak Financial Cost
     double financial_cost = ObjectivesCalculator::
     calculatePeakFinancialCostsObjective(u, realizations_ran);
 
@@ -453,7 +550,7 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
 }
 
 vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, bool print) {
-    vector<double> objectives;
+    vector<double> objectives = vector<double>();
 
     if (print) {
         printf("Calculating and printing Objectives\n");
@@ -491,27 +588,28 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
             // Create vector with restriction policies pertaining only to the
             // utility whose objectives are being calculated.
             vector<RestrictionsDataCollector *> utility_restrictions(
-                    *max_element(realizations_ran.begin(), realizations_ran.end()) + 1
+                    *max_element(realizations_ran.begin(), realizations_ran.end()) + 1,
+                    nullptr
                     );
             isolateRestrictionDataCollectors(u, utility_restrictions);
 
             // Reliability - Use WSS-level calculation (utility = minimum reliability of its WSS)
             if (!wss_collectors.empty()) {
-                // CRITICAL: Filter WSS collectors to only include those belonging to this utility
+                // Filter WSS collectors to only include those belonging to this utility
                 vector<vector<WSSDataCollector *>> utility_wss_collectors;
                 isolateWSSDataCollectors(u, utility_wss_collectors);
                 
                 if (!utility_wss_collectors.empty()) {
-                    objectives.push_back
-                            (ObjectivesCalculator::calculateReliabilityObjective_WSS(utility_wss_collectors, realizations_ran));
+                    double reliability = ObjectivesCalculator::calculateReliabilityObjective_WSS(utility_wss_collectors, realizations_ran);
+                    objectives.push_back(reliability);
                 } else {
                     // No WSS found for this utility, fallback to utility-level calculation
-                    objectives.push_back
-                            (ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran));
+                    double reliability = ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran);
+                    objectives.push_back(reliability);
                 }
             } else {
-                objectives.push_back
-                        (ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran));
+                double reliability = ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran);
+                objectives.push_back(reliability);
             }
             
             objectives.push_back
@@ -519,25 +617,22 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
             
             // Use WSS-level calculations for infrastructure NPC and worse case costs
             if (!wss_collectors.empty()) {
+                // Filter WSS collectors to only include those belonging to this utility
+                vector<vector<WSSDataCollector *>> utility_wss_collectors_npc;
+                isolateWSSDataCollectors(u, utility_wss_collectors_npc);
+                
                 objectives.push_back
-                        (ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective_WSS(wss_collectors, u, realizations_ran));
+                        (ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective_WSS(utility_wss_collectors_npc, u, realizations_ran));
             } else {
                 objectives.push_back
                         (ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective(u, realizations_ran));
             }
             
-            // Peak financial cost still uses utility-level data
             objectives.push_back
                     (ObjectivesCalculator::calculatePeakFinancialCostsObjective(u, realizations_ran));
             
-            // Use WSS-level calculation for worse case costs
-            if (!wss_collectors.empty()) {
-                objectives.push_back
-                        (ObjectivesCalculator::calculateWorseCaseCostsObjective_WSS(wss_collectors, u, realizations_ran));
-            } else {
-                objectives.push_back
-                        (ObjectivesCalculator::calculateWorseCaseCostsObjective(u, realizations_ran));
-            }
+            objectives.push_back
+                    (ObjectivesCalculator::calculateWorseCaseCostsObjective(u, realizations_ran));
         }
     }
     return objectives;
@@ -557,20 +652,25 @@ void MasterDataCollector::isolateWSSDataCollectors(vector<UtilitiesDataCollector
                                                    vector<vector<WSSDataCollector *>> &utility_wss_collectors) const {
     // Filter WSS collectors to include only those belonging to the specified utility
     utility_wss_collectors.clear();
-    int utility_id = u.at(realizations_ran.at(0))->id;
+    int utility_id = 0;
+    if (!u.empty() && !realizations_ran.empty() && u.at(realizations_ran.at(0)) != nullptr) {
+        utility_id = u.at(realizations_ran.at(0))->id;
+    }
     
+    int wss_index = 0;
     for (const auto &wss_realization_data : wss_collectors) {
         if (!wss_realization_data.empty() && 
             wss_realization_data[realizations_ran[0]] != nullptr) {
             
-            // Get owner from data collector (cached during construction, safe even after WSS is deleted)
-            const Utility* owner = wss_realization_data[realizations_ran[0]]->getOwner();
+            // Get stored owner ID (safe even after WSS is deleted)
+            int owner_id = wss_realization_data[realizations_ran[0]]->getOwnerId();
             
-            // Check owner is not null before accessing id
-            if (owner != nullptr && owner->id == utility_id) {
+            // Check using stored ID (safe even if owner pointer is dangling)
+            if (owner_id == utility_id) {
                 utility_wss_collectors.push_back(wss_realization_data);
             }
         }
+        wss_index++;
     }
 }
 
@@ -748,9 +848,6 @@ void MasterDataCollector::printPathways(string file_name) {
                 }
             }
         }
-    
-    printf("Total pathways printed: %d\n", total_pathways);
-
     outStream.close();
 }
 
@@ -808,8 +905,9 @@ void MasterDataCollector::addRealization(
         vector<WaterSource *> water_sources_realization,
         vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization,
         vector<Utility *> utilities_realization,
-        vector<WaterSupplySystems *> wss_realization,
-        unsigned long r) {
+        const vector<std::unique_ptr<WaterSupplySystems>> &wss_realization,
+        unsigned long r,
+        const vector<double> &rdm_factors) {
     // If collectors vectors have not yet been initialized, initialize them.
 #pragma omp critical
     {
@@ -830,8 +928,16 @@ void MasterDataCollector::addRealization(
     };
 
     // Create utilities data collectors
+    // Calculate realization-specific discount rate from RDM factors (deterministic)
+    // rdm_factors[3] is the discount rate multiplier
+    double base_discount_rate = 0.05; // This should match utility's base rate
+    if (!utilities_realization.empty() && utilities_realization[0] != nullptr) {
+        base_discount_rate = utilities_realization[0]->getBaseInfraDiscountRate();
+    }
+    double realization_discount_rate = base_discount_rate * (rdm_factors.size() > 3 ? rdm_factors[3] : 1.0);
+    
     for (int u = 0; u < (int) utilities_realization.size(); ++u) {
-        utility_collectors[u][r] = new UtilitiesDataCollector(utilities_realization[u], r);
+        utility_collectors[u][r] = new UtilitiesDataCollector(utilities_realization[u], r, realization_discount_rate);
     }
 
     // Create WSS data collectors pointing to realization WSS (where bonds are actually issued)
@@ -843,12 +949,12 @@ void MasterDataCollector::addRealization(
                     wss_index, wss_collectors.size(), r);
             throw std::out_of_range(error);
         }
-        if (wss_realization[wss_index] == nullptr) {
+        if (wss_realization[wss_index] == nullptr || wss_realization[wss_index].get() == nullptr) {
             char error[256];
             sprintf(error, "Realization WSS at index %zu is null for realization %lu", wss_index, r);
             throw std::runtime_error(error);
         }
-        wss_collectors[wss_index][r] = new WSSDataCollector(wss_realization[wss_index], r);
+        wss_collectors[wss_index][r] = new WSSDataCollector(wss_realization[wss_index].get(), r);
     }
 
     // Create drought mitigation policies data collector

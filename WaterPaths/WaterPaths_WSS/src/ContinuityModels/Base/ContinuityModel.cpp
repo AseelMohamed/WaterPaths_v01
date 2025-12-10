@@ -10,7 +10,7 @@
 #include "ContinuityModel.h"
 // #include "../../SystemComponents/WaterSources/SequentialJointTreatmentExpansion.h"
 
-ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<WaterSupplySystems *> &wss,
+ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<std::unique_ptr<WaterSupplySystems>> &&wss,
                                  vector<MinEnvFlowControl *> &min_env_flow_controls,
                                  const Graph &water_sources_graph,
                                  const vector<vector<int>> &water_sources_to_wss,
@@ -18,14 +18,14 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
                                  vector<double> &water_sources_rdm,
                                  unsigned long realization_id) :
         continuity_water_sources(water_sources),
-        continuity_wss(wss),
+        continuity_wss(std::move(wss)),
         min_env_flow_controls(min_env_flow_controls),
         water_sources_graph(water_sources_graph),
         water_sources_to_wss(water_sources_to_wss),
         sources_topological_order(water_sources_graph.getTopological_order()), /// Get topological order so that mass balance is ran from up to downstream.
         wss_rdm(wss_rdm),
         water_sources_rdm(water_sources_rdm),
-        n_wss((int) wss.size()),
+        n_wss((int) continuity_wss.size()),
         n_sources((int) water_sources.size()),
         realization_id(realization_id)
         {
@@ -34,7 +34,7 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
     std::sort(continuity_water_sources.begin(), continuity_water_sources.end(), WaterSource::compare);
 
     // Link water sources to WSS within each utility by passing pointers of the former to each WSS.
-    for (unsigned long u = 0; u < wss.size(); ++u) {
+    for (unsigned long u = 0; u < continuity_wss.size(); ++u) {
         for (unsigned long ws = 0; ws < water_sources_to_wss[u].size(); ++ws) {
             auto ws_id = water_sources_to_wss[u][ws];
             // printf("ID=%d ", ws_id);
@@ -51,7 +51,7 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
     wss_to_water_sources.assign(water_sources.size(), vector<int>(0));
     water_sources_online_to_wss.assign(water_sources.size(), vector<int>(0));
     
-    for (unsigned long u = 0; u < wss.size(); ++u) {
+    for (unsigned long u = 0; u < continuity_wss.size(); ++u) {
         for (const int &ws : water_sources_to_wss[u]) {
             if (ws >= 0 && ws < static_cast<int>(wss_to_water_sources.size())) {
                 wss_to_water_sources[ws].push_back(u);
@@ -67,7 +67,7 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
     for (auto water_source : water_sources) {
         bool online = false;
 
-        for (unsigned long u = 0; u < wss.size(); ++u) {
+        for (unsigned long u = 0; u < continuity_wss.size(); ++u) {
             if (water_source->isOnline())
                 online = true;
         }
@@ -82,7 +82,7 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
 
     // Populate vector with wss capacities and check if all wss
     // have storage capacity.
-    for (WaterSupplySystems *u : continuity_wss) {
+    for (const auto& u : continuity_wss) {
         wss_capacities.push_back(u->getTotal_storage_capacity());
         if (wss_capacities.back() == 0) {
             string error = "Water Supply System " + to_string(u->system_id) + " has no storage capacity (0 MGD), "
@@ -102,8 +102,13 @@ ContinuityModel::ContinuityModel(vector<WaterSource *> &water_sources, vector<Wa
 
     // Add reference to water sources and wss so that controls can
     // access their info.
+    // Create temporary raw pointer vector for addComponents (which doesn't take ownership)
+    vector<WaterSupplySystems*> wss_raw;
+    for (const auto& wss_ptr : continuity_wss) {
+        wss_raw.push_back(wss_ptr.get());
+    }
     for (MinEnvFlowControl *mef : this->min_env_flow_controls) {
-        mef->addComponents(water_sources, wss);
+        mef->addComponents(water_sources, wss_raw);
     }
 
     // Set realization id on wss and water sources, so that they use the
@@ -139,12 +144,7 @@ ContinuityModel::~ContinuityModel() {
         }
     }
 
-    /// Delete wss (with null check for shared objects)
-    for (auto u : continuity_wss) {
-        if (u != nullptr) {
-            delete u;
-        }
-    }
+    /// WSS are automatically deleted by unique_ptr
 }
 
 /**
@@ -192,7 +192,7 @@ void ContinuityModel::continuityStep(
      * with the total unrestricted_demand for that week for that water
      * source, and (2) sums the flow contributions of upstream reservoirs.
      */
-    for (WaterSupplySystems *u : continuity_wss) {
+    for (auto& u : continuity_wss) {
         u->calculateWastewater_releases(week_demand, wastewater_discharges);
         u->splitDemands(week_demand, demands, apply_demand_buffer);
     }
@@ -201,20 +201,43 @@ void ContinuityModel::continuityStep(
      * Update utility finances (including yearly infrastructure cost resets).
      * This must happen after demand splitting to have current demand/restriction data.
      * Pass realization WSS directly to avoid thread-safety issues with shared utility objects.
+     * CRITICAL: Only update finances for REALIZATION runs, not ROF generation!
+     * 
+     * THREAD-SAFETY: Use ordered section to ensure deterministic financial state updates
+     * when utilities are shared across parallel realizations. This guarantees that
+     * financial calculations execute in realization order, preventing race conditions
+     * and ensuring reproducible results across multiple runs.
      */
-    std::map<Utility*, std::vector<WaterSupplySystems*>> utility_to_wss;
-    for (WaterSupplySystems *wss : continuity_wss) {
-        Utility* utility = wss->getOwner();
-        if (utility) {
-            utility_to_wss[utility].push_back(wss);
+    if (rof_realization == NON_INITIALIZED) {
+#pragma omp ordered
+        {
+            // CRITICAL FIX: Reset utility financial state at week 0 to prevent contamination
+            // This ensures each realization starts with clean state in ordered fashion
+            if (week == 0) {
+                for (auto& wss : continuity_wss) {
+                    Utility* utility = wss->getOwner();
+                    if (utility) {
+                        utility->resetFinancialState();
+                    }
+                }
+            }
+            
+            std::map<Utility*, std::vector<WaterSupplySystems*>> utility_to_wss;
+            for (auto& wss : continuity_wss) {
+                Utility* utility = wss->getOwner();
+                if (utility) {
+                    utility_to_wss[utility].push_back(wss.get());
+                }
+            }
+            
+            for (auto& pair : utility_to_wss) {
+                Utility* utility = pair.first;
+                const std::vector<WaterSupplySystems*>& realization_wss = pair.second;
+                
+                // Pass realization WSS directly to financial calculations (thread-safe)
+                utility->updateUtilityFinancialCalculations(week, realization_wss);
+            }
         }
-    }
-    
-    for (auto& pair : utility_to_wss) {
-        Utility* utility = pair.first;
-        const std::vector<WaterSupplySystems*>& realization_wss = pair.second;
-        // Pass realization WSS directly to financial calculations (thread-safe)
-        utility->updateUtilityFinancialCalculations(week, realization_wss);
     }
 
     /**
@@ -269,8 +292,11 @@ void ContinuityModel::continuityStep(
     }
 
     // updates combined storage for Water Supply Systems.
-    for (WaterSupplySystems *u : continuity_wss) {
+    for (auto& u : continuity_wss) {
         u->updateTotalAvailableVolume();
+        // if (u->system_id == 0 && week >= 258 && week < 270 && rof_realization == NON_INITIALIZED) {
+        //     printf("[WSS %d] Week %d: avail_vol=%.4f\n", u->system_id, week, u->getTotal_available_volume());
+        // }
     }
 
     delete[] upstream_spillage;
@@ -281,12 +307,12 @@ void ContinuityModel::setRealization(unsigned long realization_id, vector<double
                                      vector<double> &water_sources_rdm) {
     if (realization_id != (unsigned) NON_INITIALIZED) {
         // Set realization on WSS
-        for (WaterSupplySystems *u : continuity_wss)
+        for (auto& u : continuity_wss)
             u->setRealization(realization_id, wss_rdm);
         
         // CRITICAL FIX: Also set realization on parent utilities to initialize bond parameters
         std::set<Utility*> unique_utilities;
-        for (WaterSupplySystems *wss : continuity_wss) {
+        for (auto& wss : continuity_wss) {
             if (wss && wss->getOwner()) {
                 unique_utilities.insert(wss->getOwner());
             }
@@ -325,6 +351,6 @@ const vector<WaterSource *> &ContinuityModel::getContinuity_water_sources() cons
     return continuity_water_sources;
 }
 
-const vector<WaterSupplySystems *> &ContinuityModel::getContinuity_wss() const {
+const vector<std::unique_ptr<WaterSupplySystems>> &ContinuityModel::getContinuity_wss() const {
     return continuity_wss;
 }

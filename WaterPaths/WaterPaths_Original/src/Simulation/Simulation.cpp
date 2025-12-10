@@ -21,7 +21,7 @@
 Simulation::Simulation(
         vector<WaterSource *> &water_sources, Graph &water_sources_graph,
         const vector<vector<int>> &water_sources_to_utilities,
-        vector<Utility *> &utilities,
+        vector<std::shared_ptr<Utility>> &utilities,
         const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
         vector<MinEnvFlowControl *> &min_env_flow_controls,
         vector<vector<double>> &utilities_rdm,
@@ -54,7 +54,7 @@ Simulation::Simulation(
 Simulation::Simulation(
         vector<WaterSource *> &water_sources, Graph &water_sources_graph,
         const vector<vector<int>> &water_sources_to_utilities,
-        vector<Utility *> &utilities,
+        vector<std::shared_ptr<Utility>> &utilities,
         const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
         vector<MinEnvFlowControl *> &min_env_flow_controls,
         vector<vector<double>> &utilities_rdm,
@@ -95,7 +95,7 @@ Simulation::Simulation(
         vector<WaterSource *> &water_sources,
         Graph &water_sources_graph,
         const vector<vector<int>> &water_sources_to_utilities,
-        vector<Utility *> &utilities,
+        vector<std::shared_ptr<Utility>> &utilities,
         const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
         vector<MinEnvFlowControl *> &min_env_flow_controls,
         vector<vector<double>> &utilities_rdm,
@@ -135,7 +135,7 @@ Simulation::Simulation(
 void Simulation::setupSimulation(vector<WaterSource *> &water_sources,
                                  Graph &water_sources_graph,
                                  const vector<vector<int>> &water_sources_to_utilities,
-                                 vector<Utility *> &utilities,
+                                 vector<std::shared_ptr<Utility>> &utilities,
                                  const vector<DroughtMitigationPolicy *> &drought_mitigation_policies,
                                  vector<MinEnvFlowControl *> &min_env_flow_controls,
                                  vector<vector<double>> &utilities_rdm,
@@ -232,7 +232,7 @@ void Simulation::createContinuityModels(unsigned long realization,
     vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization =
             Utils::copyDroughtMitigationPolicyVector(
                     drought_mitigation_policies);
-    vector<Utility *> utilities_realization =
+    vector<std::shared_ptr<Utility>> utilities_realization =
             Utils::copyUtilityVector(utilities);
     vector<MinEnvFlowControl *> min_env_flow_controls_realization =
             Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
@@ -253,7 +253,7 @@ void Simulation::createContinuityModels(unsigned long realization,
     // Create rof models by copying the water utilities and sources.
     vector<WaterSource *> water_sources_rof =
             Utils::copyWaterSourceVector(water_sources);
-    vector<Utility *> utilities_rof = Utils::copyUtilityVector(utilities);
+    vector<std::shared_ptr<Utility>> utilities_rof = Utils::copyUtilityVector(utilities);
     vector<MinEnvFlowControl *> min_env_flow_controls_rof =
             Utils::copyMinEnvFlowControlVector(min_env_flow_controls);
 

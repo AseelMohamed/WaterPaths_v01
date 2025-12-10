@@ -49,7 +49,7 @@ void TransfersBilateral::applyPolicy(int week) {
     }
 }
 
-double TransfersBilateral::performTransfer(Utility *sender, Utility *receiver,
+double TransfersBilateral::performTransfer(const std::shared_ptr<Utility>& sender, const std::shared_ptr<Utility>& receiver,
                                            double pumping_capacity,
                                            int week) const {
 
@@ -76,7 +76,7 @@ double TransfersBilateral::performTransfer(Utility *sender, Utility *receiver,
     return transfer_volume;
 }
 
-void TransfersBilateral::addSystemComponents(vector<Utility *> utilities,
+void TransfersBilateral::addSystemComponents(vector<std::shared_ptr<Utility>> utilities,
                                              vector<WaterSource *> water_sources,
                                              vector<MinEnvFlowControl *> min_env_flow_controls) {
     realization_utilities = {utilities[0], utilities[1]};

@@ -697,7 +697,7 @@ DataCollector* MasterDataCollector::createWaterSourceDataCollector(WaterSource* 
 void MasterDataCollector::addRealization(
         vector<WaterSource *> water_sources_realization,
         vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization,
-        vector<Utility *> utilities_realization,
+        vector<std::shared_ptr<Utility>> utilities_realization,
         unsigned long r) {
     // If collectors vectors have not yet been initialized, initialize them.
 #pragma omp critical

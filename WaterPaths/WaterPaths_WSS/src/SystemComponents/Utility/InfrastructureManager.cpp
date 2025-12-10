@@ -370,6 +370,10 @@ int InfrastructureManager::infrastructureConstructionHandler(
         if (next_construction != NON_INITIALIZED) {
             if (long_term_rof > infra_construction_triggers[next_construction]) {
                 new_infra_triggered = next_construction;
+                // if (next_construction == 7 && wss_id == 0) {
+                //     printf("[WSS %d] Week %d: Infrastructure %d ROF-triggered (LT_ROF=%.4f > threshold=%.4f)\n",
+                //            wss_id, week, next_construction, long_term_rof, infra_construction_triggers[next_construction]);
+                // }
                 /// Begin construction.
                 beginConstruction(week, next_construction);
             }
@@ -453,7 +457,8 @@ int InfrastructureManager::infrastructureConstructionHandler(
 
                     /// Record ID of and when infrastructure option construction was
                     /// completed. (utility_id, wss_id, week, water_source_id)
-                    infra_built_last_week.push_back({id, wss_id, week, wss});
+                    // Only record the last one built this week (overwrite, don't accumulate)
+                    infra_built_last_week = {{id, wss_id, week, wss}};
 
                     /// Erase infrastructure option from both vectors of
                     /// infrastructure to be built.
@@ -537,6 +542,11 @@ void InfrastructureManager::beginConstruction(int week, int infra_id) {
         
         under_construction[infra_id] = true;
         construction_end_date[infra_id] = week + static_cast<int>(water_source_ptr->construction_time);
+        // if (infra_id == 7 && id == 0) {
+        //     printf("[WSS %d] Week %d: Infra 7 construction begins, end_date=%d (construction_time=%d)\n",
+        //            id, week, construction_end_date[infra_id], 
+        //            (int)water_source_ptr->construction_time);
+        // }
         
     } catch (...) {
         throw out_of_range(

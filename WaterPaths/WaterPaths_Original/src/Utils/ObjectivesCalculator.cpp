@@ -204,6 +204,7 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
         realization_financial_costs[r] =
                 *max_element(year_financial_costs.begin(),
                              year_financial_costs.end());
+        
         if (realization_financial_costs[r] > 1e10) {
             printf("Absurdly high financial cost in realization %lu.\n", r);
         }
@@ -256,11 +257,11 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
 
             // if last week of the year, close the books and calculate financial cost for the year.
             if (Utils::isFirstWeekOfTheYear(w + 1)) {
-                year_financial_costs[y] =
-                        max(year_drought_mitigation_cost
-                            - utility_data[r]->getContingency_fund_size()[w],
-//                            0.0) / year_gross_revenue;
-                            0.0) / (year_gross_revenue * (1. + pow(1. + discount_rate, y)));
+                double contingency_fund = utility_data[r]->getContingency_fund_size()[w];
+                double numerator = max(year_drought_mitigation_cost - contingency_fund, 0.0);
+                double denominator = year_gross_revenue * (1. + pow(1. + discount_rate, y));
+                
+                year_financial_costs[y] = numerator / denominator;
 
                 year_gross_revenue = 1e-6;
                 year_drought_mitigation_cost = 0;
@@ -269,17 +270,17 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
             }
         }
         // store highest year cost as the drought mitigation cost of the realization.
-        worse_year_financial_costs.push_back(*max_element(
-                year_financial_costs.begin(),
-                year_financial_costs.end()));
+        double max_cost = *max_element(year_financial_costs.begin(), year_financial_costs.end());
+        
+        worse_year_financial_costs.push_back(max_cost);
     }
 
     // sort costs to get the worse 1 percentile.
     sort(worse_year_financial_costs.begin(),
          worse_year_financial_costs.end());
 
-    double obj_value = worse_year_financial_costs.at(
-            (unsigned long) floor(WORSE_CASE_COST_PERCENTILE * n_realizations));
+    unsigned long percentile_index = (unsigned long) floor(WORSE_CASE_COST_PERCENTILE * n_realizations);
+    double obj_value = worse_year_financial_costs.at(percentile_index);
 
     if (std::isinf(obj_value)) {
         string error_inf = "Infinite worse case cost.";

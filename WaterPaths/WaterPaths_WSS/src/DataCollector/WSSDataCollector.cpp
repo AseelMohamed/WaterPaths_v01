@@ -10,7 +10,12 @@
 WSSDataCollector::WSSDataCollector(const WaterSupplySystems *wss, unsigned long realization)
         : DataCollector(wss->getSystemId(), wss->name, realization, UTILITY, 11 * COLUMN_WIDTH),
           wss(wss),
-          owner(wss->getOwner()) {  // Store owner pointer immediately while WSS is still valid
+          owner(wss->getOwner()),
+          owner_id(wss->getOwner() ? wss->getOwner()->id : -1) {  // Store owner ID immediately while WSS is still valid
+}
+
+int WSSDataCollector::getOwnerId() const {
+    return owner_id;
 }
 
 string WSSDataCollector::printTabularString(int week) {
@@ -51,9 +56,11 @@ string WSSDataCollector::printCompactString(int week) {
               << ","
               << storage_capacity[week]
               << ","
-              << storage_to_capacity_ratio[week]
-              << ","
               << net_stream_inflow[week]
+              << ","
+              << short_term_rof[week]  
+              << ","
+              << long_term_rof[week]  
               << ","
               << restricted_demand[week]
               << ","
@@ -61,13 +68,9 @@ string WSSDataCollector::printCompactString(int week) {
               << ","
               << unfulfilled_demand[week]
               << ","
-              << demand_multiplier[week]
-              << ","
               << waste_water_discharge[week]
               << ","
               << total_treatment_capacity[week]
-              << ","
-              << total_storage_treatment_capacity[week]
               << ",";
 
     return outStream.str();
@@ -115,24 +118,23 @@ string WSSDataCollector::printCompactStringHeader() {
     stringstream outStream;
 
     outStream << id << "st_vol" << ","
-              << id << "st_capacity" << ","
-              << id << "st_ratio" << ","
+              << id << "capacity" << ","
               << id << "net_inf" << ","
+              << id << "st_rof" << ","
+              << id << "lt_rof" << ","
               << id << "rest_demand" << ","
               << id << "unrest_demand" << ","
               << id << "unfulf_demand" << ","
-              << id << "demand_mult" << ","
               << id << "wastewater" << ","
-              << id << "treat_capacity" << ","
-              << id << "st_treat_capacity" << ",";
+              << id << "treat_capacity" << ",";
 
     return outStream.str();
 }
 
 void WSSDataCollector::collect_data() {
-    // Use stored volume for reliability calculations, not available volume
-    // Available volume includes flow-through sources that don't show storage depletion
-    combined_storage.push_back(wss->getTotal_stored_volume());
+    // Collect available volume to match Original model behavior
+    // Available volume includes flow-through sources (like intakes)
+    combined_storage.push_back(wss->getTotal_available_volume());
     storage_capacity.push_back(wss->getTotal_storage_capacity());
     storage_to_capacity_ratio.push_back(wss->getStorageToCapacityRatio());
     unrestricted_demand.push_back(wss->getUnrestrictedDemand());
@@ -145,12 +147,13 @@ void WSSDataCollector::collect_data() {
     total_treatment_capacity.push_back(wss->getTotal_treatment_capacity());
     total_storage_treatment_capacity.push_back(0.0); // Placeholder - implement getTotal_storage_treatment_capacity() if needed
     water_sources_count.push_back((int)wss->getWater_sources().size());
+    short_term_rof.push_back(wss->getShort_term_risk_of_failure());
+    long_term_rof.push_back(wss->getLong_term_risk_of_failure());
 
-    // Collect WSS-level financial data (set by Utility)
-    gross_revenues.push_back(wss->getWssGrossRevenue());
-    drought_mitigation_cost.push_back(wss->getWssDroughtMitigationCost());
-    contingency_fund_contribution.push_back(wss->getWssContingencyFundShare());
-    debt_service_payments.push_back(wss->getWssDebtServiceShare());
+    // Note: Financial data (debt, contingency, revenue) is NOT collected at WSS level.
+    // These are utility-wide calculations handled by UtilitiesDataCollector using 
+    // per-realization storage in the Utility object to avoid race conditions.
+    
     double wss_npc = wss->getWssInfrastructureNPC();
     
     // Validate NPC value - catch memory corruption early
@@ -162,14 +165,6 @@ void WSSDataCollector::collect_data() {
         throw std::runtime_error(error);
     }
     net_present_infrastructure_cost.push_back(wss_npc);
-    
-    // Contingency fund size - sum of contributions up to this point
-    // (This mimics what UtilitiesDataCollector does for the utility level)
-    double cumulative_contingency = 0.0;
-    if (!contingency_fund_contribution.empty()) {
-        cumulative_contingency = contingency_fund_contribution.back();
-    }
-    contingency_fund_size.push_back(cumulative_contingency);
     
     // Collect infrastructure pathways from THIS WSS's infrastructure manager
     // This WSS data collector points to the REALIZATION WSS where infrastructure is actually built

@@ -161,7 +161,7 @@ Transfers::~Transfers() {
  * Adds source and buying utility.
  * @param system_utilities Utility to be added.
  */
-void Transfers::addSystemComponents(vector<Utility *> system_utilities,
+void Transfers::addSystemComponents(vector<std::shared_ptr<Utility>> system_utilities,
                                     vector<WaterSource *> water_sources,
                                     vector<MinEnvFlowControl *> min_env_flow_controls) {
 
@@ -170,7 +170,7 @@ void Transfers::addSystemComponents(vector<Utility *> system_utilities,
                                             "transfer policy.");
 
     //FIXME: RIGHT NOW TRANSFERS CAN ONLY HAVE ONE SOURCE. THIS NEEDS TO BE EXPANDED.
-    for (Utility *u : system_utilities)
+    for (auto& u : system_utilities)
         if (u->id == source_utility_id)
             source_utility = u; // source of transfers
         else {
