@@ -734,7 +734,7 @@ void WaterSupplySystems::setRealization(unsigned long r, vector<double> &rdm_fac
     // Simple, clean implementation like the original
     unsigned long n_weeks = demands_all_realizations.at(r).size();
     
-    // CRITICAL: Validate n_weeks is reasonable before allocating
+    // Validate n_weeks is reasonable before allocating
     if (n_weeks == 0 || n_weeks > 100000) {
         char error_msg[512];
         sprintf(error_msg, "ERROR: WSS %d setRealization got invalid n_weeks=%lu from demands_all_realizations[%lu]",
@@ -833,7 +833,7 @@ double WaterSupplySystems::getUnrestrictedDemand(int week) const {
     if (week == -1) {
         return unrestricted_demand;
     } else {
-        // CRITICAL: Check if vector is empty (not yet initialized by setRealization)
+        // Check if vector is empty (not yet initialized by setRealization)
         size_t vec_size = demand_series_realization.size();
         if (vec_size == 0) {
             // Vector not yet initialized - return 0 demand rather than crashing

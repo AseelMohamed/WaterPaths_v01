@@ -426,7 +426,13 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
     int wss_skipped_no_storage = 0;
     int wss_processed = 0;
     
+    #ifdef PARALLEL
+    printf("DEBUG calculateReliabilityObjective_WSS: Processing %zu WSS, %lu realizations, %lu weeks\n",
+           wss_data.size(), n_realizations, n_weeks);
+    #endif
+    
     // Calculate reliability for EACH WSS independently
+    int wss_idx = 0;
     for (const auto& wss_realization_data : wss_data) {
         // Check if this WSS has any storage capacity > 0 (actual storage, not flow-through)
         bool has_storage_data = false;
@@ -537,7 +543,13 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         
         double wss_reliability = 1.0 - (double)max_failures / n_realizations;
         wss_reliabilities.push_back(wss_reliability);
+        wss_idx++;
     }
+    
+    #ifdef PARALLEL
+    printf("DEBUG calculateReliabilityObjective_WSS: Processed=%d, Skipped(no_data)=%d, Skipped(no_storage)=%d, wss_reliabilities.size()=%zu\n",
+           wss_processed, wss_skipped_no_data, wss_skipped_no_storage, wss_reliabilities.size());
+    #endif
     
     // Utility is only as reliable as its weakest system (among those with storage)
     // Check if wss_reliabilities is empty before calling min_element
@@ -548,6 +560,9 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         // 3. WSS data collectors are not properly initialized
         // No WSS with storage found - return worst-case reliability
         // This can happen when data collection was skipped or all WSS are flow-through
+        #ifdef PARALLEL
+        printf("WARNING: wss_reliabilities is EMPTY - returning 0.0 reliability!\n");
+        #endif
         return 0.0;
     }
     

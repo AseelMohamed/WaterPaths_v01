@@ -28,7 +28,7 @@ double LevelDebtServiceBond::getDebtService(int week) {
     bool is_payment_week = std::find(pay_on_weeks.begin(), pay_on_weeks.end(),
                       Utils::weekOfTheYear(week)) != pay_on_weeks.end();
     
-    // CRITICAL FIX: Prevent multiple payments in the same week (called multiple times by different WSS)
+    // Prevent multiple payments in the same week (called multiple times by different WSS)
     bool already_paid_this_week = (last_payment_week == week);
     
     if (payments_remaining && repayment_started && is_payment_week && !already_paid_this_week) {

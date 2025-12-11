@@ -41,7 +41,7 @@ FloatingInterestBalloonPaymentBond::FloatingInterestBalloonPaymentBond(const int
  * @return
  */
 double FloatingInterestBalloonPaymentBond::getDebtService(int week) {
-    /// CRITICAL FIX: Prevent multiple payments in the same week
+    // Prevent multiple payments in the same week
     if (last_payment_week == week) {
         return 0.;  // Already paid this week
     }

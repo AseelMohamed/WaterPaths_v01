@@ -42,7 +42,7 @@ BalloonPaymentBond::BalloonPaymentBond(const int id, const double cost_of_capita
  * @return
  */
 double BalloonPaymentBond::getDebtService(int week) {
-    /// CRITICAL FIX: Prevent multiple payments in the same week
+    // Prevent multiple payments in the same week
     if (last_payment_week == week) {
         return 0.;  // Already paid this week
     }

@@ -241,7 +241,7 @@ void Simulation::createContinuityModels(unsigned long realization,
     vector<MinEnvFlowControl *> min_env_flow_controls_realization;
     vector<vector<int>> water_sources_to_wss_mapping;
 
-    // CRITICAL SECTION: ALL copying and construction must be serialized
+    // ALL copying and construction must be serialized
     // Using single critical section to prevent race conditions when multiple threads
     // copy from shared utility objects simultaneously
     #pragma omp critical(model_creation)
@@ -273,7 +273,7 @@ void Simulation::createContinuityModels(unsigned long realization,
                 realization);
     }
 
-    // CRITICAL SECTION: ROF model construction must use SAME critical section name
+    // ROF model construction must use SAME critical section name
     // to ensure it serializes with realization model construction above
     #pragma omp critical(model_creation)
     {    

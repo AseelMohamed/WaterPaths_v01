@@ -211,7 +211,7 @@ void ContinuityModel::continuityStep(
     if (rof_realization == NON_INITIALIZED) {
 #pragma omp ordered
         {
-            // CRITICAL FIX: Reset utility financial state at week 0 to prevent contamination
+            // Reset utility financial state at week 0 to prevent contamination
             // This ensures each realization starts with clean state in ordered fashion
             if (week == 0) {
                 for (auto& wss : continuity_wss) {
@@ -310,7 +310,7 @@ void ContinuityModel::setRealization(unsigned long realization_id, vector<double
         for (auto& u : continuity_wss)
             u->setRealization(realization_id, wss_rdm);
         
-        // CRITICAL FIX: Also set realization on parent utilities to initialize bond parameters
+        // Also set realization on parent utilities to initialize bond parameters
         std::set<Utility*> unique_utilities;
         for (auto& wss : continuity_wss) {
             if (wss && wss->getOwner()) {

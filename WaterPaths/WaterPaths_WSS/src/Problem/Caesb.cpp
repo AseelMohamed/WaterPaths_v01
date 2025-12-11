@@ -96,7 +96,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double caesb_tortoSM_transfer_trigger = vars[5]; //gatilho para acionar transferência de água para o Descoberto
     double caesb_descoberto_annual_payment = vars[6]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
     double caesb_tortoSM_annual_payment = vars[7]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
-    // CRITICAL FIX: Calculate weighted average instead of sum to match Original model behavior
+    
+    // Calculate weighted average instead of sum to match Original model behavior
     // Each WSS has its own percentage, utility uses demand-weighted average
     double total_demand_descoberto = 0.0;
     double total_demand_tortoSM = 0.0;
@@ -111,11 +112,49 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             total_demand_tortoSM += weekly_demand;
         }
     }
+
     double total_demand = total_demand_descoberto + total_demand_tortoSM;
+    
     // Weighted average percentage based on relative demands
     double caesb_weighted_contingency_percent = 
         (caesb_descoberto_annual_payment * total_demand_descoberto + 
          caesb_tortoSM_annual_payment * total_demand_tortoSM) / total_demand;
+    
+    // Calculate weighted average demand class fractions for unified utility
+    vector<vector<double>> caesb_weighted_demand_fractions;
+    if (!caesbDescobertoDemandClassesFractions.empty() && !caesbTortoSMDemandClassesFractions.empty()) {
+        size_t num_months = caesbDescobertoDemandClassesFractions.size();
+        caesb_weighted_demand_fractions.resize(num_months);
+        
+        for (size_t i = 0; i < num_months; ++i) {
+            size_t num_tiers = caesbDescobertoDemandClassesFractions[i].size();
+            caesb_weighted_demand_fractions[i].resize(num_tiers);
+            
+            for (size_t j = 0; j < num_tiers; ++j) {
+                caesb_weighted_demand_fractions[i][j] = 
+                    (caesbDescobertoDemandClassesFractions[i][j] * total_demand_descoberto + 
+                     caesbTortoSMDemandClassesFractions[i][j] * total_demand_tortoSM) / total_demand;
+            }
+        }
+    }
+    
+    // Calculate weighted average water prices for unified utility
+    vector<vector<double>> caesb_weighted_water_prices;
+    if (!caesbDescobertoUserClassesWaterPrices.empty() && !caesbTortoSMUserClassesWaterPrices.empty()) {
+        size_t num_classes = caesbDescobertoUserClassesWaterPrices.size();
+        caesb_weighted_water_prices.resize(num_classes);
+        
+        for (size_t i = 0; i < num_classes; ++i) {
+            size_t num_tiers = caesbDescobertoUserClassesWaterPrices[i].size();
+            caesb_weighted_water_prices[i].resize(num_tiers);
+            
+            for (size_t j = 0; j < num_tiers; ++j) {
+                caesb_weighted_water_prices[i][j] = 
+                    (caesbDescobertoUserClassesWaterPrices[i][j] * total_demand_descoberto + 
+                     caesbTortoSMUserClassesWaterPrices[i][j] * total_demand_tortoSM) / total_demand;
+            }
+        }
+    }
     
     double caesb_descoberto_inftrigger = vars[8]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Descoberto
     double caesb_tortoSM_inftrigger = vars[9]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Torto/SM
@@ -735,13 +774,13 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     rofs_infra_caesb_descoberto.push_back(1.1);
     
     // Create the single CAESB utility (handles finances and decisions only)
-    // NOTE: Using TortoSM price data for the unified utility (as per alignment with Original model)
+    // NOTE: Using weighted averages (demand fractions & prices) for the unified utility
     Utility caesb((char *) "CAESB", 0,
                   demand_caesb_descoberto, // Placeholder, will be managed by WSS
                   demand_n_weeks,
                   caesb_weighted_contingency_percent,  // Use weighted average, NOT sum
-                  caesbDescobertoDemandClassesFractions, // Using Descoberto data for unified utility
-                  caesbDescobertoUserClassesWaterPrices, // Using Descoberto data for unified utility
+                  caesb_weighted_demand_fractions, // Using weighted average demand fractions
+                  caesb_weighted_water_prices, // Using weighted average water prices
                   wwtp_discharge_caesb_descoberto, // Placeholder
                   caesb_descoberto_inf_buffer, // Placeholder
                   {}, {}, // Empty vectors for water_source_to_wtp and utility_owned_wtp_capacities

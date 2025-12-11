@@ -479,7 +479,7 @@ void Utility::addWaterSupplySystem(const std::string& name, int system_id, int u
         number_of_week_demands, wwtp_discharge_rule_copy, demand_buffer,
         water_source_to_wtp_copy, utility_owned_wtp_capacities_copy));
     
-    // CRITICAL: Reconnect the infrastructure manager after the WSS is in its final location
+    // Reconnect the infrastructure manager after the WSS is in its final location
     // This ensures the pointer is correct after any potential moves/copies
     auto& wss = water_supply_systems.back();
     wss->reconnectInfrastructureManager();
@@ -1122,8 +1122,8 @@ void Utility::resetFinancialState() {
 
 double Utility::getTotal_treatment_capacity() const {
     double utility_total_treatment_capacity = 0.0;
-    for (const auto& wss : water_supply_systems) {
-        utility_total_treatment_capacity += wss->getTotal_treatment_capacity();
+        for (const auto& wss : water_supply_systems) {
+            utility_total_treatment_capacity += wss->getTotal_treatment_capacity();
     }
     return utility_total_treatment_capacity;
 }
@@ -1136,7 +1136,7 @@ double Utility::getUnrestrictedDemand(int week) const {
     if (week == -1) {
         // no-parameter logic
         double utility_unrestricted_demand = 0.0;
-        for (const auto& wss : water_supply_systems) {
+            for (const auto& wss : water_supply_systems) {
             double wss_unrestricted_demand = wss->getUnrestrictedDemand();
             utility_unrestricted_demand += wss_unrestricted_demand;
         }
@@ -1223,8 +1223,8 @@ void Utility::setNoFinancialCalculations() {
 
 double Utility::getUnfulfilled_demand() const {
     double utility_unfulfilled_demand = 0.0;
-    for (const auto& wss : water_supply_systems) {
-        utility_unfulfilled_demand += wss->getUnfulfilled_demand();
+        for (const auto& wss : water_supply_systems) {
+            utility_unfulfilled_demand += wss->getUnfulfilled_demand();
     }
     return utility_unfulfilled_demand;
 }
@@ -1243,8 +1243,8 @@ double Utility::getBaseInfraDiscountRate() const {
 
 double Utility::getTotal_storage_capacity() const {
     double utility_total_storage_capacity = 0.0;
-    for (const auto& wss : water_supply_systems) {
-        utility_total_storage_capacity += wss->getTotal_storage_capacity();
+        for (const auto& wss : water_supply_systems) {
+            utility_total_storage_capacity += wss->getTotal_storage_capacity();
     }
     return utility_total_storage_capacity;
 }
@@ -1253,9 +1253,9 @@ double Utility::getTotal_available_volume() const {
     double utility_total_available_volume = 0.0;
     
     // Force WSS to update their volumes before aggregating
-    for (auto& wss : water_supply_systems) {
-        const_cast<WaterSupplySystems*>(wss.get())->updateTotalAvailableVolume();
-        utility_total_available_volume += wss->getTotal_available_volume();
+        for (auto& wss : water_supply_systems) {
+            const_cast<WaterSupplySystems*>(wss.get())->updateTotalAvailableVolume();
+            utility_total_available_volume += wss->getTotal_available_volume();
     }
     
     return utility_total_available_volume;
@@ -1265,9 +1265,9 @@ double Utility::getTotal_stored_volume() const {
     double utility_total_stored_volume = 0.0;
     
     // Force WSS to update their volumes before aggregating
-    for (auto& wss : water_supply_systems) {
-        // Force update of volumes from water sources
-        const_cast<WaterSupplySystems*>(wss.get())->updateTotalAvailableVolume();
+        for (auto& wss : water_supply_systems) {
+            // Force update of volumes from water sources
+            const_cast<WaterSupplySystems*>(wss.get())->updateTotalAvailableVolume();
         double wss_stored = wss->getTotal_stored_volume();
         utility_total_stored_volume += wss_stored;
     }
