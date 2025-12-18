@@ -426,11 +426,6 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
     int wss_skipped_no_storage = 0;
     int wss_processed = 0;
     
-    #ifdef PARALLEL
-    printf("DEBUG calculateReliabilityObjective_WSS: Processing %zu WSS, %lu realizations, %lu weeks\n",
-           wss_data.size(), n_realizations, n_weeks);
-    #endif
-    
     // Calculate reliability for EACH WSS independently
     int wss_idx = 0;
     for (const auto& wss_realization_data : wss_data) {
@@ -545,11 +540,6 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         wss_reliabilities.push_back(wss_reliability);
         wss_idx++;
     }
-    
-    #ifdef PARALLEL
-    printf("DEBUG calculateReliabilityObjective_WSS: Processed=%d, Skipped(no_data)=%d, Skipped(no_storage)=%d, wss_reliabilities.size()=%zu\n",
-           wss_processed, wss_skipped_no_data, wss_skipped_no_storage, wss_reliabilities.size());
-    #endif
     
     // Utility is only as reliable as its weakest system (among those with storage)
     // Check if wss_reliabilities is empty before calling min_element

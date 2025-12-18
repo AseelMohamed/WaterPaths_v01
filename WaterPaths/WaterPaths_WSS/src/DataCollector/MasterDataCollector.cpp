@@ -583,7 +583,7 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
 //            }
 //        }
     } else {
-//        cout << "Calculating Objectives" << endl;
+//        cout << "Calculating Objectives" << endl;    
         for (auto &u : utility_collectors) {
             // Create vector with restriction policies pertaining only to the
             // utility whose objectives are being calculated.
@@ -598,25 +598,14 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                 // Filter WSS collectors to only include those belonging to this utility
                 vector<vector<WSSDataCollector *>> utility_wss_collectors;
                 isolateWSSDataCollectors(u, utility_wss_collectors);
+            
+
                 
-                // DEBUG: Print WSS collector information
-                #ifdef PARALLEL
-                printf("DEBUG calculateObjectives: wss_collectors.size()=%zu, utility_wss_collectors.size()=%zu, utility_id=%d\n",
-                       wss_collectors.size(), utility_wss_collectors.size(),
-                       !u.empty() && !realizations_ran.empty() && u[realizations_ran[0]] != nullptr ? u[realizations_ran[0]]->id : -1);
-                #endif
-                
-                if (!utility_wss_collectors.empty()) {
-                    double reliability = ObjectivesCalculator::calculateReliabilityObjective_WSS(utility_wss_collectors, realizations_ran);
-                    #ifdef PARALLEL
-                    printf("DEBUG: WSS reliability calculated = %.17g\n", reliability);
-                    #endif
+                if (!utility_wss_collectors.empty()) {                    double reliability = ObjectivesCalculator::calculateReliabilityObjective_WSS(utility_wss_collectors, realizations_ran);
                     objectives.push_back(reliability);
                 } else {
                     // No WSS found for this utility, fallback to utility-level calculation
-                    #ifdef PARALLEL
-                    printf("WARNING: No WSS found for utility, using utility-level reliability calculation\n");
-                    #endif
+                    
                     double reliability = ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran);
                     objectives.push_back(reliability);
                 }
@@ -673,12 +662,6 @@ void MasterDataCollector::isolateWSSDataCollectors(vector<UtilitiesDataCollector
         utility_id = u.at(realizations_ran.at(0))->id;
     }
     
-    #ifdef PARALLEL
-    printf("DEBUG isolateWSS: Looking for WSS with utility_id=%d, total wss_collectors=%zu\n",
-           utility_id, wss_collectors.size());
-    #endif
-    
-    int wss_index = 0;
     for (const auto &wss_realization_data : wss_collectors) {
         if (!wss_realization_data.empty() && 
             wss_realization_data[realizations_ran[0]] != nullptr) {
@@ -686,27 +669,12 @@ void MasterDataCollector::isolateWSSDataCollectors(vector<UtilitiesDataCollector
             // Get stored owner ID (safe even after WSS is deleted)
             int owner_id = wss_realization_data[realizations_ran[0]]->getOwnerId();
             
-            #ifdef PARALLEL
-            printf("DEBUG isolateWSS: wss_index=%d, owner_id=%d, matches=%s\n",
-                   wss_index, owner_id, (owner_id == utility_id ? "YES" : "NO"));
-            #endif
-            
             // Check using stored ID (safe even if owner pointer is dangling)
             if (owner_id == utility_id) {
                 utility_wss_collectors.push_back(wss_realization_data);
             }
-        } else {
-            #ifdef PARALLEL
-            printf("DEBUG isolateWSS: wss_index=%d is EMPTY or NULL\n", wss_index);
-            #endif
         }
-        wss_index++;
     }
-    
-    #ifdef PARALLEL
-    printf("DEBUG isolateWSS: Found %zu WSS matching utility_id=%d\n",
-           utility_wss_collectors.size(), utility_id);
-    #endif
 }
 
 unsigned long MasterDataCollector::getActualWeeksCollected() const {

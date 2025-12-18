@@ -984,21 +984,21 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     /// Calculate objectives and store them in Borg decision variables array.
     objectives = calculateAndPrintObjectives(false);
 
-    // With WSS architecture, there is only ONE utility (CAESB) with 2 WSS.
-    // The objectives vector has 5 elements (not 10):
-    // [0] = Reliability (minimum across both WSS)
-    // [1] = Restriction Frequency
-    // [2] = Infrastructure NPC 
-    // [3] = Peak Financial Cost
-    // [4] = Worst Case Costs
-    
-	objs[0] = -objectives[0];  // Negative reliability (Borg minimizes)
-	objs[1] = objectives[1];   // Restriction frequency
-	objs[2] = objectives[2];   // Infrastructure NPC
-	objs[3] = objectives[3];   // Peak financial cost
-	objs[4] = objectives[4];   // Worst case costs
+// With WSS architecture, there is only ONE utility (CAESB) with 2 WSS.
+// The objectives vector has 5 elements (not 10):
+// [0] = Reliability (minimum across both WSS)
+// [1] = Restriction Frequency
+// [2] = Infrastructure NPC 
+// [3] = Peak Financial Cost
+// [4] = Worst Case Costs
 
-#ifdef  PARALLEL      
+#ifdef  PARALLEL 
+    objs[0] = -objectives[0];  // Negative reliability
+    objs[1] = objectives[1];   // Restriction frequency
+    objs[2] = objectives[2];   // Infrastructure NPC
+    objs[3] = objectives[3];   // Peak financial cost
+    objs[4] = objectives[4];   // Worst case costs
+     
         if (s != nullptr) {	 // != significa "diferente de"
             delete s;
     }
