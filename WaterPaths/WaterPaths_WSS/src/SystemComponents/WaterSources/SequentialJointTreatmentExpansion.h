@@ -38,6 +38,10 @@ public:
                              double wastewater_discharge,
                              vector<double> &demand_outflow) override;
 
+    void continuityWaterSource(int week, double upstream_source_inflow,
+                              double wastewater_inflow,
+                              vector<double> &demand_outflow) override;
+
     const unsigned int parent_reservoir_ID;
 
     double implementTreatmentCapacity(int utility_id);

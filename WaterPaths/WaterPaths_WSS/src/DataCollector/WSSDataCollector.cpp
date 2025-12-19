@@ -134,7 +134,8 @@ string WSSDataCollector::printCompactStringHeader() {
 void WSSDataCollector::collect_data() {
     // Collect available volume to match Original model behavior
     // Available volume includes flow-through sources (like intakes)
-    combined_storage.push_back(wss->getTotal_available_volume());
+    double available_vol = wss->getTotal_available_volume();
+    combined_storage.push_back(available_vol);
     storage_capacity.push_back(wss->getTotal_storage_capacity());
     storage_to_capacity_ratio.push_back(wss->getStorageToCapacityRatio());
     unrestricted_demand.push_back(wss->getUnrestrictedDemand());

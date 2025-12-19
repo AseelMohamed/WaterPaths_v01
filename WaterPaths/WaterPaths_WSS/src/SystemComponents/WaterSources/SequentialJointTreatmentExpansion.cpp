@@ -70,10 +70,21 @@ SequentialJointTreatmentExpansion &SequentialJointTreatmentExpansion::operator=(
 void SequentialJointTreatmentExpansion::applyContinuity(int week, double upstream_source_inflow,
                                                         double wastewater_discharge,
                                                         vector<double> &demand_outflow) {
-    throw std::logic_error("Reservoir expansion only add storage volume to the "
+    throw std::logic_error("Treatment expansion only add treatment capacity to the "
                                 "reservoir they're assigned to.  Continuity "
                                 "cannot be called on it, but only on the "
                                 "reservoir it's  assigned to expand.");
+}
+
+/**
+ * Treatment expansions don't run continuity independently - they just add capacity
+ * to their parent reservoir's treatment plant. Override to always bypass.
+ */
+void SequentialJointTreatmentExpansion::continuityWaterSource(int week, double upstream_source_inflow,
+                                                              double wastewater_inflow,
+                                                              vector<double> &demand_outflow) {
+    // Always bypass - treatment expansions don't have their own continuity
+    bypass(week, upstream_source_inflow + wastewater_inflow);
 }
 
 /**

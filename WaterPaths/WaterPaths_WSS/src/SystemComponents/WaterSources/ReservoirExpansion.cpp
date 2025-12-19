@@ -41,3 +41,14 @@ void ReservoirExpansion::applyContinuity(int week, double upstream_source_inflow
                                 "cannot be called on it, but only on the "
                                 "reservoir it's  assigned to expand.");
 }
+
+/**
+ * Reservoir expansions don't run continuity independently - they just add storage
+ * capacity to their parent reservoir. Override to always bypass.
+ */
+void ReservoirExpansion::continuityWaterSource(int week, double upstream_source_inflow,
+                                               double wastewater_inflow,
+                                               vector<double> &demand_outflow) {
+    // Always bypass - reservoir expansions don't have their own continuity
+    bypass(week, upstream_source_inflow + wastewater_inflow);
+}

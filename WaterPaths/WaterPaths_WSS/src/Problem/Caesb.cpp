@@ -165,10 +165,10 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double ETA_paranoaSul_upgrade1_ranking = vars[10]; // implantação de nova ETA no Paranoá Sul. É como se fossem o "low" e o "high" do estudo de caso da Carolina do Norte.
     double ETA_paranoaSul_upgrade2_ranking = vars[11]; // ampliação da capacidade da ETA Paranoá Sul
     double ETA_paranoaSul_upgrade3_ranking = vars[12]; // ampliação da capacidade da ETA Paranoá Sul
-    double ETA_corumba_upgrade1_ranking = vars[13]; // ampliação da ETA Corumbá (+ 1400 l/s)
-    double ETA_corumba_upgrade2_ranking = vars[14]; // ampliação da ETA Corumbá (+ 1400 l/s)
-    double ETA_corumba_upgrade3_ranking = vars[15]; // ampliação da ETA Corumbá (+ 1200 l/
-    double descoberto_expansao_ranking = vars[16]; // expansão da capacidade de armazenamento do reservatório do scoberto
+    double ETA_corumba_upgrade1_ranking = vars[13]; // Corumba Etapa 2: ampliação da ETA Corumbá (+ 1400 l/s, total 2.8 m³/s)
+    double ETA_corumba_upgrade2_ranking = vars[14]; // Corumba Etapa 3: ampliação da ETA Corumbá (+ 1200 l/s, total 4.0 m³/s)
+    double ETA_corumba_upgrade3_ranking = vars[15]; // DEPRECATED - Etapa 1 removed (Corumba starts with 1.4 m³/s)
+    double descoberto_expansao_ranking = vars[16]; // expansão da capacidade de armazenamento do reservatório do Descoberto
     double caesb_descoberto_inf_buffer = vars[17];
     double caesb_tortoSM_inf_buffer = vars[18];
 
@@ -177,16 +177,23 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     //IDENTIFICADOR DE CADA INFRAESTRUTURA FUTURA. Obs: as infraestruturas já existentes devem ser numeradas antes, começando do 0.
 
     vector<infraRank> caesb_descoberto_infra_order_raw = { //A Companhia Caesb Descoberto abrange os reservatórios do Descoberto e de Corumbá IV
-            infraRank(6, ETA_corumba_upgrade1_ranking),
-            infraRank(7, ETA_corumba_upgrade2_ranking),
-            infraRank(8, ETA_corumba_upgrade3_ranking),
-            infraRank(12, descoberto_expansao_ranking)
+            // UPDATED IDs after removing Etapa 1 and makeshift: 
+            // ID 5: ETA_corumba_etapa2 (+1.4 m³/s, total 2.8 m³/s)
+            // ID 6: ETA_corumba_etapa3 (+1.2 m³/s, total 4.0 m³/s)
+            // ID 10: descoberto_expansion (storage +25%)
+            infraRank(5, ETA_corumba_upgrade1_ranking),  // Changed from 6 to 5 (now etapa2)
+            infraRank(6, ETA_corumba_upgrade2_ranking),  // Changed from 7 to 6 (now etapa3)
+            infraRank(10, descoberto_expansao_ranking)   // Changed from 12 to 10
     };
 
     vector<infraRank> caesb_tortoSM_infra_order_raw = { //A Companhia Caesb TortoSM abrange os reservatórios do TortoSM e do Lago Paranoá
-            infraRank(9, ETA_paranoaSul_upgrade1_ranking),
-            infraRank(10, ETA_paranoaSul_upgrade2_ranking),
-            infraRank(11, ETA_paranoaSul_upgrade3_ranking)
+            // Updated IDs after removing Etapa 1: 
+            // ID 7: etapa1_ETA_paranoaSul
+            // ID 8: etapa2_ETA_paranoaSul
+            // ID 9: etapa3_ETAs_paranoa
+            infraRank(7, ETA_paranoaSul_upgrade1_ranking),  // Changed from 9 to 7
+            infraRank(8, ETA_paranoaSul_upgrade2_ranking),  // Changed from 10 to 8
+            infraRank(9, ETA_paranoaSul_upgrade3_ranking)   // Changed from 11 to 9
     };
 
     // GET INFRASTRUCTURE CONSTRUCTION ORDER BASED ON DECISION VARIABLES
@@ -490,20 +497,29 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                    17330.0};
     DataSeries corumba_storage_area(&corumba_storage, &corumba_area);
 
-    vector<int> cIV_allocations_ids = {0,  // Descoberto system id (system that uses Corumba)
-                                       WATER_QUALITY_ALLOCATION}; //0 é a id da CAESB (single utility managing both systems)
+    // Corumba IV allocation: storage is shared as:
+    // CAESB (Descoberto WSS) = 12.849 hm³ (0.35% of 3708 hm³)
+    // Saneago = 12.849 hm³ (0.35%)
+    // Energy = 745.702 hm³ (20.1%)
+    // Water Quality = 2936.6 hm³ (79.2%)
+    vector<int> cIV_allocations_ids = {0,
+                                       WATER_QUALITY_ALLOCATION};
     vector<double> cIV_allocation_fractions = {
-            cIV_supply_caesb_capacity / cIV_storage_capacity,
+            cIV_supply_caesb_capacity / cIV_storage_capacity,  // 0.00346 = 12.849/3708
             (cIV_wq_capacity + cIV_supply_saneago_capacity +
-             cIV_energy_capacity) / cIV_storage_capacity};
+             cIV_energy_capacity) / cIV_storage_capacity}; 
     vector<double> cIV_treatment_allocation_fractions = {
-            1.0};  //The Descoberto system treats water from Corumbá IV
+            1.0};  // Descoberto WSS treats 100% of water withdrawn from Corumba
+
+    // Initial treatment capacity for Corumba IV (online from start)
+    // Using the first stage ETA capacity (1.4 m³/s = 1.4e-6 * 3600 * 24 * 7 hm³/week)
+    double cIV_initial_treatment_capacity = 1.4e-6 * 3600 * 24 * 7;
 
     AllocatedReservoir corumba("Corumba IV",
                                2,
                                bacia_corumba,
-                               0,
-                               0,
+                               cIV_storage_capacity,  // Total: 3708 hm³
+                               cIV_initial_treatment_capacity,  // Initial: 1.4 m³/s
                                evaporation_corumba,
                                15000., //&corumba_storage_area,
                                &cIV_allocations_ids,
@@ -549,8 +565,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 //                            0.95e-6 * 3600 * 24 * 7); //950 m³/s corresponde à captação média no Torto.
 
 
-    BalloonPaymentBond dummy_bond(5, 0., 1, 1., vector<int>(1, 0));
-    Reservoir dummy_endpoint("Dummy Node", 5, vector<Catchment *>(), 1., 0,
+    BalloonPaymentBond dummy_bond(11, 0., 1, 1., vector<int>(1, 0));
+    Reservoir dummy_endpoint("Dummy Node", 11, vector<Catchment *>(), 1., 0,
                              evaporation_corumba, 1,
                              construction_time_interval, 0, dummy_bond);
 
@@ -568,21 +584,25 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         - Ballon Payment
         - Variable-Interest Bonds */
 
-    //Captação em Corumbá IV - Etapa 1 (1.4 m³/s) + Etapa 2 (+ 1.4 m³/s) + Etapa 3 (+ 1.2 m³/s)
+    //Captação em Corumbá IV - Initial capacity: 1.4 m³/s (online from start)
+    //                        - Etapa 2 (FORMER Etapa 1): + 1.4 m³/s (total 2.8 m³/s)
+    //                        - Etapa 3 (FORMER Etapa 2): + 1.4 m³/s (total 4.2 m³/s) 
+    //                        - Etapa 4 (FORMER Etapa 3): + 1.2 m³/s (total 5.4 m³/s)
+    // Original Etapa 1 removed since Corumba now starts with 1.4 m³/s treatment capacity
 
-    vector<double> capacity_ETA_corumba_upgrade_1 = {1.4e-6 * 3600 * 24 * 7,
-                                                     0}; //introdução da primeira ETA em Corumbá IV (1,4 m³/s). A unidade está em hm³/semana.
+    // FORMER Etapa 1 - REMOVED (now initial capacity)
+    // vector<double> capacity_ETA_corumba_upgrade_1 = {1.4e-6 * 3600 * 24 * 7, 0};
+    
     vector<double> capacity_ETA_corumba_upgrade_2 = {1.4e-6 * 3600 * 24 * 7,
-                                                     0}; //ampliação da capacidade de produção (+ 1,4 m³/s).
+                                                     0}; //ampliação da capacidade de produção (+ 1,4 m³/s) - TOTAL: 2.8 m³/s
     vector<double> capacity_ETA_corumba_upgrade_3 = {1.2e-6 * 3600 * 24 * 7,
-                                                     0}; //ampliação da capacidade de produção (+ 1,2 m³/s)
+                                                     0}; //ampliação da capacidade de produção (+ 1,2 m³/s) - TOTAL: 4.0 m³/s
 
     //Empréstimo para Expansão da ETA Corumbá (Sistema Corumbá)
+    // Etapa 1 bonds removed since treatment capacity is now initial
 
-    vector<Bond *> debendure_expansao_ETA_corumba_1 = {
-            new LevelDebtServiceBond(6, 276521740.0, 15, 0.12,
-                                     vector<int>(1, 0)),
-            new BalloonPaymentBond(11, 0, 15, 0.12, vector<int>(1, 0))};
+    // FORMER debendure_expansao_ETA_corumba_1 - REMOVED
+    
     vector<Bond *> debendure_expansao_ETA_corumba_2 = {
             new LevelDebtServiceBond(7, 222066142.8, 15, 0.12,
                                      vector<int>(1, 0)),
@@ -590,30 +610,28 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     vector<Bond *> debendure_expansao_ETA_corumba_3 = {
             new LevelDebtServiceBond(8, 251383400, 15, 0.12,
                                      vector<int>(1, 0)),
-            new BalloonPaymentBond(13, 0, 15, 0.12, vector<int>(1, 0))};
+            new BalloonPaymentBond(12, 0, 15, 0.12, vector<int>(1, 0))};
 
 
-    BalloonPaymentBond no_bond(13, 0., 1, 1, vector<int>(1, 0));
-    ReservoirExpansion corumba_makeshift_expansion("Corumba Ativação", 13, 2, cIV_storage_capacity *
-                                                                              table_gen_storage_multiplier, vector<double>(2, 0.), 0, no_bond);
+    // Corumba makeshift expansion was removed - Corumba now starts fully online with storage and treatment
+    // BalloonPaymentBond no_bond(5, 0., 1, 1, vector<int>(1, 0));
+    // ReservoirExpansion corumba_makeshift_expansion("Corumba Ativação", 5, 2, cIV_storage_capacity...
 
-    SequentialJointTreatmentExpansion ETA_corumba_etapa1(
-            "Etapa 1 de Corumba IV", 6, 2, 0, {13, 6, 7, 8},
-            capacity_ETA_corumba_upgrade_1,
-            debendure_expansao_ETA_corumba_1, construction_time_interval,
-            0 * WEEKS_IN_YEAR); //previsão: 2020
+    // FORMER ETA_corumba_etapa1 - REMOVED (treatment capacity now starts online)
+    // Corumba expansions maintain sequential order: Etapa 2 must be built before Etapa 3
 
+    BalloonPaymentBond no_bond(5, 0., 1, 1, vector<int>(1, 0));
     SequentialJointTreatmentExpansion ETA_corumba_etapa2(
-            "Etapa 2 de Corumba IV", 7, 2, 1, {13, 6, 7, 8},
+            "Etapa 2 de Corumba IV", 5, 2, 0, {5, 6},
             capacity_ETA_corumba_upgrade_2,
             debendure_expansao_ETA_corumba_2, construction_time_interval,
-            0 * WEEKS_IN_YEAR); //previsão: 2030 a 2033
+            0 * WEEKS_IN_YEAR); //previsão: 2030 a 2033. ID changed to 5
 
     SequentialJointTreatmentExpansion ETA_corumba_etapa3(
-            "Etapa 3 de Corumba IV", 8, 2, 2, {13, 6, 7, 8},
+            "Etapa 3 de Corumba IV", 6, 2, 1, {5, 6},
             capacity_ETA_corumba_upgrade_3,
             debendure_expansao_ETA_corumba_3, construction_time_interval,
-            5 * WEEKS_IN_YEAR); //previsão: depois de 2037
+            5 * WEEKS_IN_YEAR); //previsão: depois de 2037. ID changed to 6
 
 
     //Sistema Paranoá - Construção da ETA Paranoá Sul (0.7 m³/s), sua primeira ampliação (upgrade 2, com + 0.7 m³/s), segunda ampliação (upgrade 3, com + 0.35 m³/s) e
@@ -633,48 +651,48 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // Empréstimos para a implantação e ampliação da ETA Paranoá Sul e Norte (Norte: apenas upgrade 3)
 
     vector<Bond *> debendure_expansao_ETA_paranoa_1 = {
-            new BalloonPaymentBond(14, 0, 15, 0.12, vector<int>(1, 0)),
-            new LevelDebtServiceBond(9, 60332016, 15, 0.12,
+            new BalloonPaymentBond(11, 0, 15, 0.12, vector<int>(1, 0)),
+            new LevelDebtServiceBond(8, 60332016, 15, 0.12,
                                      vector<int>(1, 0))}; //bond term = 25 anos
     vector<Bond *> debendure_expansao_ETA_paranoa_2 = {
-            new BalloonPaymentBond(15, 0, 15, 0.12, vector<int>(1, 0)),
-            new LevelDebtServiceBond(10, 60332016, 15, 0.12,
+            new BalloonPaymentBond(11, 0, 15, 0.12, vector<int>(1, 0)),
+            new LevelDebtServiceBond(9, 60332016, 15, 0.12,
                                      vector<int>(1, 0))};
     vector<Bond *> debendure_expansao_ETA_paranoa_3 = {
-            new BalloonPaymentBond(16, 0, 15, 0.12, vector<int>(1, 0)),
-            new LevelDebtServiceBond(11, 60332016, 15, 0.12,
+            new BalloonPaymentBond(11, 0, 15, 0.12, vector<int>(1, 0)),
+            new LevelDebtServiceBond(10, 60332016, 15, 0.12,
                                      vector<int>(1, 0))};
 
 
     SequentialJointTreatmentExpansion etapa1_ETA_paranoaSul(
-            "Etapa 1 da ETA Paranoa Sul ", 9, 3, 0, {9, 10, 11},
+            "Etapa 1 da ETA Paranoa Sul ", 7, 3, 0, {7, 8, 9},
             capacities_ETA_paranoaSul_upgrade_1,
             debendure_expansao_ETA_paranoa_1, construction_time_interval,
-            0 * WEEKS_IN_YEAR); //previsão: 2020
+            0 * WEEKS_IN_YEAR); //previsão: 2020. ID changed to 7
 
     SequentialJointTreatmentExpansion etapa2_ETA_paranoaSul(
-            "Etapa 2 da ETA Paranoa Sul", 10, 3, 1, {9, 10, 11},
+            "Etapa 2 da ETA Paranoa Sul", 8, 3, 1, {7, 8, 9},
             capacities_ETA_paranoaSul_upgrade_2,
             debendure_expansao_ETA_paranoa_2, construction_time_interval,
-            0 * WEEKS_IN_YEAR); //previsão: 2022
+            0 * WEEKS_IN_YEAR); //previsão: 2022. ID changed to 8
 
     SequentialJointTreatmentExpansion etapa3_ETAs_paranoa(
-            "Etapa 3 da ETA Paranoa Sul e Norte", 11, 3, 2, {9, 10, 11},
+            "Etapa 3 da ETA Paranoa Sul e Norte", 9, 3, 2, {7, 8, 9},
             capacities_ETAs_paranoa_upgrade_3,
             debendure_expansao_ETA_paranoa_3, construction_time_interval,
-            0 * WEEKS_IN_YEAR); //previsão: 2034 a 2037
+            0 * WEEKS_IN_YEAR); //previsão: 2034 a 2037. ID changed to 9
 
     // Expansão do Reservatório do Descoberto
 
-    LevelDebtServiceBond descoberto_exp_bond(12, 7541502, 15, 0.12,
+    LevelDebtServiceBond descoberto_exp_bond(10, 7541502, 15, 0.12,
                                              vector<int>(1,
                                                          0)); //Elevação do nível d'água da barragem do descoberto (aumento da capacidade de armazenamento em 25%)
     ReservoirExpansion descoberto_expansion(
-            "Expansao da capacidade de armazenamento do Descoberto", 12, 0,
+            "Expansao da capacidade de armazenamento do Descoberto", 10, 0,
             25.216, //25.216 = aumento em hm³ da capacidade de armazenamento do Descoberto (25%)
             construction_time_interval,
             0 * WEEKS_IN_YEAR,
-            descoberto_exp_bond); //previsão: 2022 //acréscimo de 0.4 m³/s na vazão captável (PDSB, 2017).
+            descoberto_exp_bond); //previsão: 2022. ID changed to 10
 
     vector<WaterSource *> water_sources; //water_sources é um vetor comum, que comportará todas as
     // opções descritas acima de ampliação da infraestrutura de abastecimento
@@ -686,10 +704,10 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 //    water_sources.push_back(&ribeirao_bananal);
 //    water_sources.push_back(&ribeirao_torto);
 
-    water_sources.push_back(&corumba_makeshift_expansion);
-    water_sources.push_back(&ETA_corumba_etapa1);
-    water_sources.push_back(&ETA_corumba_etapa2);
-    water_sources.push_back(&ETA_corumba_etapa3);
+    // Corumba makeshift REMOVED - Corumba now starts fully online
+    // ETA_corumba_etapa1 REMOVED - Corumba now starts with 1.4 m³/s treatment
+    water_sources.push_back(&ETA_corumba_etapa2);  // ID 5 at index 5
+    water_sources.push_back(&ETA_corumba_etapa3);  // ID 6 at index 6
     water_sources.push_back(&etapa1_ETA_paranoaSul);
     water_sources.push_back(&etapa2_ETA_paranoaSul);
     water_sources.push_back(&etapa3_ETAs_paranoa);
@@ -706,12 +724,12 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
      * of existing sources in parentheses
      *
      *                                  1 (Santa Maria)
-     *      0(12)                       |
+     *      0(10)                       |
      *       \                          |
      *        \                         |  4(Ban)   4 (Torto)
      *         \                        |   \      /
      *          \                       |    \ __/
-     *           \                      |     3 (Paranoá) (9, 10, 11)
+     *           \                      |     3 (Paranoá) (7, 8, 9)
      *            \                     |     |
      *             \                    |    |
      *              \                   |   |
@@ -720,22 +738,22 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
      *                 \               /
      *                  \             /
      *                   \           /
-     *                2(6, 7, 8)_   /
-     *                           \ /
+     *                2(5, 6)_ _    /
+     *                          \  /
      *                           \/
-     *                           5 (dummy)
+     *                           11 (dummy)
      *
      */
 
-    Graph g(6); //graph é uma forma de estruturar dados que consiste em dois componentes:
+    Graph g(12); //graph é uma forma de estruturar dados que consiste em dois componentes:
     // um conjunto finito de vértices denominado de nós; e um cojunto finito de pares ordenados (x,y), denominados de edges.
     g.addEdge(0,
               2); //essa conexão indica que existe uma aresta do vértice 0 ao vértice 2.
-    g.addEdge(2, 5);
-    g.addEdge(1, 5);
+    g.addEdge(2, 11);
+    g.addEdge(1, 11);
     g.addEdge(4, 3);
-    //g.addEdge(5, 3);
-    g.addEdge(3, 5);
+    //g.addEdge(11, 3);
+    g.addEdge(3, 11);
 
     auto demand_n_weeks = (int) std::round(40 *
                                            WEEKS_IN_YEAR); //40 é o número de anos a serem simulados. A fç auto serve para
@@ -757,9 +775,10 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     //Criação das companhias de água. A descrição de cada termo está no arquivo .doc.
 
-    vector<vector<int>> water_sources_to_wtp_caesb_1 = {{0},
-                                                        {2}};
-    vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7, 0.};
+    vector<vector<int>> water_sources_to_wtp_caesb_1 = {{0},  // WTP 0 treats Descoberto
+                                                        {2}};  // WTP 1 treats Corumba
+    vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7,   // WTP 0: Descoberto ETA (6.0 m³/s)
+                                             1.4e-6 * 3600 * 24 * 7};  // WTP 1: Corumba ETA (1.4 m³/s) - NOW ONLINE!
     vector<vector<int>> water_sources_to_wtp_caesb_2 = {{1, 4},
                                                         {3}};
     vector<double> wtp_capacities_caesb_2 = {
@@ -770,8 +789,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // First system: Descoberto (system_id=0, utility_id=0)
     // Second system: TortoSM (system_id=1, utility_id=0)
     
-    rof_triggered_infra_order_caesb_descoberto.push_back(13);
-    rofs_infra_caesb_descoberto.push_back(1.1);
+    // NOTE: Infrastructure order based on decision variables (sorted in caesb_descoberto_infra_order_raw)
+    // No need to manually push_back infrastructure IDs here
     
     // Create the single CAESB utility (handles finances and decisions only)
     // NOTE: Using weighted averages (demand fractions & prices) for the unified utility
@@ -821,17 +840,21 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     // Water-source-WSS connectivity matrix (each row corresponds to a WSS and numbers are water
     // sources IDs.
+    // Must include ALL infrastructure that can be built (reservoirs, expansions, treatment plants, dummy)
+    // Original: Descoberto {0,2,6,7,8,12,13}, TortoSM {1,3,4,9,10,11}
+    // After removing Etapa 1 (was 6) and makeshift (was 13→removed, dummy renumbered 13→11):
     vector<vector<int>> reservoir_wss_connectivity_matrix = {
-            {0, 2, 6, 7, 8, 12, 13},  // Sources managed by Descoberto WSS (system_id=0)
-            {1, 3, 4, 9, 10, 11}      // Sources managed by TortoSM WSS (system_id=1)
+            {0, 2, 5, 6, 10, 11},  // Descoberto: Descoberto(0), Corumba(2), ETA_etapa2(5), ETA_etapa3(6), descoberto_expansion(10), dummy(11)
+            {1, 3, 4, 7, 8, 9}     // TortoSM: TortoSM(1), Paranoa(3), Bananal/Torto(4), ETA_paranoa_etapa1(7), etapa2(8), etapa3(9)
     };
 
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
 //    // O que table_storage_shift representa? O que são esses números (2000, 5000...) [3] [17]
     // Update table storage shift to match WSS structure (2 WSS within single utility)
-    auto table_storage_shift = vector<vector<double>>(2,  // Two WSS instead of 1
-                                                      vector<double>(14, 0.));
-    table_storage_shift[0][13] = 30;
+    // Vector size matches water source count: 12 sources (IDs 0-11)
+    auto table_storage_shift = vector<vector<double>>(2,  // Two WSS
+                                                      vector<double>(12, 0.));
+    // No storage shift needed for current configuration
 //    table_storage_shift[3][17] = 2000.; //tem a ver com a RdF
 //    table_storage_shift[3][8] = 5000.;
 //    table_storage_shift[1][14] = 100.;

@@ -427,24 +427,24 @@ int InfrastructureManager::infrastructureConstructionHandler(
                 if (water_sources->at(ws)->getBuilt_in_sequence().empty()) {
                     set_online_now.push_back((int) ws);
                 } else {
-                    for (const int &id_build : water_sources->at(
-                            ws)->getBuilt_in_sequence()) {
-                        /// Check if previous source/expansion is yet to be built.
-                        bool yet_to_be_built =
-                                find(rof_infra_construction_order.begin(),
-                                     rof_infra_construction_order.end(),
-                                     id_build)
-                                != rof_infra_construction_order.end() ||
-                                find(demand_infra_construction_order.begin(),
-                                     demand_infra_construction_order.end(),
-                                     id_build)
-                                != demand_infra_construction_order.end();
-                        if (yet_to_be_built)
-                            set_online_now.push_back(id_build);
-                        if (id_build == ws)
-                            break;
+                        for (const int &id_build : water_sources->at(
+                                ws)->getBuilt_in_sequence()) {
+                            /// Check if previous source/expansion is yet to be built.
+                            bool yet_to_be_built =
+                                    find(rof_infra_construction_order.begin(),
+                                         rof_infra_construction_order.end(),
+                                         id_build)
+                                    != rof_infra_construction_order.end() ||
+                                    find(demand_infra_construction_order.begin(),
+                                         demand_infra_construction_order.end(),
+                                         id_build)
+                                    != demand_infra_construction_order.end();
+                            if (yet_to_be_built)
+                                set_online_now.push_back(id_build);
+                            if (id_build == ws)
+                                break;
+                        }
                     }
-                }
 
                 /// Set online all sources that at to be set online now.
                 for (const int &wss : set_online_now) {
