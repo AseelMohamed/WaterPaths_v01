@@ -206,7 +206,6 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
                         (realizations_year_debt_payment +
                          realizations_year_cont_fund_contribution +
                          realizations_year_insurance_contract_cost) /
-//                                realizations_year_gross_revenue;
                         (realizations_year_gross_revenue *
                          (1. + pow(1. + discount_rate, y)));
                 // update year count.
@@ -225,7 +224,20 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
                              year_financial_costs.end());
         
         if (realization_financial_costs[r] > 1e10) {
-            printf("Absurdly high financial cost in realization %lu.\n", r);
+            printf("\n=== DEBUG: Absurdly high financial cost in realization %lu ===", r);
+            printf("\nPeak financial cost: %.2e", realization_financial_costs[r]);
+            
+            // Find the year with max cost
+            auto max_it = max_element(year_financial_costs.begin(), year_financial_costs.end());
+            int max_year = distance(year_financial_costs.begin(), max_it);
+            printf("\nPeak year: %d with cost: %.2e", max_year, *max_it);
+            
+            // Show first few years for context
+            printf("\nFirst 5 year costs:");
+            for (int i = 0; i < min(5, (int)year_financial_costs.size()); i++) {
+                printf("\n  Year %d: %.2e", i, year_financial_costs[i]);
+            }
+            printf("\n");
         }
     }
 
@@ -302,7 +314,6 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
                 year_financial_costs[y] =
                         max(year_drought_mitigation_cost
                             - utility_data[r]->getContingency_fund_size()[w],
-//                            0.0) / year_gross_revenue;
                             0.0) / (year_gross_revenue * (1. + pow(1. + discount_rate, y)));
 
                 year_gross_revenue = 1e-6;

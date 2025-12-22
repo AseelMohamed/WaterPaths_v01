@@ -23,6 +23,13 @@ private:
     vector<double> weekly_average_volumetric_price;
     // NOTE: base_weekly_average_volumetric_price and price_rdm_multiplier removed to match Original model
     // Prices are no longer scaled by RDM factors
+    
+    // WSS-specific financial parameters (indexed by system_id)
+    std::map<int, double> wss_contingency_percentages;  // Contingency fund % for each WSS
+    std::map<int, vector<vector<double>>> wss_demand_fractions;  // Demand class fractions for each WSS
+    std::map<int, vector<vector<double>>> wss_water_prices;  // Water prices for each WSS
+    std::map<int, vector<double>> wss_weekly_average_prices;  // Calculated weekly average prices for each WSS
+    
     // Financial and strategic variables (kept in Utility)
     double gross_revenue = 0;
     
@@ -166,13 +173,13 @@ public:
                               const WwtpDischargeRule& wwtp_discharge_rule,
                               double demand_buffer,
                               const std::vector<std::vector<int>>& water_source_to_wtp,
-                              const std::vector<double>& utility_owned_wtp_capacities);
-
-    void clearWaterSupplySystems();
-
-    void setRealization(unsigned long r, vector<double> &rdm_factors);
+                             const std::vector<double>& utility_owned_wtp_capacities,
+                             double wss_contingency_percent,
+                             const std::vector<std::vector<double>>& wss_demand_class_fractions,
+                             const std::vector<std::vector<double>>& wss_water_prices_param);
     
-    // THREAD-SAFE: Clear global bond tracking before running realizations
+    void clearWaterSupplySystems();
+    
     // Must be called BEFORE parallel region starts, not during setRealization
     static void clearGlobalBondTracking();
 
@@ -191,6 +198,11 @@ public:
 
     void calculateWeeklyAverageWaterPrices(const vector<vector<double>> &typesMonthlyDemandFraction,
                                            const vector<vector<double>> &typesMonthlyWaterPrice); //checked
+    
+    // Overloaded version for WSS-specific price calculation (output to parameter)
+    void calculateWeeklyAverageWaterPrices(const vector<vector<double>> &typesMonthlyDemandFraction,
+                                           const vector<vector<double>> &typesMonthlyWaterPrice,
+                                           vector<double>& output_weekly_prices);
 
     void setDemand_offset(double demand_offset, double offset_rate_per_volume);
 
@@ -248,6 +260,8 @@ public:
     double getTotal_stored_volume() const; // NEW - aggregates stored volume from all WSS
 
     void updateTotalAvailableVolume(); // NEW - delegates to all WSS
+    
+    void setRealization(unsigned long r, vector<double> &rdm_factors);
 
     double getUnfulfilled_demand() const; 
 

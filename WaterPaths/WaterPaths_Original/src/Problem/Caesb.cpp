@@ -96,6 +96,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double caesb_tortoSM_transfer_trigger = vars[5]; //gatilho para acionar transferência de água para o Descoberto
     double caesb_descoberto_annual_payment = vars[6]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
     double caesb_tortoSM_annual_payment = vars[7]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
+    
     double caesb_descoberto_inftrigger = vars[8]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Descoberto
     double caesb_tortoSM_inftrigger = vars[9]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Torto/SM
     if (import_export_rof_tables == EXPORT_ROF_TABLES) {

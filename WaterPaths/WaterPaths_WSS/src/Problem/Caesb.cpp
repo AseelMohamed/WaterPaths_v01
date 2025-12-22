@@ -96,65 +96,6 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double caesb_descoberto_annual_payment = vars[6]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
     double caesb_tortoSM_annual_payment = vars[7]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
     
-    // Calculate weighted average instead of sum to match Original model behavior
-    // Each WSS has its own percentage, utility uses demand-weighted average
-    double total_demand_descoberto = 0.0;
-    double total_demand_tortoSM = 0.0;
-    // Sum demands across all realizations to get average weights
-    for (const auto& realization : demand_caesb_descoberto) {
-        for (double weekly_demand : realization) {
-            total_demand_descoberto += weekly_demand;
-        }
-    }
-    for (const auto& realization : demand_caesb_tortoSM) {
-        for (double weekly_demand : realization) {
-            total_demand_tortoSM += weekly_demand;
-        }
-    }
-
-    double total_demand = total_demand_descoberto + total_demand_tortoSM;
-    
-    // Weighted average percentage based on relative demands
-    double caesb_weighted_contingency_percent = 
-        (caesb_descoberto_annual_payment * total_demand_descoberto + 
-         caesb_tortoSM_annual_payment * total_demand_tortoSM) / total_demand;
-    
-    // Calculate weighted average demand class fractions for unified utility
-    vector<vector<double>> caesb_weighted_demand_fractions;
-    if (!caesbDescobertoDemandClassesFractions.empty() && !caesbTortoSMDemandClassesFractions.empty()) {
-        size_t num_months = caesbDescobertoDemandClassesFractions.size();
-        caesb_weighted_demand_fractions.resize(num_months);
-        
-        for (size_t i = 0; i < num_months; ++i) {
-            size_t num_tiers = caesbDescobertoDemandClassesFractions[i].size();
-            caesb_weighted_demand_fractions[i].resize(num_tiers);
-            
-            for (size_t j = 0; j < num_tiers; ++j) {
-                caesb_weighted_demand_fractions[i][j] = 
-                    (caesbDescobertoDemandClassesFractions[i][j] * total_demand_descoberto + 
-                     caesbTortoSMDemandClassesFractions[i][j] * total_demand_tortoSM) / total_demand;
-            }
-        }
-    }
-    
-    // Calculate weighted average water prices for unified utility
-    vector<vector<double>> caesb_weighted_water_prices;
-    if (!caesbDescobertoUserClassesWaterPrices.empty() && !caesbTortoSMUserClassesWaterPrices.empty()) {
-        size_t num_classes = caesbDescobertoUserClassesWaterPrices.size();
-        caesb_weighted_water_prices.resize(num_classes);
-        
-        for (size_t i = 0; i < num_classes; ++i) {
-            size_t num_tiers = caesbDescobertoUserClassesWaterPrices[i].size();
-            caesb_weighted_water_prices[i].resize(num_tiers);
-            
-            for (size_t j = 0; j < num_tiers; ++j) {
-                caesb_weighted_water_prices[i][j] = 
-                    (caesbDescobertoUserClassesWaterPrices[i][j] * total_demand_descoberto + 
-                     caesbTortoSMUserClassesWaterPrices[i][j] * total_demand_tortoSM) / total_demand;
-            }
-        }
-    }
-    
     double caesb_descoberto_inftrigger = vars[8]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Descoberto
     double caesb_tortoSM_inftrigger = vars[9]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Torto/SM
     if (import_export_rof_tables == EXPORT_ROF_TABLES) {
@@ -772,18 +713,13 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // Create single CAESB utility with two water supply systems
     // First system: Descoberto (system_id=0, utility_id=0)
     // Second system: TortoSM (system_id=1, utility_id=0)
-    
-    // NOTE: Infrastructure order based on decision variables (sorted in caesb_descoberto_infra_order_raw)
-    // No need to manually push_back infrastructure IDs here
-    
-    // Create the single CAESB utility (handles finances and decisions only)
-    // NOTE: Using weighted averages (demand fractions & prices) for the unified utility
+
     Utility caesb((char *) "CAESB", 0,
                   demand_caesb_descoberto, // Placeholder, will be managed by WSS
                   demand_n_weeks,
-                  caesb_weighted_contingency_percent,  // Use weighted average, NOT sum
-                  caesb_weighted_demand_fractions, // Using weighted average demand fractions
-                  caesb_weighted_water_prices, // Using weighted average water prices
+                  0.0,  // Placeholder - each WSS has its own contingency %
+                  vector<vector<double>>(), // Empty - each WSS has its own demand fractions
+                  vector<vector<double>>(), // Empty - each WSS has its own water prices
                   wwtp_discharge_caesb_descoberto, // Placeholder
                   caesb_descoberto_inf_buffer, // Placeholder
                   {}, {}, // Empty vectors for water_source_to_wtp and utility_owned_wtp_capacities
@@ -796,7 +732,10 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                wwtp_discharge_caesb_descoberto,
                                caesb_descoberto_inf_buffer,
                                water_sources_to_wtp_caesb_1,
-                               wtp_capacities_caesb_1);
+                               wtp_capacities_caesb_1,
+                               caesb_descoberto_annual_payment,
+                               caesbDescobertoDemandClassesFractions,
+                               caesbDescobertoUserClassesWaterPrices);
 
     // Add TortoSM water supply system (system_id=1)  
     caesb.addWaterSupplySystem("TortoSM", 1, 0,
@@ -804,7 +743,10 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                wwtp_discharge_caesb_tortoSM,
                                caesb_tortoSM_inf_buffer,
                                water_sources_to_wtp_caesb_2,
-                               wtp_capacities_caesb_2);
+                               wtp_capacities_caesb_2,
+                               caesb_tortoSM_annual_payment,
+                               caesbTortoSMDemandClassesFractions,
+                               caesbTortoSMUserClassesWaterPrices);
 
     // Set infrastructure parameters for each WSS (this is where WSS gets operational control)
     // WSS_0 (Descoberto) gets Descoberto infrastructure

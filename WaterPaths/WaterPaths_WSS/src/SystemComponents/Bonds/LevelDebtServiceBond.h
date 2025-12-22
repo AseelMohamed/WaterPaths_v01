@@ -10,7 +10,7 @@
 
 class LevelDebtServiceBond : public Bond {
 private:
-    double level_debt_service_payment;
+    double level_debt_service_payment = 0.0;  // Initialize to prevent garbage values
     int n_payments_made = 0;
     int last_payment_week = NON_INITIALIZED;  // Track last week payment was made
 

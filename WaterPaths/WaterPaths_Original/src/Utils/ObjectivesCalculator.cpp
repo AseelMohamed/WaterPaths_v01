@@ -204,10 +204,6 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
         realization_financial_costs[r] =
                 *max_element(year_financial_costs.begin(),
                              year_financial_costs.end());
-        
-        if (realization_financial_costs[r] > 1e10) {
-            printf("Absurdly high financial cost in realization %lu.\n", r);
-        }
     }
 
     double obj_value = accumulate(realization_financial_costs.begin(),
