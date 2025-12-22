@@ -47,15 +47,14 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 7, 0.0, 0.1); // Percentual da receita anual alocada para o fundo de contingência da companhia 1. O limite superior representa 10% da receita anual.
     BORG_Problem_set_bounds(problem, 8, 0.001, 1.0); //Gatilho para acionar construção de infraestrutura pela Caesb - descoberto
     BORG_Problem_set_bounds(problem, 9, 0.001, 1.0); //Gatilho para acionar construção de infraestrutura pela Caesb - tortoSM
-    BORG_Problem_set_bounds(problem, 10, 0.0, 1.0); //Ordem de "construção" do upgrade 1 da ETA Paranoá Sul (ampliação da capacidade de produção - 700 l/s)
-    BORG_Problem_set_bounds(problem, 11, 0.0, 1.0); //Ordem de "construção" do upgrade 2 da ETA Paranoá Sul (ampliação da capacidade de produção - 700 l/s)
-    BORG_Problem_set_bounds(problem, 12, 0.0, 1.0); //Ordem de "construção" do upgrade 3 da ETA Paranoá (ampliação da capacidade de produção - 700 l/s)
-    BORG_Problem_set_bounds(problem, 13, 0.0, 1.0); //Ordem de "construção" do upgrade 1 da ETA Corumbá (implantação da ETA - 1400 l/s)
-    BORG_Problem_set_bounds(problem, 14, 0.0, 1.0); //Ordem de "construção" do upgrade 2 da ETA Corumbá (ampliação da capacidade de produção - 1400 l/s)
-    BORG_Problem_set_bounds(problem, 15, 0.0, 1.0); //Ordem de "construção" do upgrade 3 da ETA Corumbá (implantação de + 1.200 l/s só pra CAESB)
-    BORG_Problem_set_bounds(problem, 16, 0.0, 1.0); //Ordem de "construção" da elevação do nível da barragem do Descoberto
-    BORG_Problem_set_bounds(problem, 17, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - descoberto
-    BORG_Problem_set_bounds(problem, 18, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - tortoSM
+    BORG_Problem_set_bounds(problem, 10, 0.0, 1.0); //Ordem de "construção" da Etapa 1 da ETA Paranoá Sul (ID 7: + 0.7 m³/s)
+    BORG_Problem_set_bounds(problem, 11, 0.0, 1.0); //Ordem de "construção" da Etapa 2 da ETA Paranoá Sul (ID 8: + 0.7 m³/s)
+    BORG_Problem_set_bounds(problem, 12, 0.0, 1.0); //Ordem de "construção" da Etapa 3 das ETAs Paranoá Sul e Norte (ID 9: + 0.7 m³/s)
+    BORG_Problem_set_bounds(problem, 13, 0.0, 1.0); //Ordem de "construção" da Etapa 1 da ETA Corumbá (ID 5: + 1.4 m³/s, total 2.8 m³/s)
+    BORG_Problem_set_bounds(problem, 14, 0.0, 1.0); //Ordem de "construção" da Etapa 2 da ETA Corumbá (ID 6: + 1.2 m³/s, total 4.0 m³/s)
+    BORG_Problem_set_bounds(problem, 15, 0.0, 1.0); //Ordem de "construção" da expansão do Descoberto (ID 10: + 25% storage)
+    BORG_Problem_set_bounds(problem, 16, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - descoberto
+    BORG_Problem_set_bounds(problem, 17, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - tortoSM
 
     // Set epsilons for objectives //(problem, n° de identificação da função objetivo, valor do epsilon). O valor do epsilon indica a precisão das funções objetivo.
     BORG_Problem_set_epsilon(problem, 0, 0.001);
@@ -162,38 +161,35 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         caesb_descoberto_inftrigger = 1.1;
         caesb_tortoSM_inftrigger = 1.1;
     }
-    double ETA_paranoaSul_upgrade1_ranking = vars[10]; // implantação de nova ETA no Paranoá Sul. É como se fossem o "low" e o "high" do estudo de caso da Carolina do Norte.
-    double ETA_paranoaSul_upgrade2_ranking = vars[11]; // ampliação da capacidade da ETA Paranoá Sul
-    double ETA_paranoaSul_upgrade3_ranking = vars[12]; // ampliação da capacidade da ETA Paranoá Sul
-    double ETA_corumba_upgrade1_ranking = vars[13]; // Corumba Etapa 2: ampliação da ETA Corumbá (+ 1400 l/s, total 2.8 m³/s)
-    double ETA_corumba_upgrade2_ranking = vars[14]; // Corumba Etapa 3: ampliação da ETA Corumbá (+ 1200 l/s, total 4.0 m³/s)
-    double ETA_corumba_upgrade3_ranking = vars[15]; // DEPRECATED - Etapa 1 removed (Corumba starts with 1.4 m³/s)
-    double descoberto_expansao_ranking = vars[16]; // expansão da capacidade de armazenamento do reservatório do Descoberto
-    double caesb_descoberto_inf_buffer = vars[17];
-    double caesb_tortoSM_inf_buffer = vars[18];
+    double ETA_paranoaSul_upgrade1_ranking = vars[10]; // ID 7: Etapa 1 da ETA Paranoá Sul (+0.7 m³/s)
+    double ETA_paranoaSul_upgrade2_ranking = vars[11]; // ID 8: Etapa 2 da ETA Paranoá Sul (+0.7 m³/s)
+    double ETA_paranoaSul_upgrade3_ranking = vars[12]; // ID 9: Etapa 3 das ETAs Paranoá Sul e Norte (+0.7 m³/s)
+    double ETA_corumba_upgrade1_ranking = vars[13]; // ID 5: Etapa 1 da ETA Corumbá (+1.4 m³/s, total 2.8 m³/s)
+    double ETA_corumba_upgrade2_ranking = vars[14]; // ID 6: Etapa 2 da ETA Corumbá (+1.2 m³/s, total 4.0 m³/s)
+    double descoberto_expansao_ranking = vars[15]; // ID 10: Expansão do Reservatório do Descoberto (+25% storage)
+    double caesb_descoberto_inf_buffer = vars[16];
+    double caesb_tortoSM_inf_buffer = vars[17];
 
     //ANALISAR POSSIBILIDADE DE INCLUIR O RIO DO SAL COMO OPÇÃO DE AMPLIAÇÃO DA INFRAESTRUTURA DE OFERTA
 
     //IDENTIFICADOR DE CADA INFRAESTRUTURA FUTURA. Obs: as infraestruturas já existentes devem ser numeradas antes, começando do 0.
 
-    vector<infraRank> caesb_descoberto_infra_order_raw = { //A Companhia Caesb Descoberto abrange os reservatórios do Descoberto e de Corumbá IV
-            // UPDATED IDs after removing Etapa 1 and makeshift: 
-            // ID 5: ETA_corumba_etapa2 (+1.4 m³/s, total 2.8 m³/s)
-            // ID 6: ETA_corumba_etapa3 (+1.2 m³/s, total 4.0 m³/s)
-            // ID 10: descoberto_expansion (storage +25%)
-            infraRank(5, ETA_corumba_upgrade1_ranking),  // Changed from 6 to 5 (now etapa2)
-            infraRank(6, ETA_corumba_upgrade2_ranking),  // Changed from 7 to 6 (now etapa3)
-            infraRank(10, descoberto_expansao_ranking)   // Changed from 12 to 10
+    vector<infraRank> caesb_descoberto_infra_order_raw = { // WSS Descoberto: reservatórios Descoberto e Corumbá IV
+            // ID 5: ETA Corumbá Etapa 2 (+1.4 m³/s, total 2.8 m³/s)
+            // ID 6: ETA Corumbá Etapa 3 (+1.2 m³/s, total 4.0 m³/s)
+            // ID 10: Expansão do Descoberto (+25% storage)
+            infraRank(5, ETA_corumba_upgrade1_ranking),
+            infraRank(6, ETA_corumba_upgrade2_ranking),
+            infraRank(10, descoberto_expansao_ranking)
     };
 
-    vector<infraRank> caesb_tortoSM_infra_order_raw = { //A Companhia Caesb TortoSM abrange os reservatórios do TortoSM e do Lago Paranoá
-            // Updated IDs after removing Etapa 1: 
-            // ID 7: etapa1_ETA_paranoaSul
-            // ID 8: etapa2_ETA_paranoaSul
-            // ID 9: etapa3_ETAs_paranoa
-            infraRank(7, ETA_paranoaSul_upgrade1_ranking),  // Changed from 9 to 7
-            infraRank(8, ETA_paranoaSul_upgrade2_ranking),  // Changed from 10 to 8
-            infraRank(9, ETA_paranoaSul_upgrade3_ranking)   // Changed from 11 to 9
+    vector<infraRank> caesb_tortoSM_infra_order_raw = { // WSS TortoSM: reservatórios TortoSM e Lago Paranoá
+            // ID 7: ETA Paranoá Sul Etapa 1 (+0.7 m³/s)
+            // ID 8: ETA Paranoá Sul Etapa 2 (+0.7 m³/s)
+            // ID 9: ETAs Paranoá Sul e Norte Etapa 3 (+0.7 m³/s)
+            infraRank(7, ETA_paranoaSul_upgrade1_ranking),
+            infraRank(8, ETA_paranoaSul_upgrade2_ranking),
+            infraRank(9, ETA_paranoaSul_upgrade3_ranking)
     };
 
     // GET INFRASTRUCTURE CONSTRUCTION ORDER BASED ON DECISION VARIABLES
@@ -585,53 +581,42 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         - Variable-Interest Bonds */
 
     //Captação em Corumbá IV - Initial capacity: 1.4 m³/s (online from start)
-    //                        - Etapa 2 (FORMER Etapa 1): + 1.4 m³/s (total 2.8 m³/s)
-    //                        - Etapa 3 (FORMER Etapa 2): + 1.4 m³/s (total 4.2 m³/s) 
-    //                        - Etapa 4 (FORMER Etapa 3): + 1.2 m³/s (total 5.4 m³/s)
-    // Original Etapa 1 removed since Corumba now starts with 1.4 m³/s treatment capacity
-
-    // FORMER Etapa 1 - REMOVED (now initial capacity)
-    // vector<double> capacity_ETA_corumba_upgrade_1 = {1.4e-6 * 3600 * 24 * 7, 0};
+    //                        - Etapa 1 (ID 5): + 1.4 m³/s (total 2.8 m³/s)
+    //                        - Etapa 2 (ID 6): + 1.2 m³/s (total 4.0 m³/s)
+    // Note: Original Etapa numbering shifted - former Etapa 2/3 are now Etapa 1/2
     
-    vector<double> capacity_ETA_corumba_upgrade_2 = {1.4e-6 * 3600 * 24 * 7,
-                                                     0}; //ampliação da capacidade de produção (+ 1,4 m³/s) - TOTAL: 2.8 m³/s
-    vector<double> capacity_ETA_corumba_upgrade_3 = {1.2e-6 * 3600 * 24 * 7,
-                                                     0}; //ampliação da capacidade de produção (+ 1,2 m³/s) - TOTAL: 4.0 m³/s
+    vector<double> capacity_ETA_corumba_upgrade_1 = {1.4e-6 * 3600 * 24 * 7,
+                                                     0}; // Etapa 1: ampliação da capacidade de produção (+ 1.4 m³/s) - TOTAL: 2.8 m³/s
+    vector<double> capacity_ETA_corumba_upgrade_2 = {1.2e-6 * 3600 * 24 * 7,
+                                                     0}; // Etapa 2: ampliação da capacidade de produção (+ 1.2 m³/s) - TOTAL: 4.0 m³/s
 
-    //Empréstimo para Expansão da ETA Corumbá (Sistema Corumbá)
-    // Etapa 1 bonds removed since treatment capacity is now initial
-
-    // FORMER debendure_expansao_ETA_corumba_1 - REMOVED
+    // Empréstimos para Expansão da ETA Corumbá (Sistema Corumbá)
     
-    vector<Bond *> debendure_expansao_ETA_corumba_2 = {
+    vector<Bond *> debendure_expansao_ETA_corumba_1 = {
             new LevelDebtServiceBond(7, 222066142.8, 15, 0.12,
                                      vector<int>(1, 0)),
             new BalloonPaymentBond(12, 0, 15, 0.12, vector<int>(1, 0))};
-    vector<Bond *> debendure_expansao_ETA_corumba_3 = {
+    vector<Bond *> debendure_expansao_ETA_corumba_2 = {
             new LevelDebtServiceBond(8, 251383400, 15, 0.12,
                                      vector<int>(1, 0)),
             new BalloonPaymentBond(12, 0, 15, 0.12, vector<int>(1, 0))};
 
 
-    // Corumba makeshift expansion was removed - Corumba now starts fully online with storage and treatment
-    // BalloonPaymentBond no_bond(5, 0., 1, 1, vector<int>(1, 0));
-    // ReservoirExpansion corumba_makeshift_expansion("Corumba Ativação", 5, 2, cIV_storage_capacity...
-
-    // FORMER ETA_corumba_etapa1 - REMOVED (treatment capacity now starts online)
-    // Corumba expansions maintain sequential order: Etapa 2 must be built before Etapa 3
+    // Corumbá expansions maintain sequential order: Etapa 1 (ID 5) must be built before Etapa 2 (ID 6)
+    // Note: Corumbá starts with 1.4 m³/s treatment capacity online
 
     BalloonPaymentBond no_bond(5, 0., 1, 1, vector<int>(1, 0));
+    SequentialJointTreatmentExpansion ETA_corumba_etapa1(
+            "Etapa 1 de Corumba IV", 5, 2, 0, {5, 6},
+            capacity_ETA_corumba_upgrade_1,
+            debendure_expansao_ETA_corumba_1, construction_time_interval,
+            0 * WEEKS_IN_YEAR); // Previsão: 2030-2033. ID 5
+
     SequentialJointTreatmentExpansion ETA_corumba_etapa2(
-            "Etapa 2 de Corumba IV", 5, 2, 0, {5, 6},
+            "Etapa 2 de Corumba IV", 6, 2, 1, {5, 6},
             capacity_ETA_corumba_upgrade_2,
             debendure_expansao_ETA_corumba_2, construction_time_interval,
-            0 * WEEKS_IN_YEAR); //previsão: 2030 a 2033. ID changed to 5
-
-    SequentialJointTreatmentExpansion ETA_corumba_etapa3(
-            "Etapa 3 de Corumba IV", 6, 2, 1, {5, 6},
-            capacity_ETA_corumba_upgrade_3,
-            debendure_expansao_ETA_corumba_3, construction_time_interval,
-            5 * WEEKS_IN_YEAR); //previsão: depois de 2037. ID changed to 6
+            5 * WEEKS_IN_YEAR); // Previsão: depois de 2037. ID 6
 
 
     //Sistema Paranoá - Construção da ETA Paranoá Sul (0.7 m³/s), sua primeira ampliação (upgrade 2, com + 0.7 m³/s), segunda ampliação (upgrade 3, com + 0.35 m³/s) e
@@ -668,13 +653,13 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             "Etapa 1 da ETA Paranoa Sul ", 7, 3, 0, {7, 8, 9},
             capacities_ETA_paranoaSul_upgrade_1,
             debendure_expansao_ETA_paranoa_1, construction_time_interval,
-            0 * WEEKS_IN_YEAR); //previsão: 2020. ID changed to 7
+            0 * WEEKS_IN_YEAR); //previsão: 2020. ID 7
 
     SequentialJointTreatmentExpansion etapa2_ETA_paranoaSul(
             "Etapa 2 da ETA Paranoa Sul", 8, 3, 1, {7, 8, 9},
             capacities_ETA_paranoaSul_upgrade_2,
             debendure_expansao_ETA_paranoa_2, construction_time_interval,
-            0 * WEEKS_IN_YEAR); //previsão: 2022. ID changed to 8
+            0 * WEEKS_IN_YEAR); //previsão: 2022. ID 8
 
     SequentialJointTreatmentExpansion etapa3_ETAs_paranoa(
             "Etapa 3 da ETA Paranoa Sul e Norte", 9, 3, 2, {7, 8, 9},
@@ -692,7 +677,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             25.216, //25.216 = aumento em hm³ da capacidade de armazenamento do Descoberto (25%)
             construction_time_interval,
             0 * WEEKS_IN_YEAR,
-            descoberto_exp_bond); //previsão: 2022. ID changed to 10
+            descoberto_exp_bond); //previsão: 2022. ID 10
 
     vector<WaterSource *> water_sources; //water_sources é um vetor comum, que comportará todas as
     // opções descritas acima de ampliação da infraestrutura de abastecimento
@@ -704,10 +689,9 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 //    water_sources.push_back(&ribeirao_bananal);
 //    water_sources.push_back(&ribeirao_torto);
 
-    // Corumba makeshift REMOVED - Corumba now starts fully online
-    // ETA_corumba_etapa1 REMOVED - Corumba now starts with 1.4 m³/s treatment
-    water_sources.push_back(&ETA_corumba_etapa2);  // ID 5 at index 5
-    water_sources.push_back(&ETA_corumba_etapa3);  // ID 6 at index 6
+    // Corumbá now starts with 1.4 m³/s treatment capacity online
+    water_sources.push_back(&ETA_corumba_etapa1);  // ID 5 at index 5
+    water_sources.push_back(&ETA_corumba_etapa2);  // ID 6 at index 6
     water_sources.push_back(&etapa1_ETA_paranoaSul);
     water_sources.push_back(&etapa2_ETA_paranoaSul);
     water_sources.push_back(&etapa3_ETAs_paranoa);
@@ -838,14 +822,12 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     vector<Utility *> utilities; //vetor que contém a única companhia CAESB
     utilities.push_back(&caesb);
 
-    // Water-source-WSS connectivity matrix (each row corresponds to a WSS and numbers are water
-    // sources IDs.
-    // Must include ALL infrastructure that can be built (reservoirs, expansions, treatment plants, dummy)
-    // Original: Descoberto {0,2,6,7,8,12,13}, TortoSM {1,3,4,9,10,11}
-    // After removing Etapa 1 (was 6) and makeshift (was 13→removed, dummy renumbered 13→11):
+    // Water-source-WSS connectivity matrix: each row corresponds to a WSS
+    // WSS 0 (Descoberto): sources {0, 2, 5, 6, 10, 11}
+    // WSS 1 (TortoSM): sources {1, 3, 4, 7, 8, 9}
     vector<vector<int>> reservoir_wss_connectivity_matrix = {
-            {0, 2, 5, 6, 10, 11},  // Descoberto: Descoberto(0), Corumba(2), ETA_etapa2(5), ETA_etapa3(6), descoberto_expansion(10), dummy(11)
-            {1, 3, 4, 7, 8, 9}     // TortoSM: TortoSM(1), Paranoa(3), Bananal/Torto(4), ETA_paranoa_etapa1(7), etapa2(8), etapa3(9)
+            {0, 2, 5, 6, 10, 11},  // Descoberto(0), Corumba(2), Corumba_Etapa1(5), Corumba_Etapa2(6), Descoberto_Exp(10), Dummy(11)
+            {1, 3, 4, 7, 8, 9}     // TortoSM(1), Paranoa(3), Bananal/Torto(4), Paranoa_Etapa1(7), Paranoa_Etapa2(8), Paranoa_Etapa3(9)
     };
 
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
