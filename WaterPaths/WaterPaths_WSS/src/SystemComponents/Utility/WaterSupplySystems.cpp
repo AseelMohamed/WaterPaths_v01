@@ -264,6 +264,8 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     infra_discount_rate = other.infra_discount_rate;
     bond_term_multiplier = other.bond_term_multiplier;
     bond_interest_rate_multiplier = other.bond_interest_rate_multiplier;
+    // Copy average monthly income for affordability calculation
+    average_monthly_income = other.average_monthly_income;
     // NOTE: current_realization_id is NOT copied - it will be set correctly by setRealization() 
     // after this copy is created, avoiding race condition from shared original WSS
     // NOTE: wss_infrastructure_npc deliberately NOT copied - realization WSS should get NPC from ROF WSS via references
@@ -1078,4 +1080,12 @@ double WaterSupplySystems::getWssDebtServiceShare() const {
 
 double WaterSupplySystems::getWssInfrastructureNPC() const {
     return wss_infrastructure_npc;
+}
+
+void WaterSupplySystems::setAverageMonthlyIncome(double income) {
+    average_monthly_income = income;
+}
+
+double WaterSupplySystems::getAverageMonthlyIncome() const {
+    return average_monthly_income;
 }

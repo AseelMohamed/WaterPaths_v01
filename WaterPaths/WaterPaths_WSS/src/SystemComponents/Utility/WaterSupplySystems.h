@@ -176,6 +176,9 @@ public:
     double getWssDebtServiceShare() const;
     double getWssInfrastructureNPC() const;
     
+    void setAverageMonthlyIncome(double income);
+    double getAverageMonthlyIncome() const;
+    
 private:
     Utility* owner;
     vector<int> priority_draw_water_source;
@@ -222,6 +225,7 @@ private:
     double wss_contingency_fund_share = 0.0;
     double wss_debt_service_share = 0.0;
     double wss_infrastructure_npc = 0.0;
+    double average_monthly_income = 0.0;  // Average monthly income for affordability calculation
     
     bool hasTreatmentCapacity() const;
 };

@@ -577,3 +577,84 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
     
     return utility_reliability;
 }
+
+/**
+ * Calculate 95th percentile affordability index across realizations for all WSS.
+ * Affordability index = water_price / average_monthly_income
+ * For each WSS, we take the maximum (worst-case) weekly affordability across all weeks,
+ * then take the 95th percentile across all realizations.
+ * The objective is the maximum affordability across all WSS (worst case).
+ * 
+ * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
+ * @param realizations Optional vector of realization indices to include
+ * @return 95th percentile affordability index (worst case across WSS)
+ */
+double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
+        const vector<vector<WSSDataCollector *>>& wss_data,
+        vector<unsigned long> realizations) {
+    
+    if (wss_data.empty()) {
+        throw std::runtime_error("ERROR: wss_data is empty in calculateAffordabilityIndexObjective_WSS");
+    }
+    
+    unsigned long n_realizations = wss_data[0].size();
+    if (realizations.empty()) {
+        realizations = vector<unsigned long>(n_realizations);
+        iota(realizations.begin(), realizations.end(), 0);
+    } else {
+        n_realizations = realizations.size();
+    }
+    
+    if (realizations.empty()) {
+        throw std::runtime_error("ERROR: realizations vector is empty in calculateAffordabilityIndexObjective_WSS");
+    }
+    
+    vector<double> wss_affordability_95th; // Store 95th percentile affordability for each WSS
+    
+    // Calculate 95th percentile affordability for EACH WSS independently
+    for (const auto& wss_realization_data : wss_data) {
+        vector<double> realization_max_affordability; // Max affordability for each realization
+        
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& affordability_vec = wss_realization_data[r]->getWeekly_affordability_index();
+                
+                if (!affordability_vec.empty()) {
+                    // Find maximum affordability across all weeks in this realization
+                    double max_affordability = *max_element(affordability_vec.begin(), affordability_vec.end());
+                    realization_max_affordability.push_back(max_affordability);
+                }
+            }
+        }
+        
+        // Calculate 95th percentile across realizations for this WSS
+        if (!realization_max_affordability.empty()) {
+            // Sort to find 95th percentile
+            sort(realization_max_affordability.begin(), realization_max_affordability.end());
+            
+            // Calculate 95th percentile index
+            size_t index_95th = (size_t)(0.95 * (realization_max_affordability.size() - 1));
+            double affordability_95th = realization_max_affordability[index_95th];
+            
+            wss_affordability_95th.push_back(affordability_95th);
+        }
+    }
+    
+    // Return the maximum (worst case) affordability across all WSS
+    if (wss_affordability_95th.empty()) {
+        #ifdef PARALLEL
+        printf("WARNING: wss_affordability_95th is EMPTY - returning 0.0 affordability!\n");
+        #endif
+        return 0.0;
+    }
+    
+    double worst_affordability = *max_element(wss_affordability_95th.begin(),
+                                             wss_affordability_95th.end());
+    
+    if (std::isinf(worst_affordability)) {
+        string error_inf = "Infinite affordability index (WSS-level).";
+        throw logic_error(error_inf.c_str());
+    }
+    
+    return worst_affordability;
+}

@@ -27,6 +27,9 @@ private:
     vector<double> short_term_rof;
     vector<double> long_term_rof;
     
+    // Affordability index (water price / average income)
+    vector<double> weekly_affordability_index;
+    
     // Financial data vectors (WSS-level)
     vector<double> gross_revenues;
     vector<double> drought_mitigation_cost;
@@ -85,6 +88,7 @@ public:
     const vector<double> &getDebt_service_payments() const;
     const vector<double> &getNet_present_infrastructure_cost() const;
     const vector<double> &getContingency_fund_size() const;
+    const vector<double> &getWeekly_affordability_index() const;
     
     const Utility *getOwner() const;  // Direct access to owner (safe after WSS deletion)
     int getOwnerId() const;  // Get stored owner ID (safe even after WSS deletion)

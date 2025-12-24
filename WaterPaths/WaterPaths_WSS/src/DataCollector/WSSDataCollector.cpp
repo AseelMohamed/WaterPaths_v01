@@ -151,6 +151,17 @@ void WSSDataCollector::collect_data() {
     short_term_rof.push_back(wss->getShort_term_risk_of_failure());
     long_term_rof.push_back(wss->getLong_term_risk_of_failure());
 
+    // Calculate affordability index: water_price / average_monthly_income
+    // Average income is stored in the WSS object (set from Caesb.cpp)
+    double affordability_index = 0.0;
+    double average_income = wss->getAverageMonthlyIncome();
+    
+    if (wss->getWssGrossRevenue() > 0.0 && wss->getRestrictedDemand() > 0.0 && average_income > 0.0) {
+        double water_price = wss->getWssGrossRevenue() / wss->getRestrictedDemand();
+        affordability_index = water_price / average_income;
+    }
+    weekly_affordability_index.push_back(affordability_index);
+
     // Note: Financial data (debt, contingency, revenue) is NOT collected at WSS level.
     // These are utility-wide calculations handled by UtilitiesDataCollector using 
     // per-realization storage in the Utility object to avoid race conditions.
@@ -287,6 +298,10 @@ const vector<double> &WSSDataCollector::getNet_present_infrastructure_cost() con
 
 const vector<double> &WSSDataCollector::getContingency_fund_size() const {
     return contingency_fund_size;
+}
+
+const vector<double> &WSSDataCollector::getWeekly_affordability_index() const {
+    return weekly_affordability_index;
 }
 
 const Utility *WSSDataCollector::getOwner() const {

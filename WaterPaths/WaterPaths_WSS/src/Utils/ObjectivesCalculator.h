@@ -43,6 +43,10 @@ public:
             const vector<vector<WSSDataCollector *>>& wss_data,
             vector<unsigned long> realizations = vector<unsigned long>(0));
 
+    static double calculateAffordabilityIndexObjective_WSS(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            vector<unsigned long> realizations = vector<unsigned long>(0));
+
 };
 
 

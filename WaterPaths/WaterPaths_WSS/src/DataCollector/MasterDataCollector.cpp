@@ -515,6 +515,20 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
     double financial_cost = ObjectivesCalculator::
     calculatePeakFinancialCostsObjective(u, realizations_ran);
 
+    /// Affordability Index - Use WSS-level calculation
+    double affordability_index = 0.0;
+    if (!wss_collectors.empty()) {
+        // Filter WSS collectors to only include those belonging to this utility
+        vector<vector<WSSDataCollector *>> utility_wss_collectors_afford;
+        isolateWSSDataCollectors(u, utility_wss_collectors_afford);
+        
+        affordability_index = ObjectivesCalculator::
+        calculateAffordabilityIndexObjective_WSS(utility_wss_collectors_afford, realizations_ran);
+    } else {
+        // No WSS data available - use a default high value
+        affordability_index = 1.0;
+    }
+
     outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
               /// Reliability
               << setw(COLUMN_WIDTH * 2)
@@ -536,6 +550,10 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
               << setw(COLUMN_WIDTH * 2)
               << setprecision(COLUMN_PRECISION)
               << worse_cost
+              /// Affordability Index
+              << setw(COLUMN_WIDTH * 2)
+              << setprecision(COLUMN_PRECISION)
+              << affordability_index
               << endl;
 
     objectives.push_back(reliability);
@@ -543,6 +561,7 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
     objectives.push_back(inf_npc);
     objectives.push_back(financial_cost);
     objectives.push_back(worse_cost);
+    objectives.push_back(affordability_index);
     } catch (const std::exception& e) {
         printf("ERROR in printUtilityObjectivesToRowOutStream: %s\n", e.what());
         throw;
@@ -566,7 +585,8 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                   //              << setw(COLUMN_WIDTH * 2) << "Jordan Lake Alloc."
                   << setw(COLUMN_WIDTH * 2) << "Infrastructure NPC"
                   << setw(COLUMN_WIDTH * 2) << "Peak Financial Cost"
-                  << setw(COLUMN_WIDTH * 2) << "Worse Case Costs" << endl;
+                  << setw(COLUMN_WIDTH * 2) << "Worse Case Costs"
+                  << setw(COLUMN_WIDTH * 2) << "Affordability Index" << endl;
 
         for (auto &u : utility_collectors) {
             printUtilityObjectivesToRowOutStream(u, outStream, objectives);
@@ -638,6 +658,19 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
             
             objectives.push_back
                     (ObjectivesCalculator::calculateWorseCaseCostsObjective(u, realizations_ran));
+            
+            // Calculate affordability index (6th objective)
+            if (!wss_collectors.empty()) {
+                // Filter WSS collectors to only include those belonging to this utility
+                vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;
+                isolateWSSDataCollectors(u, utility_wss_collectors_affordability);
+                
+                objectives.push_back
+                        (ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(utility_wss_collectors_affordability, realizations_ran));
+            } else {
+                // No WSS data available - use a default high value (worst affordability)
+                objectives.push_back(1.0);
+            }
         }
     }
     return objectives;
