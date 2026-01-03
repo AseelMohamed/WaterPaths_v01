@@ -26,7 +26,12 @@ public:
 
     void issueBond(int week, int construction_time, double bond_term_multiplier, double bond_interest_rate_multiplier) override;
     
-    void resetForRealization() override { Bond::resetForRealization(); n_payments_made = 0; last_payment_week = NON_INITIALIZED; }
+    void resetForRealization() override { 
+        Bond::resetForRealization(); 
+        n_payments_made = 0; 
+        last_payment_week = NON_INITIALIZED;
+        level_debt_service_payment = 0.0;  // CRITICAL: Reset payment to avoid carrying over corrupted values
+    }
 };
 
 

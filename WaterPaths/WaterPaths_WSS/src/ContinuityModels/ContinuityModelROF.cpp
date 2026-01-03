@@ -120,19 +120,6 @@ vector<double> ContinuityModelROF::calculateLongTermROF(int week) {
                 double storage_ratio = continuity_wss[u]->getStorageToCapacityRatio();
                 double treatment_capacity = continuity_wss[u]->getTotal_treatment_capacity();
                 
-                // DEBUG: For WSS 1 at week 401, show detailed capacity breakdown
-                if (week == 401 && yr == 0 && u == 1) {
-                    printf("\n[CAPACITY-DEBUG-IMPORTED] WSS=%d, week=%d, yr=%d:\n", u, week, yr);
-                    printf("  Total treatment capacity reported: %.17f MGD\n", treatment_capacity);
-                    printf("  Number of water sources: %zu\n", continuity_wss[u]->getWater_sources().size());
-                    int ws_idx = 0;
-                    for (const auto* ws : continuity_wss[u]->getWater_sources()) {
-                        printf("    WS[%d]: id=%d, capacity=%.17f MGD\n", 
-                               ws_idx++, ws->id, ws->getTotal_treatment_capacity());
-                    }
-                    printf("\n");
-                }
-                
                 // Get demand, but use current week's demand if actual_week is out of bounds
                 // This happens near end of simulation when looking ahead for ROF
                 double unrestricted_demand = continuity_wss[u]->getUnrestrictedDemand();

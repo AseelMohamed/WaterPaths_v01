@@ -151,14 +151,18 @@ void WSSDataCollector::collect_data() {
     short_term_rof.push_back(wss->getShort_term_risk_of_failure());
     long_term_rof.push_back(wss->getLong_term_risk_of_failure());
 
-    // Calculate affordability index: water_price / average_monthly_income
-    // Average income is stored in the WSS object (set from Caesb.cpp)
+    // Calculate affordability index: weekly_water_price / weekly_average_income
+    // Income is stored as monthly, so convert to weekly by dividing by WEEKS_IN_MONTH
     double affordability_index = 0.0;
-    double average_income = wss->getAverageMonthlyIncome();
+    double average_monthly_income = wss->getAverageMonthlyIncome();
     
-    if (wss->getWssGrossRevenue() > 0.0 && wss->getRestrictedDemand() > 0.0 && average_income > 0.0) {
-        double water_price = wss->getWssGrossRevenue() / wss->getRestrictedDemand();
-        affordability_index = water_price / average_income;
+    if (wss->getWssGrossRevenue() > 0.0 && wss->getRestrictedDemand() > 0.0 && average_monthly_income > 0.0) {
+        // Weekly water price = weekly revenue / weekly demand (both in same time unit)
+        double weekly_water_price = wss->getWssGrossRevenue() / wss->getRestrictedDemand();
+        // Convert monthly income to weekly income
+        double weekly_average_income = average_monthly_income / WEEKS_IN_MONTH;
+        // Affordability index = weekly water price / weekly income
+        affordability_index = weekly_water_price / weekly_average_income;
     }
     weekly_affordability_index.push_back(affordability_index);
 

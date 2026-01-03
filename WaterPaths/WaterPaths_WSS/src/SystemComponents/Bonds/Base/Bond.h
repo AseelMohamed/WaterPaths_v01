@@ -20,6 +20,11 @@ protected:
     double coupon_rate;
     int n_payments;
     int begin_repayment_after_n_years = NON_INITIALIZED;
+    
+    // Store original values to restore between realizations
+    const double original_cost_of_capital;
+    const double original_coupon_rate;
+    const int original_n_payments;
 public:
     const int type;
     const vector<int> pay_on_weeks;
@@ -51,7 +56,14 @@ public:
     void setIssued();
     
     // Reset bond state for a new realization (clear payment history from ROF generation)
-    virtual void resetForRealization() { issued = false; week_issued = NON_INITIALIZED; }
+    virtual void resetForRealization() { 
+        issued = false; 
+        week_issued = NON_INITIALIZED;
+        // Restore original values that get modified by RDM multipliers
+        cost_of_capital = original_cost_of_capital;
+        coupon_rate = original_coupon_rate;
+        n_payments = original_n_payments;
+    }
 
 };
 

@@ -973,7 +973,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 int Caesb::simulationExceptionHander(const std::exception &e,
                                      Simulation *s, // :: significa "resolução de escopo"
                                      double *objs, const double *vars) {
-    int num_dec_var = 19; //número de variáveis desse estudo de caso
+    int num_dec_var = 18; //número de variáveis desse estudo de caso
 //        printf("Exception called during calculations. Decision variables are below:\n");
     ofstream sol;
     int world_rank;

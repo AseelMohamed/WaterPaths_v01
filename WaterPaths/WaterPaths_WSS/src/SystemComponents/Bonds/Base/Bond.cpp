@@ -9,7 +9,10 @@ Bond::Bond(const int id, const double cost_of_capital, const int n_payments,
            vector<int> pay_on_weeks, const int type,
            bool begin_repayment_at_issuance) :
         id(id), cost_of_capital(cost_of_capital), n_payments(n_payments),
-        pay_on_weeks(pay_on_weeks), type(type) {
+        pay_on_weeks(pay_on_weeks), type(type),
+        original_cost_of_capital(cost_of_capital), 
+        original_coupon_rate(0.0),  // Will be set in child constructor if needed
+        original_n_payments(n_payments) {
 
     /// If bond is to start being paid for at issuance, set repayment delay
     /// to 0. Otherwise it will be set at issuance.
@@ -29,7 +32,10 @@ Bond::Bond(const int id, const double cost_of_capital, const int n_payments,
            bool begin_repayment_at_issuance) :
         id(id), cost_of_capital(cost_of_capital), n_payments(n_payments),
         pay_on_weeks(pay_on_weeks),
-        coupon_rate(coupon_rate), type(type) {
+        coupon_rate(coupon_rate), type(type),
+        original_cost_of_capital(cost_of_capital),
+        original_coupon_rate(coupon_rate),
+        original_n_payments(n_payments) {
 
     /// If bond is to start being paid for at issuance, set repayment delay
     /// to 0. Otherwise it will be set at issuance.
@@ -45,7 +51,10 @@ Bond::Bond(const int id, const double cost_of_capital, const int n_payments,
 }
 
 Bond::Bond() : id(NON_INITIALIZED), n_payments(NON_INITIALIZED),
-               cost_of_capital(NON_INITIALIZED), type(NON_INITIALIZED) {}
+               cost_of_capital(NON_INITIALIZED), type(NON_INITIALIZED),
+               original_cost_of_capital(NON_INITIALIZED),
+               original_coupon_rate(0.0),
+               original_n_payments(NON_INITIALIZED) {}
 
 Bond::~Bond() = default;
 
