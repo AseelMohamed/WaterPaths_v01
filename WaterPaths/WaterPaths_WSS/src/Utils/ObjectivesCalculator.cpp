@@ -177,7 +177,7 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
     double discount_rate = utility_data[0]->getInfraDiscountRate();
     double realizations_year_debt_payment = 0;
-    double realizations_year_cont_fund_contribution = 0;
+    // double realizations_year_cont_fund_contribution = 0;
     double realizations_year_gross_revenue = 1e-6;
     double realizations_year_insurance_contract_cost = 0;
     vector<double> year_financial_costs;
@@ -192,8 +192,8 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
             // accumulate year's info by summing weekly amounts.
             realizations_year_debt_payment +=
                     utility_data[r]->getDebt_service_payments()[w];
-            realizations_year_cont_fund_contribution +=
-                    utility_data[r]->getContingency_fund_contribution()[w];
+            // realizations_year_cont_fund_contribution +=
+            //         utility_data[r]->getContingency_fund_contribution()[w];
             realizations_year_gross_revenue +=
                     utility_data[r]->getGross_revenues()[w];
             realizations_year_insurance_contract_cost +=
@@ -204,7 +204,6 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
             if (Utils::isFirstWeekOfTheYear(w + 1)) {
                 year_financial_costs[y] +=
                         (realizations_year_debt_payment +
-                         realizations_year_cont_fund_contribution +
                          realizations_year_insurance_contract_cost) /
                         (realizations_year_gross_revenue *
                          (1. + pow(1. + discount_rate, y)));
@@ -213,7 +212,7 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
 
                 // reset accounts.
                 realizations_year_debt_payment = 0;
-                realizations_year_cont_fund_contribution = 0;
+                // realizations_year_cont_fund_contribution = 0;
                 realizations_year_gross_revenue = 1e-6;
                 realizations_year_insurance_contract_cost = 0;
             }
@@ -259,18 +258,18 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
         throw std::runtime_error("No weeks available for worse case cost objective.");
     }
 
-#ifndef NDEBUG
-    // In debug builds, ensure consistency across all realizations
-    unsigned long first_weeks = utility_data[realizations[0]]->getGross_revenues().size();
-    for (const auto &r : realizations) {
-        const auto &g = utility_data[r]->getGross_revenues();
-        if (g.size() != first_weeks) {
-            fprintf(stderr, "Warning: Inconsistent number of weeks between realizations in calculateWorseCaseCostsObjective. "
-                    "Realization %lu has %lu weeks, realization %lu has %lu weeks.\n",
-                    realizations[0], first_weeks, r, (unsigned long)g.size());
-        }
-    }
-#endif
+// #ifndef NDEBUG
+//     // In debug builds, ensure consistency across all realizations
+//     unsigned long first_weeks = utility_data[realizations[0]]->getGross_revenues().size();
+//     for (const auto &r : realizations) {
+//         const auto &g = utility_data[r]->getGross_revenues();
+//         if (g.size() != first_weeks) {
+//             fprintf(stderr, "Warning: Inconsistent number of weeks between realizations in calculateWorseCaseCostsObjective. "
+//                     "Realization %lu has %lu weeks, realization %lu has %lu weeks.\n",
+//                     realizations[0], first_weeks, r, (unsigned long)g.size());
+//         }
+//     }
+// #endif
 
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
     double discount_rate = utility_data[0]->getUtility()->getInfraDiscountRate();
@@ -295,9 +294,8 @@ double ObjectivesCalculator::calculateWorseCaseCostsObjective(
             // if last week of the year, close the books and calculate financial cost for the year.
             if (Utils::isFirstWeekOfTheYear(w + 1)) {
                 year_financial_costs[y] =
-                        max(year_drought_mitigation_cost
-                            - utility_data[r]->getContingency_fund_size()[w],
-                            0.0) / (year_gross_revenue * (1. + pow(1. + discount_rate, y)));
+                        max(year_drought_mitigation_cost,0.0) / 
+                        (year_gross_revenue * (1. + pow(1. + discount_rate, y)));
 
                 year_gross_revenue = 1e-6;
                 year_drought_mitigation_cost = 0;

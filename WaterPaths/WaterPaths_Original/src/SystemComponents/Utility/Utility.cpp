@@ -732,7 +732,7 @@ void Utility::updateContingencyFundAndDebtService(
     drought_mitigation_cost = max(revenue_losses + transfer_costs -
                                   insurance_payout -
                                   recouped_loss_price_surcharge -
-                                  contingency_fund,
+                                  contingency_fund - projected_fund_contribution,
                                   0.0);
 
     // contingency fund cannot get negative.

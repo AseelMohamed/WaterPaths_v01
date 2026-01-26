@@ -616,7 +616,7 @@ void Utility::updateContingencyFundAndDebtService(
     drought_mitigation_cost = max(revenue_losses + transfer_costs -
                                   insurance_payout -
                                   recouped_loss_price_surcharge-
-                                  contingency_fund,
+                                  contingency_fund - projected_fund_contribution,
                                   0.0);
     
     // contingency fund cannot get negative.
@@ -737,7 +737,9 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         double transfer_costs = wss_offset * (wss_offset_rate - wss_unrestricted_price);
         double recouped_loss_price_surcharge = wss_restricted * (wss_current_price - wss_unrestricted_price);
         // NOTE: Do NOT subtract insurance_payout here - it gets subtracted once at utility level
-        double wss_drought_cost = max(revenue_losses + transfer_costs - recouped_loss_price_surcharge, 0.0);
+        double wss_drought_cost = max(revenue_losses + transfer_costs - 
+                                  recouped_loss_price_surcharge -
+                                  contingency_fund, 0.0);
         
         // Store WSS-level financial data (for data collection and objective calculations)
         wss->setWssGrossRevenue(wss_gross_revenue);
@@ -819,19 +821,20 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
     // Do NOT recalculate with averaged demand_multiplier - that causes incorrect results
     // The total_revenue_losses, total_transfer_costs, and total_recouped were summed from each WSS
     
+    // Update drought mitigation cost (aggregated from WSS, subtract insurance at utility level)
+    drought_mitigation_cost = max(total_wss_drought_cost - insurance_payout - 
+                          total_projected_fund_contribution, 0.0);
+
     // Update contingency fund (utility-wide)
     contingency_fund = max(contingency_fund + total_projected_fund_contribution -
                           total_revenue_losses - total_transfer_costs + total_recouped, 0.0);
-    
-    // Update drought mitigation cost (aggregated from WSS, subtract insurance at utility level)
-    drought_mitigation_cost = max(total_wss_drought_cost - insurance_payout, 0.0);
     
     // Fund contribution calculation
     fund_contribution = total_projected_fund_contribution - total_revenue_losses - 
                        total_transfer_costs + total_recouped;
     
-    // Update drought mitigation cost (aggregated from WSS, subtract insurance at utility level)
-    drought_mitigation_cost = max(total_wss_drought_cost - insurance_payout, 0.0);
+    // // Update drought mitigation cost (aggregated from WSS, subtract insurance at utility level)
+    // drought_mitigation_cost = max(total_wss_drought_cost - insurance_payout, 0.0);
     
     resetDroughtMitigationVariables();
     
