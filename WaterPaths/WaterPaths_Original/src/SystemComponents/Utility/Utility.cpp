@@ -728,28 +728,24 @@ void Utility::updateContingencyFundAndDebtService(
     double recouped_loss_price_surcharge =
             restricted_demand * (current_price - unrestricted_price);
 
+    // Calculate drought mitigation cost first, using previous CF to offset costs
+    drought_mitigation_cost = max(revenue_losses + transfer_costs -
+                                  insurance_payout -
+                                  recouped_loss_price_surcharge -
+                                  contingency_fund,
+                                  0.0);
+
     // contingency fund cannot get negative.
     contingency_fund = max(contingency_fund + projected_fund_contribution -
                            revenue_losses - transfer_costs +
-                           recouped_loss_price_surcharge,
+                           recouped_loss_price_surcharge +
+                           insurance_payout,
                            0.0);
 
-
-//    if (demand_multiplier < 1.0 && demand_offset != 0 && week > 285) {
-//        int i = 0;
-//    }
-//    if (week > 1028) {
-//        int i = 0;
-//    }
-
-    // Update variables for data collection and next iteration.
-    drought_mitigation_cost = max(revenue_losses + transfer_costs -
-                                  insurance_payout -
-                                  recouped_loss_price_surcharge,
-                                  0.0);
     fund_contribution =
             projected_fund_contribution - revenue_losses - transfer_costs +
-            recouped_loss_price_surcharge;
+            recouped_loss_price_surcharge +
+            insurance_payout;
 
 
     resetDroughtMitigationVariables();

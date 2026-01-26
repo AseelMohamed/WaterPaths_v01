@@ -610,27 +610,33 @@ void Utility::updateContingencyFundAndDebtService(
     double recouped_loss_price_surcharge =
             utility_restricted_demand * (current_price - unrestricted_price);
 
-    // contingency fund cannot get negative.
-    contingency_fund = max(contingency_fund + projected_fund_contribution -
-                           revenue_losses - transfer_costs +
-                           recouped_loss_price_surcharge,
-                           0.0);
+    
 
     // Update variables for data collection and next iteration.
     drought_mitigation_cost = max(revenue_losses + transfer_costs -
                                   insurance_payout -
-                                  recouped_loss_price_surcharge,
+                                  recouped_loss_price_surcharge-
+                                  contingency_fund,
                                   0.0);
-    fund_contribution =
-            projected_fund_contribution - revenue_losses - transfer_costs +
-            recouped_loss_price_surcharge;
+    
+    // contingency fund cannot get negative.
+    contingency_fund = max(contingency_fund + projected_fund_contribution -
+                           revenue_losses - transfer_costs +
+                           recouped_loss_price_surcharge +
+                           insurance_payout,
+                           0.0);
+
+    fund_contribution = projected_fund_contribution - 
+                          revenue_losses - transfer_costs +
+                          recouped_loss_price_surcharge +
+                          insurance_payout;
 
 
     resetDroughtMitigationVariables();
 
     // NOTE: current_debt_payment calculation moved to updateUtilityFinancialCalculations()
     // to avoid duplicate calls that would exhaust bond payments prematurely.
-    // Do NOT call updateCurrent_debt_payment(week) here!
+    // The updateCurrent_debt_payment(week) is not called here!
     
 }
 
