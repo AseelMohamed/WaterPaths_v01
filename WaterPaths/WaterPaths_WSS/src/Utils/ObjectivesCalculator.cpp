@@ -563,7 +563,7 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
 
 /**
  * Calculate 95th percentile affordability index across realizations for all WSS.
- * Affordability index = water_price / average_monthly_income
+ * Affordability index = water_price / average_income
  * For each WSS, we take the maximum (worst-case) weekly affordability across all weeks,
  * then take the 95th percentile across all realizations.
  * The objective is the maximum affordability across all WSS (worst case).
@@ -639,5 +639,252 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
         throw logic_error(error_inf.c_str());
     }
     
-    return worst_affordability;
+    return worst_affordability / 1e5; // This (1e5) is to convert the water price from R$/hm3 to R$/m3
+}
+
+/**
+ * Configurable reliability calculation with choice of aggregation method.
+ * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
+ * @param realizations Vector of realization indices to include
+ * @param aggregation_method 0=MIN (worst case), 1=AVERAGE
+ * @return Reliability based on chosen aggregation method
+ */
+double ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
+        const vector<vector<WSSDataCollector *>>& wss_data,
+        vector<unsigned long> realizations,
+        int aggregation_method) {
+    
+    if (wss_data.empty()) {
+        throw std::runtime_error("ERROR: wss_data is empty in calculateReliabilityObjective_WSS_Configurable");
+    }
+    
+    unsigned long n_realizations = wss_data[0].size();
+    if (realizations.empty()) {
+        realizations = vector<unsigned long>(n_realizations);
+        iota(realizations.begin(), realizations.end(), 0);
+    } else {
+        n_realizations = realizations.size();
+    }
+    
+    if (realizations.empty()) {
+        throw std::runtime_error("ERROR: realizations vector is empty");
+    }
+    
+    // Check if first realization data exists
+    if (realizations[0] >= wss_data[0].size() || wss_data[0][realizations[0]] == nullptr) {
+        char error[512];
+        sprintf(error, "ERROR: First realization %lu is invalid or nullptr in wss_data[0] (size=%zu)",
+                realizations[0], wss_data[0].size());
+        throw std::runtime_error(error);
+    }
+    
+    unsigned long n_weeks = wss_data[0][realizations[0]]->getCombined_storage().size();
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
+    
+    vector<double> wss_reliabilities; // Store reliability for each WSS
+    int wss_skipped_no_data = 0;
+    int wss_skipped_no_storage = 0;
+    int wss_processed = 0;
+    
+    // Calculate reliability for EACH WSS independently
+    for (const auto& wss_realization_data : wss_data) {
+        // Check if this WSS has any storage capacity > 0
+        bool has_storage_data = false;
+        bool has_any_data = false;
+        
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
+                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                
+                if (!storage_vec.empty() && !capacity_vec.empty()) {
+                    has_any_data = true;
+                    
+                    for (const auto& cap : capacity_vec) {
+                        if (cap > 0.0) {
+                            has_storage_data = true;
+                            break;
+                        }
+                    }
+                    if (has_storage_data) break;
+                }
+            }
+        }
+        
+        if (!has_any_data) {
+            wss_skipped_no_data++;
+            continue;
+        }
+        
+        if (!has_storage_data) {
+            wss_skipped_no_storage++;
+            continue;
+        }
+        
+        wss_processed++;
+        
+        vector<vector<int>> realizations_year_reliabilities(
+                n_realizations, vector<int>(n_years, NON_INITIALIZED));
+        vector<int> year_reliabilities(n_years, 0);
+        
+        // Check failures for this WSS across all realizations
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
+                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                
+                if (storage_vec.empty() || capacity_vec.empty()) {
+                    continue;
+                }
+                
+                for (unsigned long y = 0; y < n_years; ++y) {
+                    for (int w = (int) round(y * WEEKS_IN_YEAR);
+                         w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
+                        
+                        if (w >= (int)storage_vec.size() || w >= (int)capacity_vec.size()) {
+                            char error[512];
+                            sprintf(error, "ERROR: Week %d out of bounds for WSS data", w);
+                            throw std::out_of_range(error);
+                        }
+                        
+                        double storage = storage_vec[w];
+                        double capacity = capacity_vec[w];
+                        
+                        if (capacity > 0 && storage / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                            realizations_year_reliabilities[r][y] = FAILURE;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Count failures per year for this WSS
+        for (unsigned long y = 0; y < n_years; ++y) {
+            for (const unsigned long &r : realizations) {
+                if (r < realizations_year_reliabilities.size() && 
+                    realizations_year_reliabilities[r][y] == FAILURE) {
+                    year_reliabilities[y]++;
+                }
+            }
+        }
+        
+        int max_failures = *max_element(year_reliabilities.begin(),
+                                       year_reliabilities.end());
+        
+        if (max_failures > (int)n_realizations) {
+            char error[512];
+            sprintf(error, "ERROR: max_failures (%d) exceeds n_realizations (%lu)",
+                    max_failures, (unsigned long)n_realizations);
+            throw std::runtime_error(error);
+        }
+        
+        double wss_reliability = 1.0 - (double)max_failures / n_realizations;
+        wss_reliabilities.push_back(wss_reliability);
+    }
+    
+    if (wss_reliabilities.empty()) {
+        #ifdef PARALLEL
+        printf("WARNING: wss_reliabilities is EMPTY - returning 0.0 reliability!\n");
+        #endif
+        return 0.0;
+    }
+    
+    double utility_reliability;
+    
+    if (aggregation_method == 1) { // AVERAGE
+        utility_reliability = accumulate(wss_reliabilities.begin(), 
+                                        wss_reliabilities.end(), 0.0) / wss_reliabilities.size();
+    } else { // MIN (worst case) - default
+        utility_reliability = *min_element(wss_reliabilities.begin(),
+                                          wss_reliabilities.end());
+    }
+    
+    if (std::isinf(utility_reliability)) {
+        string error_inf = "Infinite reliability (WSS-level configurable).";
+        throw logic_error(error_inf.c_str());
+    }
+    
+    return utility_reliability;
+}
+
+/**
+ * Configurable affordability calculation with choice of aggregation method.
+ * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
+ * @param realizations Vector of realization indices to include
+ * @param aggregation_method 0=MAX (worst case), 1=AVERAGE
+ * @return Affordability based on chosen aggregation method
+ */
+double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurable(
+        const vector<vector<WSSDataCollector *>>& wss_data,
+        vector<unsigned long> realizations,
+        int aggregation_method) {
+    
+    if (wss_data.empty()) {
+        throw std::runtime_error("ERROR: wss_data is empty in calculateAffordabilityIndexObjective_WSS_Configurable");
+    }
+    
+    unsigned long n_realizations = wss_data[0].size();
+    if (realizations.empty()) {
+        realizations = vector<unsigned long>(n_realizations);
+        iota(realizations.begin(), realizations.end(), 0);
+    } else {
+        n_realizations = realizations.size();
+    }
+    
+    if (realizations.empty()) {
+        throw std::runtime_error("ERROR: realizations vector is empty");
+    }
+    
+    vector<double> wss_affordability_95th; // Store 95th percentile affordability for each WSS
+    
+    // Calculate 95th percentile affordability for EACH WSS independently
+    for (const auto& wss_realization_data : wss_data) {
+        vector<double> realization_max_affordability;
+        
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& affordability_vec = wss_realization_data[r]->getWeekly_affordability_index();
+                
+                if (!affordability_vec.empty()) {
+                    double max_affordability = *max_element(affordability_vec.begin(), affordability_vec.end());
+                    realization_max_affordability.push_back(max_affordability);
+                }
+            }
+        }
+        
+        // Calculate 95th percentile across realizations for this WSS
+        if (!realization_max_affordability.empty()) {
+            sort(realization_max_affordability.begin(), realization_max_affordability.end());
+            
+            size_t index_95th = (size_t)(0.95 * (realization_max_affordability.size() - 1));
+            double affordability_95th = realization_max_affordability[index_95th];
+            
+            wss_affordability_95th.push_back(affordability_95th);
+        }
+    }
+    
+    if (wss_affordability_95th.empty()) {
+        #ifdef PARALLEL
+        printf("WARNING: wss_affordability_95th is EMPTY - returning 0.0 affordability!\n");
+        #endif
+        return 0.0;
+    }
+    
+    double result_affordability;
+    
+    if (aggregation_method == 1) { // AVERAGE
+        result_affordability = accumulate(wss_affordability_95th.begin(), 
+                                         wss_affordability_95th.end(), 0.0) / wss_affordability_95th.size();
+    } else { // MAX (worst case) - default
+        result_affordability = *max_element(wss_affordability_95th.begin(),
+                                           wss_affordability_95th.end());
+    }
+    
+    if (std::isinf(result_affordability)) {
+        string error_inf = "Infinite affordability index (WSS-level configurable).";
+        throw logic_error(error_inf.c_str());
+    }
+    
+    return result_affordability / 1e5; // This (1e5) is to convert the water price from R$/hm3 to R$/m3
 }

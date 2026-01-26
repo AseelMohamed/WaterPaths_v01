@@ -480,7 +480,11 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
         isolateWSSDataCollectors(u, utility_wss_collectors);
         
         if (!utility_wss_collectors.empty()) {
-            reliability = ObjectivesCalculator::calculateReliabilityObjective_WSS(utility_wss_collectors, realizations_ran);
+            // Use configurable aggregation method based on experiment mode
+            reliability = ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
+                utility_wss_collectors, 
+                realizations_ran,
+                Constants::getReliabilityAggregationMethod());
         } else {
             // No WSS found for this utility, fallback to utility-level calculation
             reliability = ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran);
@@ -515,18 +519,24 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
     double financial_cost = ObjectivesCalculator::
     calculatePeakFinancialCostsObjective(u, realizations_ran);
 
-    /// Affordability Index - Use WSS-level calculation
+    /// Affordability Index - Only calculate if included in experiment
     double affordability_index = 0.0;
-    if (!wss_collectors.empty()) {
-        // Filter WSS collectors to only include those belonging to this utility
-        vector<vector<WSSDataCollector *>> utility_wss_collectors_afford;
-        isolateWSSDataCollectors(u, utility_wss_collectors_afford);
-        
-        affordability_index = ObjectivesCalculator::
-        calculateAffordabilityIndexObjective_WSS(utility_wss_collectors_afford, realizations_ran);
-    } else {
-        // No WSS data available - use a default high value
-        affordability_index = 1.0;
+    if (Constants::includeAffordabilityObjective()) {
+        if (!wss_collectors.empty()) {
+            // Filter WSS collectors to only include those belonging to this utility
+            vector<vector<WSSDataCollector *>> utility_wss_collectors_afford;
+            isolateWSSDataCollectors(u, utility_wss_collectors_afford);
+            
+            // Use configurable aggregation method based on experiment mode
+            affordability_index = ObjectivesCalculator::
+            calculateAffordabilityIndexObjective_WSS_Configurable(
+                utility_wss_collectors_afford, 
+                realizations_ran,
+                Constants::getAffordabilityAggregationMethod());
+        } else {
+            // No WSS data available - use a default high value
+            affordability_index = 1.0;
+        }
     }
 
     outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
@@ -549,19 +559,24 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
               /// Worse Case Costs
               << setw(COLUMN_WIDTH * 2)
               << setprecision(COLUMN_PRECISION)
-              << worse_cost
-              /// Affordability Index
-              << setw(COLUMN_WIDTH * 2)
-              << setprecision(COLUMN_PRECISION)
-              << affordability_index
-              << endl;
+              << worse_cost;
+    
+    // Only print affordability if included in experiment
+    if (Constants::includeAffordabilityObjective()) {
+        outStream << setw(COLUMN_WIDTH * 2)
+                  << setprecision(COLUMN_PRECISION)
+                  << affordability_index;
+    }
+    outStream << endl;
 
     objectives.push_back(reliability);
     objectives.push_back(restriction_freq);
     objectives.push_back(inf_npc);
     objectives.push_back(financial_cost);
     objectives.push_back(worse_cost);
-    objectives.push_back(affordability_index);
+    if (Constants::includeAffordabilityObjective()) {
+        objectives.push_back(affordability_index);
+    }
     } catch (const std::exception& e) {
         printf("ERROR in printUtilityObjectivesToRowOutStream: %s\n", e.what());
         throw;
@@ -579,14 +594,20 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
         std::ofstream outStream;
         outStream.open(obj_file_path);
 
+        // Dynamic header based on experiment mode
         outStream << setw(COLUMN_WIDTH) << "      " << setw((COLUMN_WIDTH * 2))
                   << "Reliability"
                   << setw(COLUMN_WIDTH * 2) << "Restriction Freq."
                   //              << setw(COLUMN_WIDTH * 2) << "Jordan Lake Alloc."
                   << setw(COLUMN_WIDTH * 2) << "Infrastructure NPC"
                   << setw(COLUMN_WIDTH * 2) << "Peak Financial Cost"
-                  << setw(COLUMN_WIDTH * 2) << "Worse Case Costs"
-                  << setw(COLUMN_WIDTH * 2) << "Affordability Index" << endl;
+                  << setw(COLUMN_WIDTH * 2) << "Worse Case Costs";
+        
+        // Only add affordability header if included in experiment
+        if (Constants::includeAffordabilityObjective()) {
+            outStream << setw(COLUMN_WIDTH * 2) << "Affordability Index";
+        }
+        outStream << endl;
 
         for (auto &u : utility_collectors) {
             printUtilityObjectivesToRowOutStream(u, outStream, objectives);
@@ -621,7 +642,12 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
             
 
                 
-                if (!utility_wss_collectors.empty()) {                    double reliability = ObjectivesCalculator::calculateReliabilityObjective_WSS(utility_wss_collectors, realizations_ran);
+                if (!utility_wss_collectors.empty()) {
+                    // Use configurable aggregation method based on experiment mode
+                    double reliability = ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
+                        utility_wss_collectors, 
+                        realizations_ran,
+                        Constants::getReliabilityAggregationMethod());
                     objectives.push_back(reliability);
                 } else {
                     // No WSS found for this utility, fallback to utility-level calculation
@@ -659,17 +685,28 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
             objectives.push_back
                     (ObjectivesCalculator::calculateWorseCaseCostsObjective(u, realizations_ran));
             
-            // Calculate affordability index (6th objective)
-            if (!wss_collectors.empty()) {
-                // Filter WSS collectors to only include those belonging to this utility
-                vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;
-                isolateWSSDataCollectors(u, utility_wss_collectors_affordability);
-                
-                objectives.push_back
-                        (ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(utility_wss_collectors_affordability, realizations_ran));
-            } else {
-                // No WSS data available - use a default high value (worst affordability)
-                objectives.push_back(1.0);
+            // Calculate affordability index (6th objective) - only if included in experiment
+            if (Constants::includeAffordabilityObjective()) {
+                if (!wss_collectors.empty()) {
+                    // Filter WSS collectors to only include those belonging to this utility
+                    vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;
+                    isolateWSSDataCollectors(u, utility_wss_collectors_affordability);
+                    
+                    // Use configurable aggregation method based on experiment mode
+                    objectives.push_back
+                            (ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurable(
+                                utility_wss_collectors_affordability, 
+                                realizations_ran,
+                                Constants::getAffordabilityAggregationMethod()));
+                } else {
+                    // No WSS data available - use a default high value (worst affordability)
+    
+    // Print final objective count
+    printf("Calculated %zu objectives for experiment mode %d\n", 
+           objectives.size(), Constants::EXPERIMENT_MODE);
+    
+                    objectives.push_back(1.0);
+                }
             }
         }
     }

@@ -165,10 +165,6 @@ void WSSDataCollector::collect_data() {
         affordability_index = weekly_water_price / weekly_average_income;
     }
     weekly_affordability_index.push_back(affordability_index);
-
-    // Note: Financial data (debt, contingency, revenue) is NOT collected at WSS level.
-    // These are utility-wide calculations handled by UtilitiesDataCollector using 
-    // per-realization storage in the Utility object to avoid race conditions.
     
     double wss_npc = wss->getWssInfrastructureNPC();
     

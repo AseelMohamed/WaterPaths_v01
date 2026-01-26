@@ -47,6 +47,17 @@ public:
             const vector<vector<WSSDataCollector *>>& wss_data,
             vector<unsigned long> realizations = vector<unsigned long>(0));
 
+    // New functions with configurable aggregation methods
+    static double calculateReliabilityObjective_WSS_Configurable(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            vector<unsigned long> realizations,
+            int aggregation_method); // 0=MIN, 1=AVERAGE
+
+    static double calculateAffordabilityIndexObjective_WSS_Configurable(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            vector<unsigned long> realizations,
+            int aggregation_method); // 0=MAX, 1=AVERAGE
+
 };
 
 

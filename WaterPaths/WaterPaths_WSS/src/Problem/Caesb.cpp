@@ -14,6 +14,7 @@
 #endif
 
 #include "Caesb.h" //include é uma diretiva de compilação
+#include "../Utils/Constants.h"
 #include "../Controls/SeasonalMinEnvFlowControl.h"
 #include "../Controls/StorageMinEnvFlowControl.h"
 #include "../Controls/InflowMinEnvFlowControl.h"
@@ -62,7 +63,11 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_epsilon(problem, 2, 10000000.);
     BORG_Problem_set_epsilon(problem, 3, 0.005);
     BORG_Problem_set_epsilon(problem, 4, 0.005);
-    BORG_Problem_set_epsilon(problem, 5, 0.001);  // Affordability index
+    
+    // Only set affordability epsilon if included in experiment (experiments 3 & 4)
+    if (Constants::includeAffordabilityObjective()) {
+        BORG_Problem_set_epsilon(problem, 5, 0.001);  // Affordability index
+    }
 }
 #endif
 
@@ -763,9 +768,9 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                            rofs_infra_caesb_tortoSM);
 
     // Set average monthly income for affordability index calculation
-    // Descoberto WSS (system_id = 0): average income = 1397 BRL/month
+    // Descoberto WSS (system_id = 0): average income per household = 1397 BRL/month
     wss_descoberto.setAverageMonthlyIncome(1397.0);
-    // Torto/Santa Maria WSS (system_id = 1): average income = 4015 BRL/month
+    // Torto/Santa Maria WSS (system_id = 1): average income per household = 4015 BRL/month
     wss_tortoSM.setAverageMonthlyIncome(4015.0);
 
     vector<Utility *> utilities; //vetor que contém a única companhia CAESB
@@ -945,7 +950,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 // [2] = Infrastructure NPC 
 // [3] = Peak Financial Cost
 // [4] = Worst Case Costs
-// [5] = Affordability Index (95th percentile, worst case across WSS)
+// [5] = Affordability Index (95th percentile, worst case across WSS) - if included
 
 #ifdef  PARALLEL 
     objs[0] = -objectives[0];  // Negative reliability
@@ -953,7 +958,11 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     objs[2] = objectives[2];   // Infrastructure NPC
     objs[3] = objectives[3];   // Peak financial cost
     objs[4] = objectives[4];   // Worst case costs
-    objs[5] = objectives[5];   // Affordability index
+    
+    // Only copy affordability if it was calculated (experiments 3 & 4)
+    if (Constants::includeAffordabilityObjective() && objectives.size() > 5) {
+        objs[5] = objectives[5];   // Affordability index
+    }
      
         if (s != nullptr) {	 // != significa "diferente de"
             delete s;
@@ -1003,7 +1012,11 @@ int Caesb::simulationExceptionHander(const std::exception &e,
     objs[2] = 1000;
     objs[3] = 5.;
     objs[4] = 5.;
-    objs[5] = 1.0;  // Worst affordability
+    
+    // Only set affordability if included in experiment
+    if (Constants::includeAffordabilityObjective()) {
+        objs[5] = 1.0;  // Worst affordability
+    }
 
     if (s != nullptr) {
         delete s;

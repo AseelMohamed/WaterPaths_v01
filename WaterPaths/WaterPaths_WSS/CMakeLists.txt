@@ -128,6 +128,8 @@ set(SOURCE_FILES
         ../WaterPaths_WSS/src/Utils/Graph/Graph.h
         ../WaterPaths_WSS/src/Utils/ObjectivesCalculator.cpp
         ../WaterPaths_WSS/src/Utils/ObjectivesCalculator.h
+        ../WaterPaths_WSS/src/Utils/Constants.cpp
+        ../WaterPaths_WSS/src/Utils/Constants.h
         ../WaterPaths_WSS/src/Utils/QPSolver/Array.cpp
         ../WaterPaths_WSS/src/Utils/QPSolver/Array.h
         ../WaterPaths_WSS/src/Utils/QPSolver/QuadProg++.cpp

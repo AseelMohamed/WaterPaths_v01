@@ -44,15 +44,16 @@ void eval(double *vars, double *objs, double *consts) {
         printf("Failure! Decision variable values:\n");
         for (int i = 0; i < NUM_DEC_VAR; ++i) sol_out << vars[i] << " ";
         sol_out << endl;
-        for (int i = 0; i < NUM_OBJECTIVES; ++i) objs[i] = 1e5;
+        int num_objs = Constants::getNumObjectives();
+        for (int i = 0; i < num_objs; ++i) objs[i] = 1e5;
     }
 }
 
 int main(int argc, char *argv[]) {
     const int c_num_dec = NUM_DEC_VAR;
-    const int c_num_obj = NUM_OBJECTIVES;
+    int c_num_obj = Constants::getNumObjectives(); // Use dynamic objective count
     int c_num_constr = 0;
-    double c_obj[c_num_obj];
+    double c_obj[NUM_OBJECTIVES]; // Use max size for array allocation
     double c_constr[0];
 
     unsigned long n_realizations = 1000;
@@ -110,6 +111,14 @@ int main(int argc, char *argv[]) {
         else if (arg == "-n" && i + 1 < argc) nfe = (unsigned long) atoi(argv[++i]);
         else if (arg == "-o" && i + 1 < argc) output_frequency = (unsigned long) atoi(argv[++i]);
         else if (arg == "-e" && i + 1 < argc) seed = atoi(argv[++i]);
+        else if (arg == "-E" && i + 1 < argc) {
+            Constants::EXPERIMENT_MODE = atoi(argv[++i]);
+            if (Constants::EXPERIMENT_MODE < 1 || Constants::EXPERIMENT_MODE > 4) {
+                fprintf(stderr, "Invalid experiment mode. Must be 1, 2, 3, or 4.\n");
+                return -1;
+            }
+            c_num_obj = Constants::getNumObjectives(); // Update objective count
+        }
         else if (arg == "-y" && i + 1 < argc) bootstrap_file = argv[++i];
         else if (arg == "-R" && i + 1 < argc) rdm_no = atoi(argv[++i]);
         else if (arg == "-U" && i + 1 < argc) utilities_rdm_file = argv[++i];
@@ -157,7 +166,12 @@ int main(int argc, char *argv[]) {
                     "ROF table binaries\n"
                     "\t-C: Import/export rof tables (1: export, 0:"
                     " do nothing (standard), -1: import)\n"
-                    "\t-B: Export objectives for all utilities on a single line\n",
+                    "\t-B: Export objectives for all utilities on a single line\n"
+                    "\t-E: Experiment mode (1-4):\n"
+                    "\t    1: 5 objs, reliability=MIN (worst case)\n"
+                    "\t    2: 5 objs, reliability=AVERAGE\n"
+                    "\t    3: 6 objs, reliability=MIN, affordability=MAX [DEFAULT]\n"
+                    "\t    4: 6 objs, reliability=AVERAGE, affordability=AVERAGE\n",
                     argv[0], n_realizations, n_weeks, system_io.c_str());
             return -1;
         }
@@ -168,6 +182,23 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Print experiment mode configuration (only on master process in serial section)
+    #ifndef PARALLEL
+    printf("========================================\n");
+    printf("Experiment Configuration:\n");
+    printf("  Experiment Mode: %d\n", Constants::EXPERIMENT_MODE);
+    printf("  Number of Objectives: %d\n", Constants::getNumObjectives());
+    printf("  Reliability Aggregation: %s\n", 
+           Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
+    if (Constants::includeAffordabilityObjective()) {
+        printf("  Affordability Aggregation: %s\n", 
+               Constants::getAffordabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MAX");
+    } else {
+        printf("  Affordability: NOT INCLUDED\n");
+    }
+    printf("========================================\n\n");
+    #endif
+    
     Caesb problem(n_weeks, import_export_rof_table);
 //    Triangle problem(n_weeks, import_export_rof_table);
     if (seed > -1) {
@@ -321,6 +352,25 @@ int main(int argc, char *argv[]) {
         return 0;
     } else {
 #ifdef  PARALLEL
+
+        // Print experiment configuration from master rank only
+        int rank = 0;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        if (rank == 0) {
+            printf("========================================\n");
+            printf("Experiment Configuration:\n");
+            printf("  Experiment Mode: %d\n", Constants::EXPERIMENT_MODE);
+            printf("  Number of Objectives: %d\n", Constants::getNumObjectives());
+            printf("  Reliability Aggregation: %s\n", 
+                   Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
+            if (Constants::includeAffordabilityObjective()) {
+                printf("  Affordability Aggregation: %s\n", 
+                       Constants::getAffordabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MAX");
+            } else {
+                printf("  Affordability: NOT INCLUDED\n");
+            }
+            printf("========================================\n");
+        }
 
         printf("Running Borg with:\n"
             "n_dec_vars: %d\n"
