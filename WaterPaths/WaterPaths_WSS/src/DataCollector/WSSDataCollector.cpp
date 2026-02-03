@@ -8,7 +8,7 @@
 #include "WSSDataCollector.h"
 
 WSSDataCollector::WSSDataCollector(const WaterSupplySystems *wss, unsigned long realization)
-        : DataCollector(wss->getSystemId(), wss->name, realization, UTILITY, 11 * COLUMN_WIDTH),
+    : DataCollector(wss->getSystemId(), wss->name, realization, UTILITY, 16 * COLUMN_WIDTH),
           wss(wss),
           owner(wss->getOwner()),
           owner_id(wss->getOwner() ? wss->getOwner()->id : -1) {  // Store owner ID immediately while WSS is still valid
@@ -71,6 +71,18 @@ string WSSDataCollector::printCompactString(int week) {
               << waste_water_discharge[week]
               << ","
               << total_treatment_capacity[week]
+              << ","
+              << water_price[week]
+              << ","
+              << gross_revenues[week]
+              << ","
+              << drought_mitigation_cost[week]
+              << ","
+              << contingency_fund_contribution[week]
+              << ","
+              << debt_service_payments[week]
+              << ","
+              << net_present_infrastructure_cost[week]
               << ",";
 
     return outStream.str();
@@ -126,7 +138,13 @@ string WSSDataCollector::printCompactStringHeader() {
               << id << "unrest_demand" << ","
               << id << "unfulf_demand" << ","
               << id << "wastewater" << ","
-              << id << "treat_capacity" << ",";
+              << id << "treat_capacity" << ","
+              << id << "water_price" << ","
+              << id << "gross_rev" << ","
+              << id << "drought_cost" << ","
+              << id << "cont_contrib" << ","
+              << id << "debt_serv" << ","
+              << id << "infra_npv" << ",";
 
     return outStream.str();
 }
@@ -156,15 +174,27 @@ void WSSDataCollector::collect_data() {
     double affordability_index = 0.0;
     double average_monthly_income = wss->getAverageMonthlyIncome();
     
-    if (wss->getWssGrossRevenue() > 0.0 && wss->getRestrictedDemand() > 0.0 && average_monthly_income > 0.0) {
+    double weekly_water_price = 0.0;
+    if (wss->getWssGrossRevenue() > 0.0 && wss->getRestrictedDemand() > 0.0) {
         // Weekly water price = weekly revenue / weekly demand (both in same time unit)
-        double weekly_water_price = wss->getWssGrossRevenue() / wss->getRestrictedDemand();
+        weekly_water_price = wss->getWssGrossRevenue() / wss->getRestrictedDemand();
+    }
+    water_price.push_back(weekly_water_price);
+
+    if (weekly_water_price > 0.0 && average_monthly_income > 0.0) {
         // Convert monthly income to weekly income
         double weekly_average_income = average_monthly_income / WEEKS_IN_MONTH;
         // Affordability index = weekly water price / weekly income
         affordability_index = weekly_water_price / weekly_average_income;
     }
     weekly_affordability_index.push_back(affordability_index);
+
+    // WSS-level financials calculated in Utility and stored in WSS
+    gross_revenues.push_back(wss->getWssGrossRevenue());
+    drought_mitigation_cost.push_back(wss->getWssDroughtMitigationCost());
+    contingency_fund_contribution.push_back(wss->getWssContingencyFundShare());
+    debt_service_payments.push_back(wss->getWssDebtServiceShare());
+    net_present_infrastructure_cost.push_back(wss->getWssInfrastructureNPC());
     
     double wss_npc = wss->getWssInfrastructureNPC();
     
@@ -215,6 +245,18 @@ void WSSDataCollector::checkForNans() const {
     if (std::isnan(total_treatment_capacity.back()))
         throw_with_nested(runtime_error(error.c_str()));
     if (std::isnan(total_storage_treatment_capacity.back()))
+        throw_with_nested(runtime_error(error.c_str()));
+    if (std::isnan(water_price.back()))
+        throw_with_nested(runtime_error(error.c_str()));
+    if (std::isnan(gross_revenues.back()))
+        throw_with_nested(runtime_error(error.c_str()));
+    if (std::isnan(drought_mitigation_cost.back()))
+        throw_with_nested(runtime_error(error.c_str()));
+    if (std::isnan(contingency_fund_contribution.back()))
+        throw_with_nested(runtime_error(error.c_str()));
+    if (std::isnan(debt_service_payments.back()))
+        throw_with_nested(runtime_error(error.c_str()));
+    if (std::isnan(net_present_infrastructure_cost.back()))
         throw_with_nested(runtime_error(error.c_str()));
 }
 

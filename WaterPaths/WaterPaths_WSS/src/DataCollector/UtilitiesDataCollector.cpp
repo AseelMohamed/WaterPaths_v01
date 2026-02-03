@@ -9,7 +9,7 @@
 
 
 UtilitiesDataCollector::UtilitiesDataCollector(const Utility *utility, unsigned long realization, double discount_rate)
-        : DataCollector(utility->id, utility->name, realization, UTILITY, 12 * COLUMN_WIDTH),
+    : DataCollector(utility->id, utility->name, realization, UTILITY, 13 * COLUMN_WIDTH),
           utility(utility),
           infra_discount_rate(discount_rate) {
 }
@@ -54,6 +54,7 @@ string UtilitiesDataCollector::printCompactString(int week) {
     check(gross_revenues, "gross_revenues");
     check(contingency_fund_contribution, "contingency_fund_contribution");
     check(drought_mitigation_cost, "drought_mitigation_cost");
+    check(water_price, "water_price");
 #endif
 
     stringstream outStream;
@@ -73,6 +74,8 @@ string UtilitiesDataCollector::printCompactString(int week) {
               << contingency_fund_contribution[week]
               << ","
               << drought_mitigation_cost[week]
+              << ","
+              << water_price[week]
               << ",";
     
     return outStream.str();
@@ -114,7 +117,8 @@ string UtilitiesDataCollector::printCompactStringHeader() {
               << id << "debt_serv" << ","
               << id << "gross_rev" << ","
               << id << "cont_contrib" << ","
-              << id << "drought_cost" << ",";
+              << id << "drought_cost" << ","
+              << id << "water_price" << ",";
     
     return outStream.str();
 }
@@ -160,7 +164,7 @@ void UtilitiesDataCollector::collect_data() {
     
     // Collect financial data - copy atomically from shared utility to avoid race conditions
     // Each thread reads from shared utility, so serialize the reads
-    double cf, npc, gr, dsp, cfc, dmc, ins_cost, ins_payout;
+    double cf, npc, gr, dsp, cfc, dmc, ins_cost, ins_payout, wp;
     #pragma omp critical(utility_financial_read)
     {
         cf = utility->getContingency_fund();
@@ -171,6 +175,7 @@ void UtilitiesDataCollector::collect_data() {
         dmc = utility->getDrought_mitigation_cost();
         ins_cost = utility->getInsurance_purchase();
         ins_payout = utility->getInsurance_payout();
+        wp = utility->getCurrentWaterPrice((int)gross_revenues.size());
     }
     
     contingency_fund_size.push_back(cf);
@@ -181,6 +186,7 @@ void UtilitiesDataCollector::collect_data() {
     drought_mitigation_cost.push_back(dmc);
     insurance_contract_cost.push_back(ins_cost);
     insurance_payout.push_back(ins_payout);
+    water_price.push_back(wp);
 
 //    checkForNans();
 
@@ -217,6 +223,8 @@ void UtilitiesDataCollector::checkForNans() const {
     if (std::isnan(insurance_contract_cost.back()))
         throw_with_nested(runtime_error(error.c_str()));
     if (std::isnan(insurance_payout.back()))
+        throw_with_nested(runtime_error(error.c_str()));
+    if (std::isnan(water_price.back()))
         throw_with_nested(runtime_error(error.c_str()));
     if (std::isnan(capacity.back()))
         throw_with_nested(runtime_error(error.c_str()));

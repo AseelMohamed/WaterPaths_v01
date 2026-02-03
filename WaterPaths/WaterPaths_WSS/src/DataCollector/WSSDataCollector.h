@@ -29,6 +29,7 @@ private:
     
     // Affordability index (water price / average income)
     vector<double> weekly_affordability_index;
+    vector<double> water_price;
     
     // Financial data vectors (WSS-level)
     vector<double> gross_revenues;

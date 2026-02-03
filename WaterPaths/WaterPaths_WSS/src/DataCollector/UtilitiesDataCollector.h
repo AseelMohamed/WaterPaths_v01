@@ -24,6 +24,7 @@ private:
     vector<double> insurance_contract_cost;
     vector<double> insurance_payout;
     vector<double> drought_mitigation_cost;
+    vector<double> water_price;
     vector<double> capacity;
     vector<double> net_present_infrastructure_cost;
     vector<double> waste_water_discharge;

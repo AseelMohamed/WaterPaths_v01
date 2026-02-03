@@ -1312,7 +1312,7 @@ vector<vector<int>> Utility::getAllAndClearInfraBuilt() const {
     return const_cast<InfrastructureManager&>(infrastructure_construction_manager).getAllAndClearInfraBuilt();
 }
 
-double Utility::waterPrice(int week) {
+double Utility::waterPrice(int week) const {
     int week_of_year = Utils::weekOfTheYear(week);
     
     // If utility-level price exists, use it (legacy single-WSS utilities)
@@ -1344,6 +1344,18 @@ double Utility::waterPrice(int week) {
     sprintf(error_msg, "Utility %d: No water price available for week %d (week_of_year %d)", 
             id, week, week_of_year);
     throw std::runtime_error(error_msg);
+}
+
+double Utility::getCurrentWaterPrice(int week) const {
+    double unrestricted_price = waterPrice(week);
+    double current_price = (restricted_price == NON_INITIALIZED) ? unrestricted_price : restricted_price;
+
+    // Ensure restricted price does not go below unrestricted price
+    if (current_price < unrestricted_price) {
+        current_price = unrestricted_price;
+    }
+
+    return current_price;
 }
 
 void Utility::setRestricted_price(double restricted_price) {

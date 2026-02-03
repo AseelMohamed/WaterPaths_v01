@@ -590,6 +590,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
         throw std::runtime_error("ERROR: realizations vector is empty in calculateAffordabilityIndexObjective_WSS");
     }
     
+    const double affordability_scale = 2.44 / 1e6; // Convert R$/hm3 to R$/m3 and per-capita to household
     vector<double> wss_affordability_95th; // Store 95th percentile affordability for each WSS
     
     // Calculate 95th percentile affordability for EACH WSS independently
@@ -603,7 +604,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
                 if (!affordability_vec.empty()) {
                     // Find maximum affordability across all weeks in this realization
                     double max_affordability = *max_element(affordability_vec.begin(), affordability_vec.end());
-                    realization_max_affordability.push_back(max_affordability);
+                    realization_max_affordability.push_back(max_affordability * affordability_scale);
                 }
             }
         }
@@ -637,7 +638,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
         throw logic_error(error_inf.c_str());
     }
     
-    return worst_affordability / 1e5; // This (1e5) is to convert the water price from R$/hm3 to R$/m3
+    return worst_affordability;  // Values already scaled by 2.44/1e6.
 }
 
 /**
@@ -834,6 +835,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
         throw std::runtime_error("ERROR: realizations vector is empty");
     }
     
+    const double affordability_scale = 2.44 / 1e6; // Convert R$/hm3 to R$/m3 and per-capita to household
     vector<double> wss_affordability_95th; // Store 95th percentile affordability for each WSS
     
     // Calculate 95th percentile affordability for EACH WSS independently
@@ -846,7 +848,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
                 
                 if (!affordability_vec.empty()) {
                     double max_affordability = *max_element(affordability_vec.begin(), affordability_vec.end());
-                    realization_max_affordability.push_back(max_affordability);
+                    realization_max_affordability.push_back(max_affordability * affordability_scale);
                 }
             }
         }
@@ -884,5 +886,5 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
         throw logic_error(error_inf.c_str());
     }
     
-    return result_affordability / 1e5; // This (1e5) is to convert the water price from R$/hm3 to R$/m3
+    return result_affordability; // Values already scaled by 2.44/1e6.
 }

@@ -216,7 +216,8 @@ public:
 
     void resetDroughtMitigationVariables(); //Checked
 
-    double waterPrice(int week); //Checked
+        double waterPrice(int week) const; //Checked
+        double getCurrentWaterPrice(int week) const;
 
     double getGrossRevenue() const; //checked
 

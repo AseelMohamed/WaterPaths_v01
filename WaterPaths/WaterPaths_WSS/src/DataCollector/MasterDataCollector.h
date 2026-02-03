@@ -50,6 +50,8 @@ public:
 
     void printUtilitesOutputTabular(int week_i, int week_f, string file_name);
 
+        void printWCCComponentsOutput(int week_i, int week_f, string file_name);
+
     void
     printWaterSourcesOutputCompact(int week_i, int week_f, string file_name);
 

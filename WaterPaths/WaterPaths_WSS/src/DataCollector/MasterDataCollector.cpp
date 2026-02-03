@@ -9,6 +9,7 @@
 #include <numeric>
 #include <random>
 #include <algorithm>
+#include <cmath>
 #include "../DroughtMitigationInstruments/TransfersBilateral.h"
 
 #ifdef NETCDF
@@ -305,6 +306,80 @@ void MasterDataCollector::printUtilitiesOutputCompact(
                 line += p[r]->printCompactString(w);
             line.pop_back();
             out_stream << line << endl;
+        }
+
+        out_stream.close();
+    }
+}
+
+void MasterDataCollector::printWCCComponentsOutput(
+        int week_i, int week_f, string file_name) {
+#pragma omp parallel for
+    for (int rr = 0; rr < (int) realizations_ran.size(); ++rr) {
+        auto r = realizations_ran[rr];
+        std::ofstream out_stream;
+        out_stream.open(output_directory + file_name + "_r"
+                        + std::to_string(r) + ".csv");
+
+        out_stream << "utility_id,utility_name,realization,year,row_type,"
+                      "drought_cost_sum,gross_rev_sum,discount_rate,annual_cost"
+                   << endl;
+
+        for (vector<UtilitiesDataCollector *> &p : utility_collectors) {
+            auto *u = p[r];
+            if (u == nullptr) {
+                continue;
+            }
+
+            const auto &drought = u->getDrought_mitigation_cost();
+            const auto &gross = u->getGross_revenues();
+            int max_week = std::min(week_f, (int)std::min(drought.size(), gross.size()));
+
+            double discount_rate = u->getInfraDiscountRate();
+            double drought_sum = 0.0;
+            double gross_sum = 1e-6;
+            int year = 0;
+            double max_annual_cost = 0.0;
+
+            for (int w = week_i; w < max_week; ++w) {
+                drought_sum += drought[w];
+                gross_sum += gross[w];
+
+                if (Utils::isFirstWeekOfTheYear(w + 1)) {
+                    double annual_cost = std::max(drought_sum, 0.0) /
+                            (gross_sum * (1. + std::pow(1. + discount_rate, year)));
+
+                    out_stream << u->id << ","
+                               << u->name << ","
+                               << r << ","
+                               << year << ","
+                               << "year" << ","
+                               << drought_sum << ","
+                               << gross_sum << ","
+                               << discount_rate << ","
+                               << annual_cost
+                               << endl;
+
+                    if (annual_cost > max_annual_cost) {
+                        max_annual_cost = annual_cost;
+                    }
+
+                    drought_sum = 0.0;
+                    gross_sum = 1e-6;
+                    year++;
+                }
+            }
+
+            out_stream << u->id << ","
+                       << u->name << ","
+                       << r << ","
+                       << -1 << ","
+                       << "max" << ","
+                       << "" << ","
+                       << "" << ","
+                       << discount_rate << ","
+                       << max_annual_cost
+                       << endl;
         }
 
         out_stream.close();
