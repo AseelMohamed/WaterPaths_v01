@@ -101,6 +101,18 @@ void ContinuityModelRealization::setLongTermROFs(const vector<double> &risks_of_
 }
 
 void ContinuityModelRealization::applyDroughtMitigationPolicies(int week) {
+    // Reset drought mitigation variables at the start of the week
+    // so current prices remain available for data collection after continuityStep.
+    std::set<Utility*> utilities_reset;
+    for (auto& wss : continuity_wss) {
+        if (wss != nullptr) {
+            Utility* owner = wss->getOwner();
+            if (owner != nullptr && utilities_reset.insert(owner).second) {
+                owner->resetDroughtMitigationVariables();
+            }
+        }
+    }
+
     // Reset all WSS demand multipliers to 1.0 before applying policies
     // This ensures restrictions don't persist from previous weeks unless re-triggered
     // match Original model behavior and test impact on transfer patterns

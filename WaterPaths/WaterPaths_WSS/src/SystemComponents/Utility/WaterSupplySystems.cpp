@@ -526,17 +526,17 @@ void WaterSupplySystems::splitDemands(
         throw std::out_of_range(error_msg);
     }
     
-    unrestricted_demand = demand_series_realization[week] +
-                          apply_demand_buffer * demand_buffer *
-                          weekly_peaking_factor[week_of_year];
-           
-    restricted_demand = unrestricted_demand * demand_multiplier - demand_offset;
-           
-    unfulfilled_demand = max(max(restricted_demand - total_available_volume,
-                                 restricted_demand - total_treatment_capacity),
-                             0.);
-    restricted_demand -= unfulfilled_demand;
-    
+        unrestricted_demand = demand_series_realization[week] +
+                     apply_demand_buffer * demand_buffer *
+                     weekly_peaking_factor[week_of_year];
+
+        restricted_demand = unrestricted_demand * demand_multiplier - demand_offset;
+
+        unfulfilled_demand = max(max(restricted_demand - total_available_volume,
+                         restricted_demand - total_treatment_capacity),
+                     0.);
+        restricted_demand -= unfulfilled_demand;
+
     double demand_non_priority_sources = restricted_demand;
     double total_serviced_demand = 0;
 

@@ -16,6 +16,7 @@ private:
     const vector<double> stage_triggers;
     double current_multiplier = 0;
     vector<vector<double>> restricted_weekly_average_volumetric_price;
+        vector<vector<double>> price_multipliers;
 
 public:
     Restrictions(const int id, const vector<double> &stage_multipliers,

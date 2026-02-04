@@ -43,6 +43,9 @@ Restrictions::Restrictions(
     calculateWeeklyAverageWaterPrices(typesMonthlyDemandFraction,
                                       typesMonthlyWaterPrice,
                                       priceMultipliers);
+    if (priceMultipliers) {
+        price_multipliers = *priceMultipliers;
+    }
     wss_ids = vector<int>(1, id);
 }
 
@@ -51,7 +54,8 @@ Restrictions::Restrictions(const Restrictions &restrictions) :
         stage_multipliers(restrictions.stage_multipliers),
         stage_triggers(restrictions.stage_triggers),
         restricted_weekly_average_volumetric_price(
-                restrictions.restricted_weekly_average_volumetric_price) {
+        restrictions.restricted_weekly_average_volumetric_price),
+    price_multipliers(restrictions.price_multipliers) {
     wss_ids = restrictions.wss_ids;
 }
 
@@ -92,13 +96,17 @@ void Restrictions::applyPolicy(int week) {
         }
     }
     
-    // Apply financial restriction (price surcharge) at utility level if this stage is active
-    if (!restricted_weekly_average_volumetric_price.empty() && stage > 0) {
-        Utility* owner_utility = realization_wss[0]->getOwner();
-        if (owner_utility != nullptr) {
-            int week_of_year = Utils::weekOfTheYear(week);
-            owner_utility->setRestricted_price(
-                    restricted_weekly_average_volumetric_price[stage - 1][week_of_year]);
+    // Apply financial restriction (price surcharge) at WSS level if this stage is active
+    if (!price_multipliers.empty() && stage > 0) {
+        int week_of_year = Utils::weekOfTheYear(week);
+        for (WaterSupplySystems* wss : realization_wss) {
+            if (wss == nullptr) continue;
+            Utility* owner_utility = wss->getOwner();
+            if (owner_utility != nullptr) {
+                double wss_restricted_price = owner_utility->calculateRestrictedWeeklyPriceForWss(
+                        wss->getSystemId(), (int)stage - 1, week_of_year, price_multipliers);
+                owner_utility->setRestrictedPriceForWss(wss->getSystemId(), wss_restricted_price);
+            }
         }
     }
 }

@@ -204,10 +204,10 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
             // financial cost for the year.
             if (Utils::isFirstWeekOfTheYear(w + 1)) {
                 year_financial_costs[y] +=
-                        (realizations_year_debt_payment +
-                         realizations_year_insurance_contract_cost) /
-                        (realizations_year_gross_revenue *
-                         (1. + pow(1. + discount_rate, y)));
+                    (realizations_year_debt_payment +
+                     realizations_year_insurance_contract_cost) /
+                    (realizations_year_gross_revenue *
+                     (1. + pow(1. + discount_rate, y)));
                 // update year count.
                 y++;
 

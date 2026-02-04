@@ -23,12 +23,14 @@ private:
     vector<double> weekly_average_volumetric_price;
     // NOTE: base_weekly_average_volumetric_price and price_rdm_multiplier removed to match Original model
     // Prices are no longer scaled by RDM factors
+
     
     // WSS-specific financial parameters (indexed by system_id)
     std::map<int, double> wss_contingency_percentages;  // Contingency fund % for each WSS
     std::map<int, vector<vector<double>>> wss_demand_fractions;  // Demand class fractions for each WSS
     std::map<int, vector<vector<double>>> wss_water_prices;  // Water prices for each WSS
     std::map<int, vector<double>> wss_weekly_average_prices;  // Calculated weekly average prices for each WSS
+        std::map<int, double> wss_restricted_prices;  // Restricted price for each WSS (per week)
     
     // Financial and strategic variables (kept in Utility)
     double gross_revenue = 0;
@@ -218,6 +220,13 @@ public:
 
         double waterPrice(int week) const; //Checked
         double getCurrentWaterPrice(int week) const;
+
+        // Per-WSS restricted price helpers
+        void setRestrictedPriceForWss(int system_id, double restricted_price);
+        double getRestrictedPriceForWss(int system_id) const;
+        double calculateRestrictedWeeklyPriceForWss(int system_id, int stage,
+                                                                                                int week_of_year,
+                                                                                                const vector<vector<double>> &priceMultipliers) const;
 
     double getGrossRevenue() const; //checked
 

@@ -296,8 +296,8 @@ Utility::Utility(const char *name, int id,
 }
 
 Utility::Utility(Utility &utility) :
-        weekly_average_volumetric_price(
-                utility.weekly_average_volumetric_price),
+    weekly_average_volumetric_price(
+        utility.weekly_average_volumetric_price),
         // Removed operational variables - now in WaterSupplySystems
         wwtp_discharge_rule(utility.wwtp_discharge_rule),
         demands_all_realizations(utility.demands_all_realizations),
@@ -340,6 +340,8 @@ Utility::~Utility() {
 Utility &Utility::operator=(const Utility &utility) {
     demand_series_realization = vector<double>(
             (unsigned long) utility.number_of_week_demands);
+
+    weekly_average_volumetric_price = utility.weekly_average_volumetric_price;
 
     // Initialize water supply systems like in other constructors
     water_supply_systems.clear();
@@ -669,7 +671,9 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
     double total_revenue_losses = 0.0;
     double total_transfer_costs = 0.0;
     double total_recouped = 0.0;
-    
+    double total_transfer_volume = 0.0;
+    double weighted_transfer_price_sum = 0.0;
+
     // Use passed realization WSS (thread-safe - each realization has its own copies)
     size_t num_wss = realization_wss.size();
     
@@ -699,13 +703,22 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         // Get WSS-specific price (lookup from stored parameters)
         double wss_unrestricted_price = 0.0;
         double wss_current_price = 0.0;
+        double wss_restricted_price = NON_INITIALIZED;
         
         if (wss_weekly_average_prices.find(system_id) != wss_weekly_average_prices.end()) {
             auto& wss_prices = wss_weekly_average_prices[system_id];
             if (week_of_year >= 0 && week_of_year < (int)wss_prices.size()) {
                 wss_unrestricted_price = wss_prices[week_of_year];
-                // Use restricted price if set, otherwise use unrestricted
-                wss_current_price = (restricted_price == NON_INITIALIZED) ? wss_unrestricted_price : restricted_price;
+                auto wss_restricted_it = wss_restricted_prices.find(system_id);
+                if (wss_restricted_it != wss_restricted_prices.end()) {
+                    wss_restricted_price = wss_restricted_it->second;
+                }
+                // Use WSS-specific restricted price if set, otherwise fall back to utility restricted price
+                if (wss_restricted_price != NON_INITIALIZED) {
+                    wss_current_price = wss_restricted_price;
+                } else {
+                    wss_current_price = (restricted_price == NON_INITIALIZED) ? wss_unrestricted_price : restricted_price;
+                }
                 
                 // Validation: ensure restricted price is not lower than unrestricted price
                 if (wss_current_price < wss_unrestricted_price) {
@@ -727,6 +740,7 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         double wss_demand_mult = wss->getDemand_multiplier();
         double wss_offset = wss->getDemand_offset();
         double wss_offset_rate = wss->getOffset_rate_per_volume();
+        double wss_transfer_volume = max(wss_offset, 0.0);
         
         // Calculate WSS-specific gross revenue using WSS-specific price
         double wss_gross_revenue = wss_restricted * wss_current_price;
@@ -734,30 +748,35 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         // Calculate WSS-specific drought mitigation costs using WSS-specific price
         double lost_demand_vol_sales = (wss_unrestricted * (1 - wss_demand_mult) + wss_unfulfilled);
         double revenue_losses = lost_demand_vol_sales * wss_unrestricted_price;
-        double transfer_costs = wss_offset * (wss_offset_rate - wss_unrestricted_price);
+        double transfer_costs = wss_transfer_volume * (wss_offset_rate - wss_unrestricted_price);
         double recouped_loss_price_surcharge = wss_restricted * (wss_current_price - wss_unrestricted_price);
-        // NOTE: Do NOT subtract insurance_payout here - it gets subtracted once at utility level
-        double wss_drought_cost = max(revenue_losses + transfer_costs - 
-                                  recouped_loss_price_surcharge -
-                                  contingency_fund, 0.0);
+        // double wss_drought_cost = max(revenue_losses + transfer_costs - 
+        //                           recouped_loss_price_surcharge -
+        //                           contingency_fund, 0.0);
+
+        
         
         // Store WSS-level financial data (for data collection and objective calculations)
         wss->setWssGrossRevenue(wss_gross_revenue);
-        wss->setWssDroughtMitigationCost(wss_drought_cost);
+        // wss->setWssDroughtMitigationCost(wss_drought_cost);
         
         // Aggregate for utility-level calculations
         total_unrestricted_demand += wss_unrestricted;
         total_restricted_demand += wss_restricted;
         total_unfulfilled_demand += wss_unfulfilled;
         total_wss_gross_revenue += wss_gross_revenue;
-        total_wss_drought_cost += wss_drought_cost;
+        // total_wss_drought_cost += wss_drought_cost;
         avg_demand_multiplier += wss_demand_mult;
         total_demand_offset += wss_offset;
         // Aggregate actual losses (don't recalculate with averages later)
         total_revenue_losses += revenue_losses;
         total_transfer_costs += transfer_costs;
         total_recouped += recouped_loss_price_surcharge;
+        total_transfer_volume += wss_transfer_volume;
+        weighted_transfer_price_sum += wss_transfer_volume * wss_offset_rate;
     }
+
+    
     
     // Calculate average demand multiplier
     if (num_wss > 0) {
@@ -821,22 +840,23 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
     // Do NOT recalculate with averaged demand_multiplier - that causes incorrect results
     // The total_revenue_losses, total_transfer_costs, and total_recouped were summed from each WSS
     
-    // Update drought mitigation cost (aggregated from WSS, subtract insurance at utility level)
-    drought_mitigation_cost = max(total_wss_drought_cost - insurance_payout - 
-                          total_projected_fund_contribution, 0.0);
+    // Update drought mitigation cost at UTILITY level using aggregated variables
+    // DMC_i = RL_i + TC_i - INP_i - RV_{sur,i} - CF_{i-1} - CF_{IN,i}
+    double contingency_fund_before = contingency_fund;
+    drought_mitigation_cost = max(total_revenue_losses + total_transfer_costs -
+                          insurance_payout - total_recouped -
+                          contingency_fund_before - total_projected_fund_contribution, 0.0);
 
-    // Update contingency fund (utility-wide)
+    // Update contingency fund (utility-wide) AFTER drought mitigation cost
     contingency_fund = max(contingency_fund + total_projected_fund_contribution -
                           total_revenue_losses - total_transfer_costs + total_recouped, 0.0);
     
     // Fund contribution calculation
     fund_contribution = total_projected_fund_contribution - total_revenue_losses - 
                        total_transfer_costs + total_recouped;
-    
+
     // // Update drought mitigation cost (aggregated from WSS, subtract insurance at utility level)
     // drought_mitigation_cost = max(total_wss_drought_cost - insurance_payout, 0.0);
-    
-    resetDroughtMitigationVariables();
     
     // Calculate current debt payment
     current_debt_payment = updateCurrent_debt_payment(week, realization_wss);
@@ -848,6 +868,7 @@ void Utility::resetDroughtMitigationVariables() {
     offset_rate_per_volume = NONE;
     this->demand_offset = NONE;
     insurance_payout = 0.0;  // Reset payout so it doesn't persist across weeks
+    wss_restricted_prices.clear();
 }
 
 /**
@@ -1347,10 +1368,45 @@ double Utility::waterPrice(int week) const {
 }
 
 double Utility::getCurrentWaterPrice(int week) const {
+    int week_of_year = Utils::weekOfTheYear(week);
+
+    // If WSS prices exist, sum current prices across all WSS in this utility
+    if (!wss_weekly_average_prices.empty()) {
+        double total_current_price = 0.0;
+
+        for (const auto& wss_price_pair : wss_weekly_average_prices) {
+            int system_id = wss_price_pair.first;
+            const auto& wss_prices = wss_price_pair.second;
+
+            if (week_of_year < 0 || week_of_year >= (int)wss_prices.size()) {
+                continue;
+            }
+
+            double wss_unrestricted_price = wss_prices[week_of_year];
+            double wss_restricted_price = NON_INITIALIZED;
+            auto wss_restricted_it = wss_restricted_prices.find(system_id);
+            if (wss_restricted_it != wss_restricted_prices.end()) {
+                wss_restricted_price = wss_restricted_it->second;
+            }
+
+            double wss_current_price = (wss_restricted_price == NON_INITIALIZED)
+                    ? ((restricted_price == NON_INITIALIZED) ? wss_unrestricted_price : restricted_price)
+                    : wss_restricted_price;
+
+            if (wss_current_price < wss_unrestricted_price) {
+                wss_current_price = wss_unrestricted_price;
+            }
+
+            total_current_price += wss_current_price;
+        }
+
+        return total_current_price;
+    }
+
+    // Fallback: single utility price behavior
     double unrestricted_price = waterPrice(week);
     double current_price = (restricted_price == NON_INITIALIZED) ? unrestricted_price : restricted_price;
 
-    // Ensure restricted price does not go below unrestricted price
     if (current_price < unrestricted_price) {
         current_price = unrestricted_price;
     }
@@ -1452,4 +1508,48 @@ const vector<WaterSupplySystems*>& Utility::getWSSReferences() const {
 
 bool Utility::isUsedForRealization() const {
     return used_for_realization;
+}
+
+void Utility::setRestrictedPriceForWss(int system_id, double restricted_price) {
+    wss_restricted_prices[system_id] = restricted_price;
+}
+
+double Utility::getRestrictedPriceForWss(int system_id) const {
+    auto it = wss_restricted_prices.find(system_id);
+    if (it != wss_restricted_prices.end()) {
+        return it->second;
+    }
+    return NON_INITIALIZED;
+}
+
+double Utility::calculateRestrictedWeeklyPriceForWss(int system_id, int stage,
+                                                    int week_of_year,
+                                                    const vector<vector<double>> &priceMultipliers) const {
+    auto demand_it = wss_demand_fractions.find(system_id);
+    auto price_it = wss_water_prices.find(system_id);
+    if (demand_it == wss_demand_fractions.end() || price_it == wss_water_prices.end()) {
+        char error_msg[256];
+        sprintf(error_msg, "Utility %d: Missing demand fractions or water prices for WSS %d", id, system_id);
+        throw std::runtime_error(error_msg);
+    }
+
+    const auto &fractions = demand_it->second;
+    const auto &prices = price_it->second;
+
+    if (stage < 0 || stage >= (int)priceMultipliers.size()) {
+        char error_msg[256];
+        sprintf(error_msg, "Utility %d: Restriction stage %d out of bounds for price multipliers (size=%zu)",
+                id, stage, priceMultipliers.size());
+        throw std::out_of_range(error_msg);
+    }
+
+    int month_index = min((int) (week_of_year / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
+    double monthly_avg_price = 0.0;
+    int n_tiers = static_cast<int>(prices.at(0).size());
+
+    for (int t = 0; t < n_tiers; ++t) {
+        monthly_avg_price += fractions[month_index][t] * prices[month_index][t] * priceMultipliers[stage][t];
+    }
+
+    return monthly_avg_price / WEEKS_IN_MONTH;
 }

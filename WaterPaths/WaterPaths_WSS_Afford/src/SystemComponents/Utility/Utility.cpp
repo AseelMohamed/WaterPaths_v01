@@ -3,7 +3,6 @@
 //
 
 #include <algorithm>
-#include <fstream>
 #include <stdexcept>
 #include <omp.h>
 #include "Utility.h"
@@ -673,7 +672,6 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
     
     // Use passed realization WSS (thread-safe - each realization has its own copies)
     size_t num_wss = realization_wss.size();
-    int skipped_wss = 0;
     
     // Sanity check - ensure we have WSS
     if (num_wss == 0) {
@@ -693,7 +691,6 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         
         if (wss == nullptr) {
             printf("ERROR [Financial] WSS %zu is null!\n", i);
-            skipped_wss++;
             continue;
         }
         
@@ -716,12 +713,10 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
                 }
             } else {
                 printf("WARNING: week_of_year %d out of bounds for WSS %d prices\n", week_of_year, system_id);
-                skipped_wss++;
                 continue;
             }
         } else {
             printf("WARNING: No prices stored for WSS %d\n", system_id);
-            skipped_wss++;
             continue;
         }
         
@@ -779,34 +774,6 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
     utility_unrestricted_demand = total_unrestricted_demand;
     utility_restricted_demand = total_restricted_demand;
     gross_revenue = total_wss_gross_revenue;
-
-    // DEBUG: Write WSS vs utility gross revenue reconciliation (one line per week)
-    // Output file: output/WCC_GrossRevenue_Debug.csv
-    {
-        const std::string debug_file = "output/WCC_GrossRevenue_Debug.csv";
-        bool write_header = false;
-        {
-            std::ifstream in(debug_file);
-            write_header = !in.good() || in.peek() == std::ifstream::traits_type::eof();
-        }
-
-        std::ofstream out(debug_file, std::ios::app);
-        if (out.is_open()) {
-            if (write_header) {
-                out << "week,utility_id,utility_name,realization_id,num_wss,skipped_wss,total_wss_gross_revenue,utility_gross_revenue,delta" << std::endl;
-            }
-            out << week << ","
-                << id << ","
-                << name << ","
-                << current_realization_id << ","
-                << num_wss << ","
-                << skipped_wss << ","
-                << total_wss_gross_revenue << ","
-                << gross_revenue << ","
-                << (gross_revenue - total_wss_gross_revenue)
-                << std::endl;
-        }
-    }
     
     // Clear yearly updated data collecting variables
     if (week_of_year == 0) {
@@ -1435,4 +1402,42 @@ double Utility::getTotal_stored_volume() const {
     double utility_total_stored_volume = 0.0;
     
     // Force WSS to update their volumes before aggregating
-        for (auto& wss : water_su
+        for (auto& wss : water_supply_systems) {
+            // Force update of volumes from water sources
+            const_cast<WaterSupplySystems*>(wss.get())->updateTotalAvailableVolume();
+        double wss_stored = wss->getTotal_stored_volume();
+        utility_total_stored_volume += wss_stored;
+    }
+    
+    return utility_total_stored_volume;
+}
+
+void Utility::updateTotalAvailableVolume() {
+    // Delegate to all water supply systems to update their available volumes
+    for (auto& wss : water_supply_systems) {
+        wss->updateTotalAvailableVolume();
+    }
+}
+
+const vector<unique_ptr<WaterSupplySystems>> &Utility::getWaterSupplySystems() const {
+    return water_supply_systems;
+}
+
+void Utility::updateWSSReferences(const vector<WaterSupplySystems*>& new_wss) {
+    // Update the non-owning references to point to the WSS objects that have water sources
+    water_supply_systems_refs.clear();
+    
+    for (auto* wss : new_wss) {
+        if (wss && wss->getOwner() == this) {
+            water_supply_systems_refs.push_back(wss);
+        }
+    }
+}
+
+const vector<WaterSupplySystems*>& Utility::getWSSReferences() const {
+    return water_supply_systems_refs;
+}
+
+bool Utility::isUsedForRealization() const {
+    return used_for_realization;
+}
