@@ -12,6 +12,7 @@ WSSDataCollector::WSSDataCollector(const WaterSupplySystems *wss, unsigned long 
           wss(wss),
           owner(wss->getOwner()),
           owner_id(wss->getOwner() ? wss->getOwner()->id : -1) {  // Store owner ID immediately while WSS is still valid
+    average_monthly_income = wss->getAverageMonthlyIncome();
 }
 
 int WSSDataCollector::getOwnerId() const {
@@ -72,7 +73,9 @@ string WSSDataCollector::printCompactString(int week) {
               << ","
               << total_treatment_capacity[week]
               << ","
-              << water_price[week]
+              << aggregated_current_price[week]
+              << ","
+              << residential_current_price[week]
               << ","
               << gross_revenues[week]
               << ","
@@ -139,7 +142,8 @@ string WSSDataCollector::printCompactStringHeader() {
               << id << "unfulf_demand" << ","
               << id << "wastewater" << ","
               << id << "treat_capacity" << ","
-              << id << "water_price" << ","
+              << id << "agg_price" << ","
+              << id << "res_price" << ","
               << id << "gross_rev" << ","
               << id << "drought_cost" << ","
               << id << "cont_contrib" << ","
@@ -169,25 +173,15 @@ void WSSDataCollector::collect_data() {
     short_term_rof.push_back(wss->getShort_term_risk_of_failure());
     long_term_rof.push_back(wss->getLong_term_risk_of_failure());
 
-    // Calculate affordability index: weekly_water_price / weekly_average_income
-    // Income is stored as monthly, so convert to weekly by dividing by WEEKS_IN_MONTH
-    double affordability_index = 0.0;
-    double average_monthly_income = wss->getAverageMonthlyIncome();
-    
-    double weekly_water_price = 0.0;
-    if (wss->getWssGrossRevenue() > 0.0 && wss->getRestrictedDemand() > 0.0) {
-        // Weekly water price = weekly revenue / weekly demand (both in same time unit)
-        weekly_water_price = wss->getWssGrossRevenue() / wss->getRestrictedDemand();
-    }
-    water_price.push_back(weekly_water_price);
+    double residential_price = wss->getWssResidentialPrice();
+    residential_current_price.push_back(residential_price);
 
-    if (weekly_water_price > 0.0 && average_monthly_income > 0.0) {
-        // Convert monthly income to weekly income
-        double weekly_average_income = average_monthly_income / WEEKS_IN_MONTH;
-        // Affordability index = weekly water price / weekly income
-        affordability_index = weekly_water_price / weekly_average_income;
+    double aggregated_price = 0.0;
+    if (wss->getWssGrossRevenue() > 0.0 && wss->getRestrictedDemand() > 0.0) {
+        aggregated_price = wss->getWssGrossRevenue() / wss->getRestrictedDemand();
     }
-    weekly_affordability_index.push_back(affordability_index);
+    aggregated_current_price.push_back(aggregated_price);
+
 
     // WSS-level financials calculated in Utility and stored in WSS
     gross_revenues.push_back(wss->getWssGrossRevenue());
@@ -246,7 +240,9 @@ void WSSDataCollector::checkForNans() const {
         throw_with_nested(runtime_error(error.c_str()));
     if (std::isnan(total_storage_treatment_capacity.back()))
         throw_with_nested(runtime_error(error.c_str()));
-    if (std::isnan(water_price.back()))
+    if (std::isnan(aggregated_current_price.back()))
+        throw_with_nested(runtime_error(error.c_str()));
+    if (std::isnan(residential_current_price.back()))
         throw_with_nested(runtime_error(error.c_str()));
     if (std::isnan(gross_revenues.back()))
         throw_with_nested(runtime_error(error.c_str()));
@@ -344,6 +340,14 @@ const vector<double> &WSSDataCollector::getContingency_fund_size() const {
 
 const vector<double> &WSSDataCollector::getWeekly_affordability_index() const {
     return weekly_affordability_index;
+}
+
+const vector<double> &WSSDataCollector::getResidential_current_price() const {
+    return residential_current_price;
+}
+
+double WSSDataCollector::getAverage_monthly_income() const {
+    return average_monthly_income;
 }
 
 const Utility *WSSDataCollector::getOwner() const {

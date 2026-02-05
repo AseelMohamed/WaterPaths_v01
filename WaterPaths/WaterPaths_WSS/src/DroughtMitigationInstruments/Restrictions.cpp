@@ -106,6 +106,11 @@ void Restrictions::applyPolicy(int week) {
                 double wss_restricted_price = owner_utility->calculateRestrictedWeeklyPriceForWss(
                         wss->getSystemId(), (int)stage - 1, week_of_year, price_multipliers);
                 owner_utility->setRestrictedPriceForWss(wss->getSystemId(), wss_restricted_price);
+
+                double wss_residential_restricted_price =
+                        owner_utility->calculateRestrictedWeeklyResidentialPriceForWss(
+                                wss->getSystemId(), (int)stage - 1, week_of_year, price_multipliers);
+                owner_utility->setRestrictedResidentialPriceForWss(wss->getSystemId(), wss_residential_restricted_price);
             }
         }
     }

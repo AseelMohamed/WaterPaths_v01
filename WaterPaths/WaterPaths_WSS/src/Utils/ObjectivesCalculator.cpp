@@ -5,6 +5,7 @@
 #include <numeric>
 #include <algorithm>
 #include <limits>
+#include <cstdio>
 #include "ObjectivesCalculator.h"
 #include "Utils.h"
 
@@ -177,7 +178,7 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
     double discount_rate = utility_data[0]->getInfraDiscountRate();
     double realizations_year_debt_payment = 0;
-    // double realizations_year_cont_fund_contribution = 0;
+    double realizations_year_cont_fund_contribution = 0;
     double realizations_year_gross_revenue = 1e-6;
     double realizations_year_insurance_contract_cost = 0;
     vector<double> year_financial_costs;
@@ -189,30 +190,31 @@ double ObjectivesCalculator::calculatePeakFinancialCostsObjective(
         year_financial_costs.assign(n_years, 0.0);
         y = 0;
         for (unsigned long w = 0; w < n_weeks; ++w) {
-            // accumulate year's info by summing weekly amounts.
-            realizations_year_debt_payment +=
-                    utility_data[r]->getDebt_service_payments()[w];
-            // realizations_year_cont_fund_contribution +=
-            //         utility_data[r]->getContingency_fund_contribution()[w];
-            realizations_year_gross_revenue +=
-                    utility_data[r]->getGross_revenues()[w];
-            realizations_year_insurance_contract_cost +=
-                    utility_data[r]->getInsurance_contract_cost()[w];
+                    // accumulate year's info by summing weekly amounts.
+                    realizations_year_debt_payment +=
+                        utility_data[r]->getDebt_service_payments()[w];
+                    realizations_year_cont_fund_contribution +=
+                            utility_data[r]->getContingency_fund_contribution()[w];
+                    realizations_year_gross_revenue +=
+                        utility_data[r]->getGross_revenues()[w];
+                    realizations_year_insurance_contract_cost +=
+                        utility_data[r]->getInsurance_contract_cost()[w];
 
             // if last week of the year, close the books and calculate
             // financial cost for the year.
             if (Utils::isFirstWeekOfTheYear(w + 1)) {
                 year_financial_costs[y] +=
-                        (realizations_year_debt_payment +
-                         realizations_year_insurance_contract_cost) /
-                        (realizations_year_gross_revenue *
-                         (1. + pow(1. + discount_rate, y)));
+                    (realizations_year_debt_payment +
+                     realizations_year_cont_fund_contribution +
+                     realizations_year_insurance_contract_cost) /
+                    (realizations_year_gross_revenue *
+                     (1. + pow(1. + discount_rate, y)));
                 // update year count.
                 y++;
 
                 // reset accounts.
                 realizations_year_debt_payment = 0;
-                // realizations_year_cont_fund_contribution = 0;
+                realizations_year_cont_fund_contribution = 0;
                 realizations_year_gross_revenue = 1e-6;
                 realizations_year_insurance_contract_cost = 0;
             }
@@ -561,7 +563,7 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
 
 /**
  * Calculate 95th percentile affordability index across realizations for all WSS.
- * Affordability index = water_price / average_income
+ * Affordability index = residential current water price / average income
  * For each WSS, we take the maximum (worst-case) weekly affordability across all weeks,
  * then take the 95th percentile across all realizations.
  * The objective is the maximum affordability across all WSS (worst case).
@@ -599,12 +601,33 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
         
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                const auto& affordability_vec = wss_realization_data[r]->getWeekly_affordability_index();
-                
-                if (!affordability_vec.empty()) {
-                    // Find maximum affordability across all weeks in this realization
-                    double max_affordability = *max_element(affordability_vec.begin(), affordability_vec.end());
-                    realization_max_affordability.push_back(max_affordability * affordability_scale);
+                const auto& residential_prices = wss_realization_data[r]->getResidential_current_price();
+                int wss_id = wss_realization_data[r]->id;
+                double average_monthly_income = wss_realization_data[r]->getAverage_monthly_income();
+                double weekly_average_income = (average_monthly_income > 0.0)
+                                                     ? (average_monthly_income / WEEKS_IN_MONTH)
+                                                     : 0.0;
+
+                if (!residential_prices.empty() && weekly_average_income > 0.0) {
+                    double max_affordability = 0.0;
+                    bool has_value = false;
+
+                    for (size_t w = 0; w < residential_prices.size(); ++w) {
+                        double weekly_price = residential_prices[w];
+                        if (weekly_price > 0.0) {
+                            double affordability = (weekly_price / weekly_average_income) * affordability_scale;
+                            if (!has_value || affordability > max_affordability) {
+                                max_affordability = affordability;
+                                has_value = true;
+                            }
+
+
+                        }
+                    }
+
+                    if (has_value) {
+                        realization_max_affordability.push_back(max_affordability);
+                    }
                 }
             }
         }
@@ -844,11 +867,33 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
         
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                const auto& affordability_vec = wss_realization_data[r]->getWeekly_affordability_index();
-                
-                if (!affordability_vec.empty()) {
-                    double max_affordability = *max_element(affordability_vec.begin(), affordability_vec.end());
-                    realization_max_affordability.push_back(max_affordability * affordability_scale);
+                const auto& residential_prices = wss_realization_data[r]->getResidential_current_price();
+                int wss_id = wss_realization_data[r]->id;
+                double average_monthly_income = wss_realization_data[r]->getAverage_monthly_income();
+                double weekly_average_income = (average_monthly_income > 0.0)
+                                                     ? (average_monthly_income / WEEKS_IN_MONTH)
+                                                     : 0.0;
+
+                if (!residential_prices.empty() && weekly_average_income > 0.0) {
+                    double max_affordability = 0.0;
+                    bool has_value = false;
+
+                    for (size_t w = 0; w < residential_prices.size(); ++w) {
+                        double weekly_price = residential_prices[w];
+                        if (weekly_price > 0.0) {
+                            double affordability = (weekly_price / weekly_average_income) * affordability_scale;
+                            if (!has_value || affordability > max_affordability) {
+                                max_affordability = affordability;
+                                has_value = true;
+                            }
+
+
+                        }
+                    }
+
+                    if (has_value) {
+                        realization_max_affordability.push_back(max_affordability);
+                    }
                 }
             }
         }

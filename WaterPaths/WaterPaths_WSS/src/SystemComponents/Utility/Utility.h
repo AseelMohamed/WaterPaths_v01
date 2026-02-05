@@ -31,6 +31,7 @@ private:
     std::map<int, vector<vector<double>>> wss_water_prices;  // Water prices for each WSS
     std::map<int, vector<double>> wss_weekly_average_prices;  // Calculated weekly average prices for each WSS
         std::map<int, double> wss_restricted_prices;  // Restricted price for each WSS (per week)
+        std::map<int, double> wss_restricted_residential_prices;  // Restricted residential price for each WSS (per week)
     
     // Financial and strategic variables (kept in Utility)
     double gross_revenue = 0;
@@ -224,9 +225,14 @@ public:
         // Per-WSS restricted price helpers
         void setRestrictedPriceForWss(int system_id, double restricted_price);
         double getRestrictedPriceForWss(int system_id) const;
+        void setRestrictedResidentialPriceForWss(int system_id, double restricted_price);
+        double getRestrictedResidentialPriceForWss(int system_id) const;
         double calculateRestrictedWeeklyPriceForWss(int system_id, int stage,
                                                                                                 int week_of_year,
                                                                                                 const vector<vector<double>> &priceMultipliers) const;
+        double calculateRestrictedWeeklyResidentialPriceForWss(int system_id, int stage,
+                                                                                                                   int week_of_year,
+                                                                                                                   const vector<vector<double>> &priceMultipliers) const;
 
     double getGrossRevenue() const; //checked
 

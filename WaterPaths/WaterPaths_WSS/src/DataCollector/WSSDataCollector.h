@@ -29,7 +29,8 @@ private:
     
     // Affordability index (water price / average income)
     vector<double> weekly_affordability_index;
-    vector<double> water_price;
+    vector<double> aggregated_current_price;
+    vector<double> residential_current_price;
     
     // Financial data vectors (WSS-level)
     vector<double> gross_revenues;
@@ -38,6 +39,7 @@ private:
     vector<double> debt_service_payments;
     vector<double> net_present_infrastructure_cost;
     vector<double> contingency_fund_size;
+    double average_monthly_income = 0.0;
     
     // Infrastructure pathways built by this WSS
     vector<vector<int>> pathways;
@@ -90,6 +92,8 @@ public:
     const vector<double> &getNet_present_infrastructure_cost() const;
     const vector<double> &getContingency_fund_size() const;
     const vector<double> &getWeekly_affordability_index() const;
+    const vector<double> &getResidential_current_price() const;
+    double getAverage_monthly_income() const;
     
     const Utility *getOwner() const;  // Direct access to owner (safe after WSS deletion)
     int getOwnerId() const;  // Get stored owner ID (safe even after WSS deletion)

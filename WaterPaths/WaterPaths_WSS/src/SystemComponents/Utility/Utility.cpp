@@ -732,6 +732,29 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
             printf("WARNING: No prices stored for WSS %d\n", system_id);
             continue;
         }
+
+        // Calculate current residential first-tier weekly price for affordability
+        double wss_residential_base_price = 0.0;
+        auto wss_monthly_price_it = wss_water_prices.find(system_id);
+        if (wss_monthly_price_it != wss_water_prices.end()) {
+            const auto& monthly_prices = wss_monthly_price_it->second;
+            int month_index = min((int) (week_of_year / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
+            if (month_index >= 0 && month_index < (int)monthly_prices.size() &&
+                !monthly_prices[month_index].empty()) {
+                wss_residential_base_price = monthly_prices[month_index][0] / WEEKS_IN_MONTH;
+            }
+        }
+
+        double wss_residential_current_price = wss_residential_base_price;
+        auto wss_res_restricted_it = wss_restricted_residential_prices.find(system_id);
+        if (wss_res_restricted_it != wss_restricted_residential_prices.end()) {
+            wss_residential_current_price = wss_res_restricted_it->second;
+        }
+
+        if (wss_residential_current_price < wss_residential_base_price) {
+            wss_residential_current_price = wss_residential_base_price;
+        }
+        wss->setWssResidentialPrice(wss_residential_current_price);
         
         // Get WSS operational data
         double wss_unrestricted = wss->getUnrestrictedDemand(-1);
@@ -750,11 +773,14 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         double revenue_losses = lost_demand_vol_sales * wss_unrestricted_price;
         double transfer_costs = wss_transfer_volume * (wss_offset_rate - wss_unrestricted_price);
         double recouped_loss_price_surcharge = wss_restricted * (wss_current_price - wss_unrestricted_price);
-        // double wss_drought_cost = max(revenue_losses + transfer_costs - 
-        //                           recouped_loss_price_surcharge -
-        //                           contingency_fund, 0.0);
+        double wss_drought_cost = max(revenue_losses + transfer_costs - recouped_loss_price_surcharge, 0.0);
 
-        
+        double wss_contingency_pct = 0.0;
+        if (wss_contingency_percentages.find(system_id) != wss_contingency_percentages.end()) {
+            wss_contingency_pct = wss_contingency_percentages[system_id];
+        }
+        double wss_projected_fund_contribution = wss_contingency_pct * wss_unrestricted * wss_unrestricted_price;
+
         
         // Store WSS-level financial data (for data collection and objective calculations)
         wss->setWssGrossRevenue(wss_gross_revenue);
@@ -869,6 +895,7 @@ void Utility::resetDroughtMitigationVariables() {
     this->demand_offset = NONE;
     insurance_payout = 0.0;  // Reset payout so it doesn't persist across weeks
     wss_restricted_prices.clear();
+    wss_restricted_residential_prices.clear();
 }
 
 /**
@@ -1522,6 +1549,18 @@ double Utility::getRestrictedPriceForWss(int system_id) const {
     return NON_INITIALIZED;
 }
 
+void Utility::setRestrictedResidentialPriceForWss(int system_id, double restricted_price) {
+    wss_restricted_residential_prices[system_id] = restricted_price;
+}
+
+double Utility::getRestrictedResidentialPriceForWss(int system_id) const {
+    auto it = wss_restricted_residential_prices.find(system_id);
+    if (it != wss_restricted_residential_prices.end()) {
+        return it->second;
+    }
+    return NON_INITIALIZED;
+}
+
 double Utility::calculateRestrictedWeeklyPriceForWss(int system_id, int stage,
                                                     int week_of_year,
                                                     const vector<vector<double>> &priceMultipliers) const {
@@ -1552,4 +1591,39 @@ double Utility::calculateRestrictedWeeklyPriceForWss(int system_id, int stage,
     }
 
     return monthly_avg_price / WEEKS_IN_MONTH;
+}
+
+double Utility::calculateRestrictedWeeklyResidentialPriceForWss(int system_id, int stage,
+                                                                int week_of_year,
+                                                                const vector<vector<double>> &priceMultipliers) const {
+    auto price_it = wss_water_prices.find(system_id);
+    if (price_it == wss_water_prices.end()) {
+        char error_msg[256];
+        sprintf(error_msg, "Utility %d: Missing water prices for WSS %d", id, system_id);
+        throw std::runtime_error(error_msg);
+    }
+
+    if (stage < 0 || stage >= (int)priceMultipliers.size()) {
+        char error_msg[256];
+        sprintf(error_msg, "Utility %d: Restriction stage %d out of bounds for price multipliers (size=%zu)",
+                id, stage, priceMultipliers.size());
+        throw std::out_of_range(error_msg);
+    }
+
+    const auto &prices = price_it->second;
+    int month_index = min((int) (week_of_year / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
+    if (month_index < 0 || month_index >= (int)prices.size() || prices[month_index].empty()) {
+        char error_msg[256];
+        sprintf(error_msg, "Utility %d: Missing residential price for WSS %d in month %d", id, system_id, month_index);
+        throw std::runtime_error(error_msg);
+    }
+
+    if (priceMultipliers[stage].empty()) {
+        char error_msg[256];
+        sprintf(error_msg, "Utility %d: Missing residential price multiplier for stage %d", id, stage);
+        throw std::runtime_error(error_msg);
+    }
+
+    double residential_price = prices[month_index][0] * priceMultipliers[stage][0];
+    return residential_price / WEEKS_IN_MONTH;
 }

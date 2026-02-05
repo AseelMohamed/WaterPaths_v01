@@ -169,12 +169,14 @@ public:
     void setWssContingencyFundShare(double share);
     void setWssDebtServiceShare(double share);
     void setWssInfrastructureNPC(double npc);
+    void setWssResidentialPrice(double price);
     
     double getWssGrossRevenue() const;
     double getWssDroughtMitigationCost() const;
     double getWssContingencyFundShare() const;
     double getWssDebtServiceShare() const;
     double getWssInfrastructureNPC() const;
+    double getWssResidentialPrice() const;
     
     void setAverageMonthlyIncome(double income);
     double getAverageMonthlyIncome() const;
@@ -225,6 +227,7 @@ private:
     double wss_contingency_fund_share = 0.0;
     double wss_debt_service_share = 0.0;
     double wss_infrastructure_npc = 0.0;
+    double wss_residential_price = 0.0;  // Current residential first-tier weekly price
     double average_monthly_income = 0.0;  // Average monthly income for affordability calculation
     
     bool hasTreatmentCapacity() const;

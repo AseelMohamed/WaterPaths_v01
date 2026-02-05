@@ -52,9 +52,6 @@ void Problem::printTimeSeriesAndPathways(bool plot_time_series) {
             this->master_data_collector->printUtilitiesOutputCompact(
                     0, (int) actual_weeks, fu + "_s" + std::to_string(solution_no) +
                                       fname_sufix);
-                this->master_data_collector->printWCCComponentsOutput(
-                    0, (int) actual_weeks, "WCCComponents_s" + std::to_string(solution_no) +
-                              fname_sufix);
             this->master_data_collector->printWSSOutputCompact(
                     0, (int) actual_weeks, "WSS_s" + std::to_string(solution_no) +
                                       fname_sufix);
