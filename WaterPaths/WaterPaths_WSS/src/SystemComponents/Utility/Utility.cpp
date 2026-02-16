@@ -709,16 +709,6 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
             auto& wss_prices = wss_weekly_average_prices[system_id];
             if (week_of_year >= 0 && week_of_year < (int)wss_prices.size()) {
                 wss_unrestricted_price = wss_prices[week_of_year];
-                auto wss_restricted_it = wss_restricted_prices.find(system_id);
-                if (wss_restricted_it != wss_restricted_prices.end()) {
-                    wss_restricted_price = wss_restricted_it->second;
-                }
-                // Use WSS-specific restricted price if set, otherwise fall back to utility restricted price
-                if (wss_restricted_price != NON_INITIALIZED) {
-                    wss_current_price = wss_restricted_price;
-                } else {
-                    wss_current_price = (restricted_price == NON_INITIALIZED) ? wss_unrestricted_price : restricted_price;
-                }
                 
                 // Validation: ensure restricted price is not lower than unrestricted price
                 if (wss_current_price < wss_unrestricted_price) {
@@ -746,9 +736,12 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         }
 
         double wss_residential_current_price = wss_residential_base_price;
-        auto wss_res_restricted_it = wss_restricted_residential_prices.find(system_id);
-        if (wss_res_restricted_it != wss_restricted_residential_prices.end()) {
-            wss_residential_current_price = wss_res_restricted_it->second;
+        #pragma omp critical(utility_restriction_prices)
+        {
+            auto wss_res_restricted_it = wss_restricted_residential_prices.find(system_id);
+            if (wss_res_restricted_it != wss_restricted_residential_prices.end()) {
+                wss_residential_current_price = wss_res_restricted_it->second;
+            }
         }
 
         if (wss_residential_current_price < wss_residential_base_price) {
@@ -890,12 +883,15 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
 }
 
 void Utility::resetDroughtMitigationVariables() {
-    restricted_price = NON_INITIALIZED;
-    offset_rate_per_volume = NONE;
-    this->demand_offset = NONE;
-    insurance_payout = 0.0;  // Reset payout so it doesn't persist across weeks
-    wss_restricted_prices.clear();
-    wss_restricted_residential_prices.clear();
+    #pragma omp critical(utility_restriction_prices)
+    {
+        restricted_price = NON_INITIALIZED;
+        offset_rate_per_volume = NONE;
+        this->demand_offset = NONE;
+        insurance_payout = 0.0;  // Reset payout so it doesn't persist across weeks
+        wss_restricted_prices.clear();
+        wss_restricted_residential_prices.clear();
+    }
 }
 
 /**
@@ -1102,17 +1098,9 @@ void Utility::issueBond(int new_infra_triggered, int week, WaterSupplySystems* t
                         
                         // Calculate NPC using realization-specific discount rate passed from WSS
                         double npc = bond.getNetPresentValueAtIssuance(discount_rate, week);
-                        
-                        // Mark this bond as globally issued and store its NPC
+                        // Mark this bond as issued for this realization and store its NPC
                         globally_issued_bonds.insert(bond_key_str);
                         globally_issued_bond_npcs[bond_key_str] = npc;
-                        
-                        // THREAD-SAFE: Accumulate NPC in WSS object (realization-isolated)
-                        // Each realization has its own WSS copy, so no race condition
-                        target_wss->setWssInfrastructureNPC(npc);  // setWssInfrastructureNPC now accumulates
-                        // double old_wss_npc = target_wss->getWssInfrastructureNPC();
-                        
-                        // LEGACY: Also track in utility for backwards compatibility
                         // But note: this will have race conditions if used across realizations
                         if (used_for_realization) {
                             double old_util_npc = infra_net_present_cost;
@@ -1124,6 +1112,10 @@ void Utility::issueBond(int new_infra_triggered, int week, WaterSupplySystems* t
                             if (wss_realization_id != (unsigned long)NON_INITIALIZED) {
                                 double old_real_npc = realization_infra_costs[wss_realization_id];
                                 realization_infra_costs[wss_realization_id] += npc;                            }
+                        }
+                        // Track infrastructure NPC at WSS level for objective calculations
+                        if (target_wss) {
+                            target_wss->setWssInfrastructureNPC(npc);
                         }
                     } else {
                         // Still mark it globally to prevent future attempts
@@ -1411,13 +1403,19 @@ double Utility::getCurrentWaterPrice(int week) const {
 
             double wss_unrestricted_price = wss_prices[week_of_year];
             double wss_restricted_price = NON_INITIALIZED;
-            auto wss_restricted_it = wss_restricted_prices.find(system_id);
-            if (wss_restricted_it != wss_restricted_prices.end()) {
-                wss_restricted_price = wss_restricted_it->second;
+            double local_restricted_price = NON_INITIALIZED;
+            #pragma omp critical(utility_restriction_prices)
+            {
+                auto wss_restricted_it = wss_restricted_prices.find(system_id);
+                if (wss_restricted_it != wss_restricted_prices.end()) {
+                    wss_restricted_price = wss_restricted_it->second;
+                }
+                local_restricted_price = restricted_price;
             }
 
             double wss_current_price = (wss_restricted_price == NON_INITIALIZED)
-                    ? ((restricted_price == NON_INITIALIZED) ? wss_unrestricted_price : restricted_price)
+                    ? ((local_restricted_price == NON_INITIALIZED)
+                       ? wss_unrestricted_price : local_restricted_price)
                     : wss_restricted_price;
 
             if (wss_current_price < wss_unrestricted_price) {
@@ -1432,7 +1430,13 @@ double Utility::getCurrentWaterPrice(int week) const {
 
     // Fallback: single utility price behavior
     double unrestricted_price = waterPrice(week);
-    double current_price = (restricted_price == NON_INITIALIZED) ? unrestricted_price : restricted_price;
+    double local_restricted_price = NON_INITIALIZED;
+    #pragma omp critical(utility_restriction_prices)
+    {
+        local_restricted_price = restricted_price;
+    }
+    double current_price = (local_restricted_price == NON_INITIALIZED)
+            ? unrestricted_price : local_restricted_price;
 
     if (current_price < unrestricted_price) {
         current_price = unrestricted_price;
@@ -1443,7 +1447,10 @@ double Utility::getCurrentWaterPrice(int week) const {
 
 void Utility::setRestricted_price(double restricted_price) {
     // NOTE: price_rdm_multiplier NOT applied to match Original model behavior
-    Utility::restricted_price = restricted_price;
+    #pragma omp critical(utility_restriction_prices)
+    {
+        Utility::restricted_price = restricted_price;
+    }
 }
 
 void Utility::setNoFinancialCalculations() {
@@ -1538,7 +1545,10 @@ bool Utility::isUsedForRealization() const {
 }
 
 void Utility::setRestrictedPriceForWss(int system_id, double restricted_price) {
-    wss_restricted_prices[system_id] = restricted_price;
+    #pragma omp critical(utility_restriction_prices)
+    {
+        wss_restricted_prices[system_id] = restricted_price;
+    }
 }
 
 double Utility::getRestrictedPriceForWss(int system_id) const {
@@ -1550,7 +1560,10 @@ double Utility::getRestrictedPriceForWss(int system_id) const {
 }
 
 void Utility::setRestrictedResidentialPriceForWss(int system_id, double restricted_price) {
-    wss_restricted_residential_prices[system_id] = restricted_price;
+    #pragma omp critical(utility_restriction_prices)
+    {
+        wss_restricted_residential_prices[system_id] = restricted_price;
+    }
 }
 
 double Utility::getRestrictedResidentialPriceForWss(int system_id) const {

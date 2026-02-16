@@ -125,7 +125,7 @@ vector<double> ContinuityModelROF::calculateLongTermROF(int week) {
                 double unrestricted_demand = continuity_wss[u]->getUnrestrictedDemand();
                 
                 auto storage_condition = storage_ratio <= STORAGE_CAPACITY_RATIO_FAIL;
-                auto treatment_condition = unrestricted_demand > 0.9 * treatment_capacity;
+                auto treatment_condition = unrestricted_demand > (0.9 * treatment_capacity);
                 
                 if (storage_condition || treatment_condition) {
                     year_failure[u] = FAILURE;
