@@ -180,6 +180,8 @@ public:
     
     void setAverageMonthlyIncome(double income);
     double getAverageMonthlyIncome() const;
+    void setInitialPopulation(double population);
+    double getInitialPopulation() const;
     
 private:
     Utility* owner;
@@ -229,6 +231,7 @@ private:
     double wss_infrastructure_npc = 0.0;
     double wss_residential_price = 0.0;  // Current residential first-tier weekly price
     double average_monthly_income = 0.0;  // Average monthly income for affordability calculation
+    double initial_population = 0.0;  // Initial population for per-household affordability
     
     bool hasTreatmentCapacity() const;
 };

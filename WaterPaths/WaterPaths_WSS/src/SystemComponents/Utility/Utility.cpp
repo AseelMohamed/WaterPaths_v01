@@ -385,8 +385,8 @@ void Utility::calculateWeeklyAverageWaterPrices(
     priceCalculationErrorChecking(typesMonthlyDemandFraction,
                                   typesMonthlyWaterPrice);
 
-    weekly_average_volumetric_price = vector<double>((int) WEEKS_IN_YEAR + 1,
-                                                     0.);
+    base_weekly_average_volumetric_price = vector<double>((int) WEEKS_IN_YEAR + 1,
+                                                          0.);
     double monthly_average_price[NUMBER_OF_MONTHS] = {};
     int n_tiers = static_cast<int>(typesMonthlyWaterPrice.at(0).size());
 
@@ -402,15 +402,17 @@ void Utility::calculateWeeklyAverageWaterPrices(
         }
     }
     // Create weekly price table from monthly prices.
-    bool issued_high_tariff_warning = false;
     for (int w = 0; w < (int) (WEEKS_IN_YEAR + 1); ++w) {
         int month_index = min((int) (w / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
-        weekly_average_volumetric_price[w] =
+        base_weekly_average_volumetric_price[w] =
                 monthly_average_price[month_index] /
                 WEEKS_IN_MONTH;
     }
-    
-    // NOTE: base_weekly_average_volumetric_price storage removed - no RDM scaling applied (matches Original model)
+
+    weekly_average_volumetric_price = base_weekly_average_volumetric_price;
+    for (double &awp : weekly_average_volumetric_price) {
+        awp *= price_rdm_multiplier;
+    }
 }
 
 /**
@@ -423,7 +425,6 @@ void Utility::calculateWeeklyAverageWaterPrices(
         const vector<vector<double>> &typesMonthlyDemandFraction,
         const vector<vector<double>> &typesMonthlyWaterPrice,
         vector<double>& output_weekly_prices) {
-    
     output_weekly_prices = vector<double>((int) WEEKS_IN_YEAR + 1, 0.);
     double monthly_average_price[NUMBER_OF_MONTHS] = {};
     int n_tiers = static_cast<int>(typesMonthlyWaterPrice.at(0).size());
@@ -542,6 +543,10 @@ void Utility::addWaterSupplySystem(const std::string& name, int system_id, int u
     priceCalculationErrorChecking(wss_demand_class_fractions, wss_water_prices_param);
     vector<double> wss_weekly_prices;
     calculateWeeklyAverageWaterPrices(wss_demand_class_fractions, wss_water_prices_param, wss_weekly_prices);
+    base_wss_weekly_average_prices[system_id] = wss_weekly_prices;
+    for (double &price : wss_weekly_prices) {
+        price *= price_rdm_multiplier;
+    }
     wss_weekly_average_prices[system_id] = wss_weekly_prices;
 }
 
@@ -1238,8 +1243,25 @@ void Utility::setRealization(unsigned long r, vector<double> &rdm_factors) {
     // THREAD-SAFE FIX: Apply RDM multiplier to BASE discount rate (not accumulated)
     // This prevents accumulation when setRealization is called multiple times on shared utility
     infra_discount_rate = base_infra_discount_rate * rdm_factors.at(3);
-    // NOTE: price_rdm_multiplier (rdm_factors.at(4)) is NOT applied to match Original model behavior
-    // Prices remain at their base values without RDM scaling
+    price_rdm_multiplier = rdm_factors.at(4);
+
+    if (!base_weekly_average_volumetric_price.empty()) {
+        weekly_average_volumetric_price = base_weekly_average_volumetric_price;
+        for (double &awp : weekly_average_volumetric_price) {
+            awp *= price_rdm_multiplier;
+        }
+    }
+
+    if (!base_wss_weekly_average_prices.empty()) {
+        wss_weekly_average_prices.clear();
+        for (const auto &pair : base_wss_weekly_average_prices) {
+            vector<double> scaled_prices = pair.second;
+            for (double &price : scaled_prices) {
+                price *= price_rdm_multiplier;
+            }
+            wss_weekly_average_prices[pair.first] = std::move(scaled_prices);
+        }
+    }
 
 }
 
@@ -1446,10 +1468,9 @@ double Utility::getCurrentWaterPrice(int week) const {
 }
 
 void Utility::setRestricted_price(double restricted_price) {
-    // NOTE: price_rdm_multiplier NOT applied to match Original model behavior
     #pragma omp critical(utility_restriction_prices)
     {
-        Utility::restricted_price = restricted_price;
+        Utility::restricted_price = restricted_price * price_rdm_multiplier;
     }
 }
 
@@ -1547,7 +1568,7 @@ bool Utility::isUsedForRealization() const {
 void Utility::setRestrictedPriceForWss(int system_id, double restricted_price) {
     #pragma omp critical(utility_restriction_prices)
     {
-        wss_restricted_prices[system_id] = restricted_price;
+        wss_restricted_prices[system_id] = restricted_price * price_rdm_multiplier;
     }
 }
 
@@ -1562,7 +1583,7 @@ double Utility::getRestrictedPriceForWss(int system_id) const {
 void Utility::setRestrictedResidentialPriceForWss(int system_id, double restricted_price) {
     #pragma omp critical(utility_restriction_prices)
     {
-        wss_restricted_residential_prices[system_id] = restricted_price;
+        wss_restricted_residential_prices[system_id] = restricted_price * price_rdm_multiplier;
     }
 }
 

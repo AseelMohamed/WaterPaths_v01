@@ -40,6 +40,7 @@ private:
     vector<double> net_present_infrastructure_cost;
     vector<double> contingency_fund_size;
     double average_monthly_income = 0.0;
+    double initial_population = 0.0;
     
     // Infrastructure pathways built by this WSS
     vector<vector<int>> pathways;
@@ -94,6 +95,7 @@ public:
     const vector<double> &getWeekly_affordability_index() const;
     const vector<double> &getResidential_current_price() const;
     double getAverage_monthly_income() const;
+    double getInitial_population() const;
     
     const Utility *getOwner() const;  // Direct access to owner (safe after WSS deletion)
     int getOwnerId() const;  // Get stored owner ID (safe even after WSS deletion)

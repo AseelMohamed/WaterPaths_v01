@@ -13,6 +13,7 @@ WSSDataCollector::WSSDataCollector(const WaterSupplySystems *wss, unsigned long 
           owner(wss->getOwner()),
           owner_id(wss->getOwner() ? wss->getOwner()->id : -1) {  // Store owner ID immediately while WSS is still valid
     average_monthly_income = wss->getAverageMonthlyIncome();
+    initial_population = wss->getInitialPopulation();
 }
 
 int WSSDataCollector::getOwnerId() const {
@@ -348,6 +349,10 @@ const vector<double> &WSSDataCollector::getResidential_current_price() const {
 
 double WSSDataCollector::getAverage_monthly_income() const {
     return average_monthly_income;
+}
+
+double WSSDataCollector::getInitial_population() const {
+    return initial_population;
 }
 
 const Utility *WSSDataCollector::getOwner() const {

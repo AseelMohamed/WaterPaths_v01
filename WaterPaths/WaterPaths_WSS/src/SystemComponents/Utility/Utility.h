@@ -21,8 +21,8 @@ class WaterSupplySystems; // forward declaration
 class Utility {
 private:
     vector<double> weekly_average_volumetric_price;
-    // NOTE: base_weekly_average_volumetric_price and price_rdm_multiplier removed to match Original model
-    // Prices are no longer scaled by RDM factors
+    vector<double> base_weekly_average_volumetric_price;
+    double price_rdm_multiplier = 1.0;
 
     
     // WSS-specific financial parameters (indexed by system_id)
@@ -30,8 +30,9 @@ private:
     std::map<int, vector<vector<double>>> wss_demand_fractions;  // Demand class fractions for each WSS
     std::map<int, vector<vector<double>>> wss_water_prices;  // Water prices for each WSS
     std::map<int, vector<double>> wss_weekly_average_prices;  // Calculated weekly average prices for each WSS
-        std::map<int, double> wss_restricted_prices;  // Restricted price for each WSS (per week)
-        std::map<int, double> wss_restricted_residential_prices;  // Restricted residential price for each WSS (per week)
+    std::map<int, vector<double>> base_wss_weekly_average_prices;  // Unscaled weekly prices for each WSS
+    std::map<int, double> wss_restricted_prices;  // Restricted price for each WSS (per week)
+    std::map<int, double> wss_restricted_residential_prices;  // Restricted residential price for each WSS (per week)
     
     // Financial and strategic variables (kept in Utility)
     double gross_revenue = 0;

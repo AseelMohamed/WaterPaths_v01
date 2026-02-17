@@ -563,7 +563,7 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
 
 /**
  * Calculate 95th percentile affordability index across realizations for all WSS.
- * Affordability index = residential current water price / average income
+ * Affordability index = weekly residential price * weekly restricted demand / weekly income
  * For each WSS, we take the maximum (worst-case) weekly affordability across all weeks,
  * then take the 95th percentile across all realizations.
  * The objective is the maximum affordability across all WSS (worst case).
@@ -592,7 +592,6 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
         throw std::runtime_error("ERROR: realizations vector is empty in calculateAffordabilityIndexObjective_WSS");
     }
     
-    const double affordability_scale = 2.44 / 1e6; // Convert R$/hm3 to R$/m3 and per-capita to household
     vector<double> wss_affordability_95th; // Store 95th percentile affordability for each WSS
     
     // Calculate 95th percentile affordability for EACH WSS independently
@@ -602,20 +601,25 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
                 const auto& residential_prices = wss_realization_data[r]->getResidential_current_price();
-                int wss_id = wss_realization_data[r]->id;
+                const auto& restricted_demand = wss_realization_data[r]->getRestricted_demand();
                 double average_monthly_income = wss_realization_data[r]->getAverage_monthly_income();
+                double initial_population = wss_realization_data[r]->getInitial_population();
                 double weekly_average_income = (average_monthly_income > 0.0)
                                                      ? (average_monthly_income / WEEKS_IN_MONTH)
                                                      : 0.0;
 
-                if (!residential_prices.empty() && weekly_average_income > 0.0) {
+                size_t n_weeks = std::min(residential_prices.size(), restricted_demand.size());
+
+                if (n_weeks > 0 && weekly_average_income > 0.0 && initial_population > 0.0) {
                     double max_affordability = 0.0;
                     bool has_value = false;
 
-                    for (size_t w = 0; w < residential_prices.size(); ++w) {
+                    for (size_t w = 0; w < n_weeks; ++w) {
                         double weekly_price = residential_prices[w];
-                        if (weekly_price > 0.0) {
-                            double affordability = (weekly_price / weekly_average_income) * affordability_scale;
+                        double weekly_demand = restricted_demand[w];
+                        if (weekly_price > 0.0 && weekly_demand > 0.0) {
+                            double weekly_cost = (weekly_price * weekly_demand) / initial_population;
+                            double affordability = weekly_cost / weekly_average_income;
                             if (!has_value || affordability > max_affordability) {
                                 max_affordability = affordability;
                                 has_value = true;
@@ -661,7 +665,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
         throw logic_error(error_inf.c_str());
     }
     
-    return worst_affordability;  // Values already scaled by 2.44/1e6.
+    return worst_affordability;
 }
 
 /**
@@ -858,7 +862,6 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
         throw std::runtime_error("ERROR: realizations vector is empty");
     }
     
-    const double affordability_scale = 2.44 / 1e6; // Convert R$/hm3 to R$/m3 and per-capita to household
     vector<double> wss_affordability_95th; // Store 95th percentile affordability for each WSS
     
     // Calculate 95th percentile affordability for EACH WSS independently
@@ -868,20 +871,25 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
                 const auto& residential_prices = wss_realization_data[r]->getResidential_current_price();
-                int wss_id = wss_realization_data[r]->id;
+                const auto& restricted_demand = wss_realization_data[r]->getRestricted_demand();
                 double average_monthly_income = wss_realization_data[r]->getAverage_monthly_income();
+                double initial_population = wss_realization_data[r]->getInitial_population();
                 double weekly_average_income = (average_monthly_income > 0.0)
                                                      ? (average_monthly_income / WEEKS_IN_MONTH)
                                                      : 0.0;
 
-                if (!residential_prices.empty() && weekly_average_income > 0.0) {
+                size_t n_weeks = std::min(residential_prices.size(), restricted_demand.size());
+
+                if (n_weeks > 0 && weekly_average_income > 0.0 && initial_population > 0.0) {
                     double max_affordability = 0.0;
                     bool has_value = false;
 
-                    for (size_t w = 0; w < residential_prices.size(); ++w) {
+                    for (size_t w = 0; w < n_weeks; ++w) {
                         double weekly_price = residential_prices[w];
-                        if (weekly_price > 0.0) {
-                            double affordability = (weekly_price / weekly_average_income) * affordability_scale;
+                        double weekly_demand = restricted_demand[w];
+                        if (weekly_price > 0.0 && weekly_demand > 0.0) {
+                            double weekly_cost = (weekly_price * weekly_demand) / initial_population;
+                            double affordability = weekly_cost / weekly_average_income;
                             if (!has_value || affordability > max_affordability) {
                                 max_affordability = affordability;
                                 has_value = true;
@@ -931,5 +939,5 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
         throw logic_error(error_inf.c_str());
     }
     
-    return result_affordability; // Values already scaled by 2.44/1e6.
+    return result_affordability;
 }

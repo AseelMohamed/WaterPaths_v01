@@ -769,12 +769,16 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     // Set average monthly income for affordability index calculation
     // Descoberto WSS (system_id = 0): average income per household = 1397 BRL/month
-    wss_descoberto.setAverageMonthlyIncome(1397.0);
-    // Torto/Santa Maria WSS (system_id = 1): average income per household = 4015 BRL/month
-    wss_tortoSM.setAverageMonthlyIncome(4015.0);
+        wss_descoberto.setAverageMonthlyIncome(1397.0);
+        // Torto/Santa Maria WSS (system_id = 1): average income per household = 4015 BRL/month
+        wss_tortoSM.setAverageMonthlyIncome(4015.0);
 
-    vector<Utility *> utilities; //vetor que contém a única companhia CAESB
-    utilities.push_back(&caesb);
+        // Set initial population for per-household affordability scaling
+        wss_descoberto.setInitialPopulation(1568110.0);
+        wss_tortoSM.setInitialPopulation(776160.0);
+
+        vector<Utility *> utilities; //vetor que contém a única companhia CAESB
+        utilities.push_back(&caesb);
 
     // Water-source-WSS connectivity matrix: each row corresponds to a WSS
     // WSS 0 (Descoberto): sources {0, 2, 5, 6, 10, 11}
