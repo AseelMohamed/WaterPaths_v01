@@ -297,8 +297,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                       118.494 * table_gen_storage_multiplier,
                                       193.662 * table_gen_storage_multiplier,
                                       288.837 * table_gen_storage_multiplier,
-                                      460.490 *
-                                      table_gen_storage_multiplier}; //dados do volume (hm³) do reservatório do Paranoá
+                                      460.490 * table_gen_storage_multiplier}; //dados do volume (hm³) do reservatório do Paranoá
 
     vector<double> paranoa_area = {0, 2.757, 15.154, 81.656, 324.785, 763.788,
                                    1321.336, 1874.680, 2429.789, 3006.939,
@@ -432,8 +431,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     //Curva de Corumbá IV - baseado nos dados do portal da ANA (volume útil)
     vector<double> corumba_storage = {0,
-                                      2936.6 *
-                                      table_gen_storage_multiplier, //hm³
+                                      2936.6 * table_gen_storage_multiplier, //hm³
                                       cIV_storage_capacity *
                                       table_gen_storage_multiplier};
     vector<double> corumba_area = {0, 13712.0, //hm²
@@ -469,6 +467,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                &cIV_allocation_fractions,
                                &cIV_treatment_allocation_fractions);
 
+//460.490
     // Lago Paranoá parameters
     double lp_supply_capacity = 36.966 *
                                 table_gen_storage_multiplier; //volume destinado a abastecimento em hm³
@@ -486,8 +485,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     AllocatedReservoir paranoa("Lago Paranoa", 3,
                                bacia_paranoa,
                                lp_storage_capacity,
-                               0.7e-6 * 3600 * 24 *
-                               7, //capacidade de tratamento da ETA Lago Norte atual (hm³/semana)
+                               0.7e-6 * 3600 * 24 * 7, //capacidade de tratamento da ETA Lago Norte atual (hm³/semana)
                                evaporation_paranoa,
                                &paranoa_storage_area,
                                &lp_allocations_ids,
@@ -498,8 +496,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             "Captacao no Ribeirao Bananal e Ribeiro do Torto",
             4,                                                          //Obs: a série de vazão utilizada referente ao Bananal
             sistema_bananal_torto,                                          //foi retirada de uma estação fluviométrica localizada
-            1.7e-6 * 3600 * 24 *
-            7); // hm³/semana      //a justante do ponto de captação. Não há problema,
+            1.7e-6 * 3600 * 24 * 7); // hm³/semana      //a justante do ponto de captação. Não há problema,
     // pois a captação começou apenas ao final de 2017,
     // então a série é basicamente composta pela vazão natural do ribeirão.
 //    Intake ribeirao_torto("Captacao no Ribeirao do Torto",
@@ -773,9 +770,9 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         // Torto/Santa Maria WSS (system_id = 1): average income per household = 4015 BRL/month
         wss_tortoSM.setAverageMonthlyIncome(4015.0);
 
-        // Set initial population for per-household affordability scaling
-        wss_descoberto.setInitialPopulation(1568110.0);
-        wss_tortoSM.setInitialPopulation(776160.0);
+        // Set initial households for per-household affordability scaling
+        wss_descoberto.setInitialHouseholds(698801);
+        wss_tortoSM.setInitialHouseholds(318098);
 
         vector<Utility *> utilities; //vetor que contém a única companhia CAESB
         utilities.push_back(&caesb);

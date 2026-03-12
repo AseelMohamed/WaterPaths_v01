@@ -89,6 +89,9 @@ public:
     void printUtilityObjectivesToRowOutStream(vector<UtilitiesDataCollector *> &u, std::ofstream &outStream,
             vector<double> &objectives);
 
+    void printWeeklyReliabilityByWSS() const;
+    void printWeeklyReliabilityByWSSCsv(const string &file_name) const;
+
     void readOrCreateBSSamples(int sol_id, int n_sets, int n_samples, const vector<vector<int>> &bootstrap_samples,
                                vector<vector<int>> &bootstrap_sample_sets) const;
 

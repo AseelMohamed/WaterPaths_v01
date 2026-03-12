@@ -817,6 +817,268 @@ unsigned long MasterDataCollector::getActualWeeksCollected() const {
     return 0;
 }
 
+void MasterDataCollector::printWeeklyReliabilityByWSS() const {
+    if (wss_collectors.empty() || realizations_ran.empty()) {
+        printf("Weekly WSS reliability: no WSS data available.\n");
+        return;
+    }
+
+    printf("\nWeekly reliability by WSS (threshold ratio = %.3f)\n", STORAGE_CAPACITY_RATIO_FAIL);
+
+    for (const auto &wss_realization_data : wss_collectors) {
+        int wss_id = NON_INITIALIZED;
+        unsigned long n_weeks = 0;
+
+        for (const auto &r : realizations_ran) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                wss_id = wss_realization_data[r]->id;
+                n_weeks = std::max(n_weeks, (unsigned long) wss_realization_data[r]->getCombined_storage().size());
+            }
+        }
+
+        if (n_weeks == 0) {
+            continue;
+        }
+
+        printf("WSS %d:\n", wss_id);
+
+        for (unsigned long w = 0; w < n_weeks; ++w) {
+            int valid_realizations = 0;
+            int failed_realizations = 0;
+
+            for (const auto &r : realizations_ran) {
+                if (r >= wss_realization_data.size() || wss_realization_data[r] == nullptr) {
+                    continue;
+                }
+
+                const auto &storage_vec = wss_realization_data[r]->getCombined_storage();
+                const auto &capacity_vec = wss_realization_data[r]->getStorage_capacity();
+
+                if (w >= storage_vec.size() || w >= capacity_vec.size()) {
+                    continue;
+                }
+
+                double capacity = capacity_vec[w];
+                if (capacity <= 0.0) {
+                    continue;
+                }
+
+                ++valid_realizations;
+                if (storage_vec[w] / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                    ++failed_realizations;
+                }
+            }
+
+            if (valid_realizations == 0) {
+                printf("  Week %lu: N/A (no storage-based realizations)\n", w);
+            } else {
+                double weekly_reliability = 1.0 - static_cast<double>(failed_realizations) / valid_realizations;
+                printf("  Week %lu: %.6f (%d/%d non-fail)\n",
+                       w,
+                       weekly_reliability,
+                       valid_realizations - failed_realizations,
+                       valid_realizations);
+            }
+        }
+    }
+}
+
+void MasterDataCollector::printWeeklyReliabilityByWSSCsv(const string &file_name) const {
+    if (wss_collectors.empty() || realizations_ran.empty()) {
+        printf("Weekly WSS reliability CSV: no WSS data available.\n");
+        return;
+    }
+
+    if (output_directory.empty()) {
+        printf("Weekly WSS reliability CSV: output directory is not set.\n");
+        return;
+    }
+
+    string csv_path = output_directory + file_name + ".csv";
+    ofstream out_stream;
+    out_stream.open(csv_path);
+
+    if (!out_stream.is_open()) {
+        char error_msg[512];
+        sprintf(error_msg, "Could not open weekly reliability CSV for writing: %s", csv_path.c_str());
+        throw runtime_error(error_msg);
+    }
+
+    const vector<WSSDataCollector *> *wss0 = nullptr;
+    const vector<WSSDataCollector *> *wss1 = nullptr;
+
+    for (const auto &wss_realization_data : wss_collectors) {
+        int wss_id = NON_INITIALIZED;
+        for (const auto &r : realizations_ran) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                wss_id = wss_realization_data[r]->id;
+                break;
+            }
+        }
+
+        if (wss_id == 0) {
+            wss0 = &wss_realization_data;
+        } else if (wss_id == 1) {
+            wss1 = &wss_realization_data;
+        }
+    }
+
+    auto get_n_weeks = [&](const vector<WSSDataCollector *> *wss_data) {
+        unsigned long n_weeks = 0;
+        if (wss_data == nullptr) return n_weeks;
+        for (const auto &r : realizations_ran) {
+            if (r < wss_data->size() && wss_data->at(r) != nullptr) {
+                n_weeks = std::max(n_weeks, (unsigned long) wss_data->at(r)->getCombined_storage().size());
+            }
+        }
+        return n_weeks;
+    };
+
+    auto annual_reliability = [&](const vector<WSSDataCollector *> *wss_data, unsigned long y, bool &has_data) {
+        has_data = false;
+        if (wss_data == nullptr || realizations_ran.empty()) return 0.0;
+
+        int failed_realizations = 0;
+        const int n_realizations = (int) realizations_ran.size();
+        int year_start = (int) round(y * WEEKS_IN_YEAR);
+        int year_end = (int) round((y + 1) * WEEKS_IN_YEAR);
+
+        for (const auto &r : realizations_ran) {
+            if (r >= wss_data->size() || wss_data->at(r) == nullptr) {
+                continue;
+            }
+
+            const auto &storage_vec = wss_data->at(r)->getCombined_storage();
+            const auto &capacity_vec = wss_data->at(r)->getStorage_capacity();
+            if (storage_vec.empty() || capacity_vec.empty()) {
+                continue;
+            }
+
+            bool realization_failed = false;
+            for (int w = year_start; w < year_end; ++w) {
+                if (w >= (int) storage_vec.size() || w >= (int) capacity_vec.size()) {
+                    continue;
+                }
+
+                double capacity = capacity_vec[w];
+                if (capacity <= 0.0) {
+                    continue;
+                }
+
+                has_data = true;
+                if (storage_vec[w] / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                    realization_failed = true;
+                    break;
+                }
+            }
+
+            if (realization_failed) {
+                failed_realizations++;
+            }
+        }
+
+        if (!has_data || n_realizations == 0) {
+            return 0.0;
+        }
+
+        return 1.0 - static_cast<double>(failed_realizations) / n_realizations;
+    };
+
+    auto annual_affordability = [&](const vector<WSSDataCollector *> *wss_data, unsigned long y, bool &has_data) {
+        has_data = false;
+        if (wss_data == nullptr) return 0.0;
+
+        vector<double> realization_max_affordability;
+        int year_start = (int) round(y * WEEKS_IN_YEAR);
+        int year_end = (int) round((y + 1) * WEEKS_IN_YEAR);
+
+        for (const auto &r : realizations_ran) {
+            if (r >= wss_data->size() || wss_data->at(r) == nullptr) {
+                continue;
+            }
+
+            const auto &residential_prices = wss_data->at(r)->getResidential_current_price();
+            const auto &restricted_demand = wss_data->at(r)->getRestricted_demand();
+            double average_monthly_income = wss_data->at(r)->getAverage_monthly_income();
+            double initial_households = wss_data->at(r)->getInitial_households();
+            double weekly_average_income = (average_monthly_income > 0.0)
+                                                 ? (average_monthly_income / WEEKS_IN_MONTH)
+                                                 : 0.0;
+
+            if (weekly_average_income <= 0.0 || initial_households <= 0.0) {
+                continue;
+            }
+
+            int max_week = std::min(year_end, (int) std::min(residential_prices.size(), restricted_demand.size()));
+            if (year_start >= max_week) {
+                continue;
+            }
+
+            double max_affordability = 0.0;
+            bool has_value = false;
+            for (int w = year_start; w < max_week; ++w) {
+                double weekly_price = residential_prices[w];
+                double weekly_demand = restricted_demand[w];
+                if (weekly_price > 0.0 && weekly_demand > 0.0) {
+                    double weekly_cost = (weekly_price * weekly_demand) / initial_households;
+                    double affordability = weekly_cost / weekly_average_income;
+                    if (!has_value || affordability > max_affordability) {
+                        max_affordability = affordability;
+                        has_value = true;
+                    }
+                }
+            }
+
+            if (has_value) {
+                realization_max_affordability.push_back(max_affordability);
+                has_data = true;
+            }
+        }
+
+        if (realization_max_affordability.empty()) {
+            return 0.0;
+        }
+
+        sort(realization_max_affordability.begin(), realization_max_affordability.end());
+        size_t index_95th = (size_t) (0.95 * (realization_max_affordability.size() - 1));
+        return realization_max_affordability[index_95th];
+    };
+
+    unsigned long n_weeks = std::max(get_n_weeks(wss0), get_n_weeks(wss1));
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
+    out_stream << "0reliability,1reliability,0afford,1afford" << endl;
+
+    for (unsigned long y = 0; y < n_years; ++y) {
+        bool has_0 = false;
+        bool has_1 = false;
+        bool has_afford_0 = false;
+        bool has_afford_1 = false;
+        double rel_0 = annual_reliability(wss0, y, has_0);
+        double rel_1 = annual_reliability(wss1, y, has_1);
+        double afford_0 = annual_affordability(wss0, y, has_afford_0);
+        double afford_1 = annual_affordability(wss1, y, has_afford_1);
+
+        if (has_0) {
+            out_stream << rel_0;
+        }
+        out_stream << ",";
+        if (has_1) {
+            out_stream << rel_1;
+        }
+        out_stream << ",";
+        if (has_afford_0) {
+            out_stream << afford_0;
+        }
+        out_stream << ",";
+        if (has_afford_1) {
+            out_stream << afford_1;
+        }
+        out_stream << endl;
+    }
+
+    out_stream.close();
+}
+
 void MasterDataCollector::performBootstrapAnalysis(
 		int sol_id, int n_sets, int n_samples, int n_threads, vector<vector<int>> bootstrap_samples) {
     printf("Running bootstrap samples.\n");

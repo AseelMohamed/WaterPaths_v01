@@ -306,6 +306,12 @@ int main(int argc, char *argv[]) {
                    (rdm_no != NON_INITIALIZED ? to_string(rdm_no).c_str() : ""));
             problem.setSol_number(standard_solution);
             problem_ptr->functionEvaluation(solutions[standard_solution].data(), c_obj, c_constr);
+            if (problem_ptr->getMaster_data_collector() != nullptr) {
+                problem_ptr->getMaster_data_collector()->setOutputDirectory(system_io);
+                problem_ptr->getMaster_data_collector()->printWeeklyReliabilityByWSSCsv(
+                    "annualWSS_s" + std::to_string(standard_solution) +
+                    (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
+            }
 
             // Export pathways and objectives, otherwise, if required, run bootstrap sub-sampling.
             if (n_sets > 0 && n_bs_samples > 0) {
@@ -334,6 +340,12 @@ int main(int argc, char *argv[]) {
                        (rdm_no != NON_INITIALIZED ? to_string(rdm_no).c_str() : ""));
                 problem.setSol_number((unsigned long) s);
                 problem_ptr->functionEvaluation(solutions[s].data(), c_obj, c_constr);
+                if (problem_ptr->getMaster_data_collector() != nullptr) {
+                    problem_ptr->getMaster_data_collector()->setOutputDirectory(system_io);
+                    problem_ptr->getMaster_data_collector()->printWeeklyReliabilityByWSSCsv(
+                            "annualWSS_s" + std::to_string(s) +
+                            (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
+                }
                 vector<double> objectives = problem_ptr->calculateAndPrintObjectives(false);
                 // problem.printTimeSeriesAndPathways(plotting);
                 problem.printTimeSeriesAndPathways(plotting);

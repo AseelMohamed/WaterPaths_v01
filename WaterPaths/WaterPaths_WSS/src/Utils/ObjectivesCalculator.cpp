@@ -603,14 +603,14 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
                 const auto& residential_prices = wss_realization_data[r]->getResidential_current_price();
                 const auto& restricted_demand = wss_realization_data[r]->getRestricted_demand();
                 double average_monthly_income = wss_realization_data[r]->getAverage_monthly_income();
-                double initial_population = wss_realization_data[r]->getInitial_population();
+                double initial_households = wss_realization_data[r]->getInitial_households();
                 double weekly_average_income = (average_monthly_income > 0.0)
                                                      ? (average_monthly_income / WEEKS_IN_MONTH)
                                                      : 0.0;
 
                 size_t n_weeks = std::min(residential_prices.size(), restricted_demand.size());
 
-                if (n_weeks > 0 && weekly_average_income > 0.0 && initial_population > 0.0) {
+                if (n_weeks > 0 && weekly_average_income > 0.0 && initial_households > 0.0) {
                     double max_affordability = 0.0;
                     bool has_value = false;
 
@@ -618,7 +618,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
                         double weekly_price = residential_prices[w];
                         double weekly_demand = restricted_demand[w];
                         if (weekly_price > 0.0 && weekly_demand > 0.0) {
-                            double weekly_cost = (weekly_price * weekly_demand) / initial_population;
+                            double weekly_cost = (weekly_price * weekly_demand) / initial_households;
                             double affordability = weekly_cost / weekly_average_income;
                             if (!has_value || affordability > max_affordability) {
                                 max_affordability = affordability;
@@ -873,14 +873,14 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
                 const auto& residential_prices = wss_realization_data[r]->getResidential_current_price();
                 const auto& restricted_demand = wss_realization_data[r]->getRestricted_demand();
                 double average_monthly_income = wss_realization_data[r]->getAverage_monthly_income();
-                double initial_population = wss_realization_data[r]->getInitial_population();
+                double initial_households = wss_realization_data[r]->getInitial_households();
                 double weekly_average_income = (average_monthly_income > 0.0)
                                                      ? (average_monthly_income / WEEKS_IN_MONTH)
                                                      : 0.0;
 
                 size_t n_weeks = std::min(residential_prices.size(), restricted_demand.size());
 
-                if (n_weeks > 0 && weekly_average_income > 0.0 && initial_population > 0.0) {
+                if (n_weeks > 0 && weekly_average_income > 0.0 && initial_households > 0.0) {
                     double max_affordability = 0.0;
                     bool has_value = false;
 
@@ -888,7 +888,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
                         double weekly_price = residential_prices[w];
                         double weekly_demand = restricted_demand[w];
                         if (weekly_price > 0.0 && weekly_demand > 0.0) {
-                            double weekly_cost = (weekly_price * weekly_demand) / initial_population;
+                            double weekly_cost = (weekly_price * weekly_demand) / initial_households;
                             double affordability = weekly_cost / weekly_average_income;
                             if (!has_value || affordability > max_affordability) {
                                 max_affordability = affordability;

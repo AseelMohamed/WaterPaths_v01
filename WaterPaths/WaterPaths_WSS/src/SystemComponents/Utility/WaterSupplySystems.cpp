@@ -266,7 +266,7 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     bond_interest_rate_multiplier = other.bond_interest_rate_multiplier;
     // Copy average monthly income for affordability calculation
     average_monthly_income = other.average_monthly_income;
-    initial_population = other.initial_population;
+    initial_households = other.initial_households;
     wss_residential_price = other.wss_residential_price;
     // NOTE: current_realization_id is NOT copied - it will be set correctly by setRealization() 
     // after this copy is created, avoiding race condition from shared original WSS
@@ -1100,10 +1100,10 @@ double WaterSupplySystems::getAverageMonthlyIncome() const {
     return average_monthly_income;
 }
 
-void WaterSupplySystems::setInitialPopulation(double population) {
-    initial_population = population;
+void WaterSupplySystems::setInitialHouseholds(double households) {
+    initial_households = households;
 }
 
-double WaterSupplySystems::getInitialPopulation() const {
-    return initial_population;
+double WaterSupplySystems::getInitialHouseholds() const {
+    return initial_households;
 }
