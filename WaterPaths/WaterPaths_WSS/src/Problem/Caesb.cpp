@@ -121,22 +121,23 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     //IDENTIFICADOR DE CADA INFRAESTRUTURA FUTURA. Obs: as infraestruturas já existentes devem ser numeradas antes, começando do 0.
 
-    vector<infraRank> caesb_descoberto_infra_order_raw = { // WSS Descoberto: reservatórios Descoberto e Corumbá IV
+    vector<infraRank> caesb_descoberto_infra_order_raw = { // WSS Descoberto: reservatórios Descoberto, Corumbá IV e Lago Paranoá
             // ID 5: ETA Corumbá Etapa 2 (+1.4 m³/s, total 2.8 m³/s)
             // ID 6: ETA Corumbá Etapa 3 (+1.2 m³/s, total 4.0 m³/s)
-            // ID 10: Expansão do Descoberto (+25% storage)
-            infraRank(5, ETA_corumba_upgrade1_ranking),
-            infraRank(6, ETA_corumba_upgrade2_ranking),
-            infraRank(10, descoberto_expansao_ranking)
-    };
-
-    vector<infraRank> caesb_tortoSM_infra_order_raw = { // WSS TortoSM: reservatórios TortoSM e Lago Paranoá
             // ID 7: ETA Paranoá Sul Etapa 1 (+0.7 m³/s)
             // ID 8: ETA Paranoá Sul Etapa 2 (+0.7 m³/s)
             // ID 9: ETAs Paranoá Sul e Norte Etapa 3 (+0.7 m³/s)
+            // ID 10: Expansão do Descoberto (+25% storage)
+            infraRank(5, ETA_corumba_upgrade1_ranking),
+            infraRank(6, ETA_corumba_upgrade2_ranking),
             infraRank(7, ETA_paranoaSul_upgrade1_ranking),
             infraRank(8, ETA_paranoaSul_upgrade2_ranking),
-            infraRank(9, ETA_paranoaSul_upgrade3_ranking)
+            infraRank(9, ETA_paranoaSul_upgrade3_ranking),
+            infraRank(10, descoberto_expansao_ranking)
+    };
+
+    vector<infraRank> caesb_tortoSM_infra_order_raw = { // WSS TortoSM: reservatório TortoSM
+            // No ROF-triggered infrastructure options for TortoSM
     };
 
     // GET INFRASTRUCTURE CONSTRUCTION ORDER BASED ON DECISION VARIABLES
@@ -330,15 +331,15 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                  53}; // período de estiagem (maio - week 18, a outubro) e período chuvoso (novembro - week 44 a abril)
     vector<double> paranoa_releases = {(1.2e-6 * 3600 * 24 * 7),
                                        (0.7e-6 * 3600 * 24 * 7),
-                                       (1.2e-6 * 3600 * 24 *
-                                        7)}; // mínimo de 0,7 m³/s no período de estiagem e de 1,2 m³/s no período chuvoso
+                                       (1.2e-6 * 3600 * 24 * 7)}; // mínimo de 0,7 m³/s no período de estiagem e de 1,2 m³/s no período chuvoso
+
     SeasonalMinEnvFlowControl paranoa_min_env_control(3, paranoa_weeks,
                                                       paranoa_releases);
 
     //Vazão remanescente do Ribeirão Bananal e do Torto - combinação entre as duas water sources
     vector<int> bananal_torto_weeks = {0, 5, 9, 13, 18, 22, 26, 31, 35, 39, 44,
-                                       48,
-                                       53}; // período de estiagem (maio - week 18, a outubro) e período chuvoso (novembro - week 44 a abril)
+                                       48,53}; // período de estiagem (maio - week 18, a outubro) e período chuvoso (novembro - week 44 a abril)
+    
     //A vazão remanescente da water source integrada Bananal + Torto corresponde à soma das vazões remanescentes de cada um
     vector<double> bananal_torto_releases = {(0.832e-6 * 3600 * 24 * 7),
                                              (1.006e-6 * 3600 * 24 * 7),
@@ -474,13 +475,13 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double lp_wq_capacity = 423.524 *
                             table_gen_storage_multiplier; //volume destinado a qualidade da água do lago em hm³
     double lp_storage_capacity = lp_wq_capacity + lp_supply_capacity;
-    vector<int> lp_allocations_ids = {1,  // TortoSM system id (system that uses Paranoa)
-                                      WATER_QUALITY_ALLOCATION}; //1 é a id da companhia do TortoSM
+    vector<int> lp_allocations_ids = {0,  // Descoberto system id (system that uses Paranoa)
+                                      WATER_QUALITY_ALLOCATION}; //0 é a id da companhia do Descoberto
     vector<double> lp_allocation_fractions = {
             lp_supply_capacity / lp_storage_capacity,
             lp_wq_capacity / lp_storage_capacity};
     vector<double> lp_treatment_allocation_fractions = {
-            1.0}; //The TortoSM system treats water from Lago Paranoá
+            1.0}; //The Descoberto system treats water from Lago Paranoá
 
     AllocatedReservoir paranoa("Lago Paranoa", 3,
                                bacia_paranoa,
@@ -566,15 +567,12 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     //Sistema Paranoá - Construção da ETA Paranoá Sul (0.7 m³/s), sua primeira ampliação (upgrade 2, com + 0.7 m³/s), segunda ampliação (upgrade 3, com + 0.35 m³/s) e
     // ampliação da ETA Lago Norte (upgrade 3, com + 0.35 m³/s))
 
-    vector<double> capacities_ETA_paranoaSul_upgrade_1 = {0,
-                                                          0.7e-6 * 3600 * 24 *
-                                                          7}; //capacidade de produção da ETA paranoá Sul na sua etapa 1 = 0.7 m³/s
-    vector<double> capacities_ETA_paranoaSul_upgrade_2 = {0,
-                                                          0.7e-6 * 3600 * 24 *
-                                                          7}; //aumento da capacidade de produção da ETA Paranoá Sul na sua etapa 2 = 0.7 m³/s
-    vector<double> capacities_ETAs_paranoa_upgrade_3 = {0,
-                                                        0.7e-6 * 3600 * 24 *
-                                                        7}; // aumento da capacidade de produção da ETA paranoá Sul na sua etapa 3 = 0.350 m³/s
+    vector<double> capacities_ETA_paranoaSul_upgrade_1 = {0.7e-6 * 3600 * 24 *
+                                                          7, 0}; //capacidade de produção da ETA paranoá Sul na sua etapa 1 = 0.7 m³/s (Descoberto WSS)
+    vector<double> capacities_ETA_paranoaSul_upgrade_2 = {0.7e-6 * 3600 * 24 *
+                                                          7, 0}; //aumento da capacidade de produção da ETA Paranoá Sul na sua etapa 2 = 0.7 m³/s (Descoberto WSS)
+    vector<double> capacities_ETAs_paranoa_upgrade_3 = {0.7e-6 * 3600 * 24 *
+                                                        7, 0}; // aumento da capacidade de produção da ETA paranoá Sul na sua etapa 3 = 0.350 m³/s (Descoberto WSS)
     // + ampliação da ETA paranoá Norte em 0.350 m³/s
 
     // Empréstimos para a implantação e ampliação da ETA Paranoá Sul e Norte (Norte: apenas upgrade 3)
@@ -654,15 +652,15 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
      *                                  1 (Santa Maria)
      *      0(10)                       |
      *       \                          |
-     *        \                         |  4(Ban)   4 (Torto)
-     *         \                        |   \      /
-     *          \                       |    \ __/
-     *           \                      |     3 (Paranoá) (7, 8, 9)
-     *            \                     |     |
-     *             \                    |    |
-     *              \                   |   |
-     *               \                  |  |
-     *                \                 |_|
+     *        \                         |    4(Ban)   4 (Torto)
+     *         \                        |     \      /
+     *          \                       |      \ __/
+     *           \                      |       3 (Paranoá) (7, 8, 9)
+     *            \                     |       |
+     *             \                    |      |
+     *              \                   |     |
+     *               \                  |    |
+     *                \                 |___|
      *                 \               /
      *                  \             /
      *                   \           /
@@ -703,15 +701,15 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     //Criação das companhias de água. A descrição de cada termo está no arquivo .doc.
 
-    vector<vector<int>> water_sources_to_wtp_caesb_1 = {{0},  // WTP 0 treats Descoberto
-                                                        {2}};  // WTP 1 treats Corumba
+    vector<vector<int>> water_sources_to_wtp_caesb_1 = {{0},   // WTP 0 treats Descoberto
+                                                        {2},   // WTP 1 treats Corumba
+                                                        {3}};  // WTP 2 treats Lago Paranoa
     vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7,   // WTP 0: Descoberto ETA (6.0 m³/s)
-                                             1.4e-6 * 3600 * 24 * 7};  // WTP 1: Corumba ETA (1.4 m³/s) - NOW ONLINE!
-    vector<vector<int>> water_sources_to_wtp_caesb_2 = {{1, 4},
-                                                        {3}};
+                                             1.4e-6 * 3600 * 24 * 7,   // WTP 1: Corumba ETA (1.4 m³/s)
+                                             0.7e-6 * 3600 * 24 * 7};  // WTP 2: ETA Lago Norte (0.7 m³/s)
+    vector<vector<int>> water_sources_to_wtp_caesb_2 = {{1, 4}};  // WTP 0 treats TortoSM and Bananal/Torto
     vector<double> wtp_capacities_caesb_2 = {
-            1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7,
-            0.7e-6 * 3600 * 24 * 7};
+            1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7};  // WTP 0: ETA Brasilia (1.1 m³/s) + Bananal/Torto (1.7 m³/s)
 
     // Create single CAESB utility with two water supply systems
     // First system: Descoberto (system_id=0, utility_id=0)
@@ -781,8 +779,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // WSS 0 (Descoberto): sources {0, 2, 5, 6, 10, 11}
     // WSS 1 (TortoSM): sources {1, 3, 4, 7, 8, 9}
     vector<vector<int>> reservoir_wss_connectivity_matrix = {
-            {0, 2, 5, 6, 10, 11},  // Descoberto(0), Corumba(2), Corumba_Etapa1(5), Corumba_Etapa2(6), Descoberto_Exp(10), Dummy(11)
-            {1, 3, 4, 7, 8, 9}     // TortoSM(1), Paranoa(3), Bananal/Torto(4), Paranoa_Etapa1(7), Paranoa_Etapa2(8), Paranoa_Etapa3(9)
+            {0, 2, 3, 5, 6, 7, 8, 9, 10, 11},  // Descoberto(0), Corumba(2), Paranoa(3), Corumba_Etapa1(5), Corumba_Etapa2(6), Paranoa_Etapa1(7), Paranoa_Etapa2(8), Paranoa_Etapa3(9), Descoberto_Exp(10), Dummy(11)
+            {1, 4}                              // TortoSM(1), Bananal/Torto(4)
     };
 
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
