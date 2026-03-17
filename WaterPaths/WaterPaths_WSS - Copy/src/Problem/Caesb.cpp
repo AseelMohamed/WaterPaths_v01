@@ -393,6 +393,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     vector<double> construction_time_interval = {3.0,
                                                  5.0}; //o período de construção das novas infraestruturas varia entre 3 e 5 anos
 
+    // ========================================================
     // =========TESTING ONLY=======: force all infrastructure online from week 0
     // Remove these lines to restore normal behaviour
     construction_time_interval = {0.0, 0.0};
@@ -401,6 +402,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // Also override the already-created rofs vectors (they were built before the trigger was overridden above)
     fill(rofs_infra_caesb_descoberto.begin(), rofs_infra_caesb_descoberto.end(), -1.0);
     fill(rofs_infra_caesb_tortoSM.begin(),    rofs_infra_caesb_tortoSM.end(),    -1.0);
+    // ========================================================
+    // ========================================================
 
     vector<double> city_infrastructure_rof_triggers = {
             caesb_descoberto_inftrigger,

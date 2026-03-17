@@ -878,8 +878,10 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // But IDs are still [0]=Descoberto, [1]=TortoSM, so constructor assigns them backwards
     vector<double> transfer_rofs = {caesb_tortoSM_transfer_trigger,      // [0] assigned to system_id 0 (Descoberto)
                                     caesb_descoberto_transfer_trigger};  // [1] assigned to system_id 1 (TortoSM)
-    vector<double> transfer_capacities = {0.5e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
-                                          0.7e-6 * 3600 * 24 * 7};        // Capacity Descoberto→TortoSM
+//     vector<double> transfer_capacities = {0.5e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
+//                                           0.7e-6 * 3600 * 24 * 7};        // Capacity Descoberto→TortoSM
+    vector<double> transfer_capacities = {0,        // Capacity TortoSM→Descoberto
+                                          0};        // Capacity Descoberto→TortoSM
     vector<int> tranfers_wss_ids = {0, 1};  // system_id 0=Descoberto, system_id 1=TortoSM
     TransfersBilateral transfers(0, transfer_capacities, 0.1, 1.1,
                                  transfer_rofs, tranfers_wss_ids);
