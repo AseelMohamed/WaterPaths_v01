@@ -56,6 +56,8 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 15, 0.0, 1.0); //Ordem de "construção" da expansão do Descoberto (ID 10: + 25% storage)
     BORG_Problem_set_bounds(problem, 16, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - descoberto
     BORG_Problem_set_bounds(problem, 17, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - tortoSM
+    BORG_Problem_set_bounds(problem, 18, 0.0, 1.0); //Fração de alocação do Lago Paranoá para o WSS Descoberto
+    BORG_Problem_set_bounds(problem, 19, 0.0, 1.0); //Fração de alocação do Lago Paranoá para o WSS TortoSM
 
     // Set epsilons for objectives //(problem, n° de identificação da função objetivo, valor do epsilon). O valor do epsilon indica a precisão das funções objetivo.
     BORG_Problem_set_epsilon(problem, 0, 0.001);
@@ -116,6 +118,17 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double descoberto_expansao_ranking = vars[15]; // ID 10: Expansão do Reservatório do Descoberto (+25% storage)
     double caesb_descoberto_inf_buffer = vars[16];
     double caesb_tortoSM_inf_buffer = vars[17];
+    double caesb_descoberto_paranoa_alloc = vars[18]; //fração de alocação do Lago Paranoá para o WSS Descoberto
+    double caesb_tortoSM_paranoa_alloc = vars[19]; //fração de alocação do Lago Paranoá para o WSS TortoSM
+
+    // Normalize Paranoá allocations in case they exceed 1 (same pattern as Lake Michael)
+    double sum_paranoa_allocations = caesb_descoberto_paranoa_alloc + caesb_tortoSM_paranoa_alloc;
+    if (sum_paranoa_allocations == 0.)
+        throw invalid_argument("Paranoa allocations cannot be all zero.");
+    if (sum_paranoa_allocations > 1) {
+        caesb_descoberto_paranoa_alloc /= sum_paranoa_allocations;
+        caesb_tortoSM_paranoa_alloc /= sum_paranoa_allocations;
+    }
 
     //ANALISAR POSSIBILIDADE DE INCLUIR O RIO DO SAL COMO OPÇÃO DE AMPLIAÇÃO DA INFRAESTRUTURA DE OFERTA
 
@@ -475,13 +488,16 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double lp_wq_capacity = 423.524 *
                             table_gen_storage_multiplier; //volume destinado a qualidade da água do lago em hm³
     double lp_storage_capacity = lp_wq_capacity + lp_supply_capacity;
-    vector<int> lp_allocations_ids = {0,  // Descoberto system id (system that uses Paranoa)
-                                      WATER_QUALITY_ALLOCATION}; //0 é a id da companhia do Descoberto
+    vector<int> lp_allocations_ids = {0, 1,  // WSS 0 (Descoberto) and WSS 1 (TortoSM) share Paranoá
+                                      WATER_QUALITY_ALLOCATION};
     vector<double> lp_allocation_fractions = {
-            lp_supply_capacity / lp_storage_capacity,
+            caesb_descoberto_paranoa_alloc * lp_supply_capacity / lp_storage_capacity,
+            caesb_tortoSM_paranoa_alloc * lp_supply_capacity / lp_storage_capacity,
             lp_wq_capacity / lp_storage_capacity};
+    double sum_paranoa_for_treatment = caesb_descoberto_paranoa_alloc + caesb_tortoSM_paranoa_alloc;
     vector<double> lp_treatment_allocation_fractions = {
-            1.0}; //The Descoberto system treats water from Lago Paranoá
+            caesb_descoberto_paranoa_alloc / sum_paranoa_for_treatment,
+            caesb_tortoSM_paranoa_alloc / sum_paranoa_for_treatment};
 
     AllocatedReservoir paranoa("Lago Paranoa", 3,
                                bacia_paranoa,
@@ -780,7 +796,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // WSS 1 (TortoSM): sources {1, 3, 4, 7, 8, 9}
     vector<vector<int>> reservoir_wss_connectivity_matrix = {
             {0, 2, 3, 5, 6, 7, 8, 9, 10, 11},  // Descoberto(0), Corumba(2), Paranoa(3), Corumba_Etapa1(5), Corumba_Etapa2(6), Paranoa_Etapa1(7), Paranoa_Etapa2(8), Paranoa_Etapa3(9), Descoberto_Exp(10), Dummy(11)
-            {1, 4}                              // TortoSM(1), Bananal/Torto(4)
+            {1, 3, 4, 7, 8, 9}                 // TortoSM(1), Paranoa(3), Bananal/Torto(4), Paranoa_Etapa1(7), Paranoa_Etapa2(8), Paranoa_Etapa3(9)
     };
 
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
@@ -981,7 +997,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 int Caesb::simulationExceptionHander(const std::exception &e,
                                      Simulation *s, // :: significa "resolução de escopo"
                                      double *objs, const double *vars) {
-    int num_dec_var = 18; //número de variáveis desse estudo de caso
+    int num_dec_var = 20; //número de variáveis desse estudo de caso
 //        printf("Exception called during calculations. Decision variables are below:\n");
     ofstream sol;
     int world_rank;
