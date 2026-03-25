@@ -393,17 +393,17 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     vector<double> construction_time_interval = {3.0,
                                                  5.0}; //o período de construção das novas infraestruturas varia entre 3 e 5 anos
 
-    // ========================================================
-    // =========TESTING ONLY=======: force all infrastructure online from week 0
-    // Remove these lines to restore normal behaviour
-    construction_time_interval = {0.0, 0.0};
-    caesb_descoberto_inftrigger = -1.0;
-    caesb_tortoSM_inftrigger    = -1.0;
-    // Also override the already-created rofs vectors (they were built before the trigger was overridden above)
-    fill(rofs_infra_caesb_descoberto.begin(), rofs_infra_caesb_descoberto.end(), -1.0);
-    fill(rofs_infra_caesb_tortoSM.begin(),    rofs_infra_caesb_tortoSM.end(),    -1.0);
-    // ========================================================
-    // ========================================================
+//     // ========================================================
+//     // =========TESTING ONLY=======: force all infrastructure online from week 0
+//     // Remove these lines to restore normal behaviour
+//     construction_time_interval = {0.0, 0.0};
+//     caesb_descoberto_inftrigger = -1.0;
+//     caesb_tortoSM_inftrigger    = -1.0;
+//     // Also override the already-created rofs vectors (they were built before the trigger was overridden above)
+//     fill(rofs_infra_caesb_descoberto.begin(), rofs_infra_caesb_descoberto.end(), -1.0);
+//     fill(rofs_infra_caesb_tortoSM.begin(),    rofs_infra_caesb_tortoSM.end(),    -1.0);
+//     // ========================================================
+//     // ========================================================
 
     vector<double> city_infrastructure_rof_triggers = {
             caesb_descoberto_inftrigger,
@@ -958,12 +958,12 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     objectives = calculateAndPrintObjectives(false);
 
 // With WSS architecture, there is only ONE utility (CAESB) with 2 WSS.
-// The objectives vector has 4 or 5 elements depending on experiment mode:
+// The objectives vector has variable elements depending on experiment mode:
 // [0] = Reliability (minimum across both WSS)
 // [1] = Restriction Frequency
 // [2] = Infrastructure NPC 
 // [3] = Worst Case Costs
-// [4] = Affordability Index (95th percentile, worst case across WSS) - if included
+// [4+] = Affordability Index (if included) and/or Failure Severity (if included)
 
 #ifdef  PARALLEL 
     objs[0] = -objectives[0];  // Negative reliability
@@ -971,9 +971,16 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     objs[2] = objectives[2];   // Infrastructure NPC
         objs[3] = objectives[3];   // Worst case costs
     
+    int obj_idx = 4;
     // Only copy affordability if it was calculated (experiments 3 & 4)
-        if (Constants::includeAffordabilityObjective() && objectives.size() > 4) {
-                objs[4] = objectives[4];   // Affordability index
+        if (Constants::includeAffordabilityObjective() && obj_idx < (int)objectives.size()) {
+                objs[obj_idx] = objectives[obj_idx];   // Affordability index
+        obj_idx++;
+    }
+    // Only copy severity if it was included
+        if (Constants::includeSeverityObjective() && obj_idx < (int)objectives.size()) {
+                objs[obj_idx] = objectives[obj_idx];   // Failure severity
+        obj_idx++;
     }
      
         if (s != nullptr) {	 // != significa "diferente de"

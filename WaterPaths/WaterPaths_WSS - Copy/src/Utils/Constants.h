@@ -27,6 +27,7 @@ namespace Constants {
     // Experiment 3: 5 objs, reliability=MIN, affordability=MAX (worst case) [DEFAULT]
     // Experiment 4: 5 objs, reliability=AVERAGE, affordability=AVERAGE
     extern int EXPERIMENT_MODE; // Set via command line (-E flag)
+    extern bool INCLUDE_SEVERITY; // Toggle severity objective via -V flag
     
     // Aggregation methods for WSS-level objectives
     enum AggregationMethod {
@@ -38,8 +39,9 @@ namespace Constants {
     AggregationMethod getReliabilityAggregationMethod();
     AggregationMethod getAffordabilityAggregationMethod();
     bool includeAffordabilityObjective();
+    bool includeSeverityObjective();
     
-    const int NUM_OBJECTIVES = 5;  // Maximum number of objectives (for array sizing)
+    const int NUM_OBJECTIVES = 6;  // Maximum number of objectives (for array sizing)
 //#define NUM_DEC_VAR 57;
     const int NUM_DEC_VAR = 18;
 
@@ -137,9 +139,11 @@ namespace Constants {
 
     // Inline function implementations for experiment configuration
     inline int getNumObjectives() {
-        // Experiments 1 & 2: 4 objectives (no affordability)
-        // Experiments 3 & 4: 5 objectives (with affordability)
-        return (EXPERIMENT_MODE == 1 || EXPERIMENT_MODE == 2) ? 4 : 5;
+        // Base: 4 objectives (reliability, restriction freq, infra NPC, worst case costs)
+        int n = 4;
+        if (includeAffordabilityObjective()) n++;
+        if (includeSeverityObjective()) n++;
+        return n;
     }
     
     inline AggregationMethod getReliabilityAggregationMethod() {
@@ -158,6 +162,10 @@ namespace Constants {
         // Experiments 1 & 2: No affordability
         // Experiments 3 & 4: Include affordability
         return (EXPERIMENT_MODE == 3 || EXPERIMENT_MODE == 4);
+    }
+    
+    inline bool includeSeverityObjective() {
+        return INCLUDE_SEVERITY;
     }
 
     static constexpr int WEEK_OF_YEAR[4017] = {

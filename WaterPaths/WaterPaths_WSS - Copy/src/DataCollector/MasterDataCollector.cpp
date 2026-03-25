@@ -610,6 +610,20 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
         }
     }
 
+    /// Failure Severity - Use same aggregation method as reliability
+    double failure_severity = 0.0;
+    if (Constants::includeSeverityObjective()) {
+        if (!wss_collectors.empty()) {
+            vector<vector<WSSDataCollector *>> utility_wss_collectors_sev;
+            isolateWSSDataCollectors(u, utility_wss_collectors_sev);
+            failure_severity = ObjectivesCalculator::
+            calculateFailureSeverityObjective_WSS_Configurable(
+                utility_wss_collectors_sev,
+                realizations_ran,
+                Constants::getReliabilityAggregationMethod());
+        }
+    }
+
     outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
               /// Reliability
               << setw(COLUMN_WIDTH * 2)
@@ -634,6 +648,11 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
                   << setprecision(COLUMN_PRECISION)
                   << affordability_index;
     }
+    if (Constants::includeSeverityObjective()) {
+        outStream << setw(COLUMN_WIDTH * 2)
+                  << setprecision(COLUMN_PRECISION)
+                  << failure_severity;
+    }
     outStream << endl;
 
     objectives.push_back(reliability);
@@ -642,6 +661,9 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
     objectives.push_back(worse_cost);
     if (Constants::includeAffordabilityObjective()) {
         objectives.push_back(affordability_index);
+    }
+    if (Constants::includeSeverityObjective()) {
+        objectives.push_back(failure_severity);
     }
     } catch (const std::exception& e) {
         printf("ERROR in printUtilityObjectivesToRowOutStream: %s\n", e.what());
@@ -671,6 +693,9 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
         // Only add affordability header if included in experiment
         if (Constants::includeAffordabilityObjective()) {
             outStream << setw(COLUMN_WIDTH * 2) << "Affordability Index";
+        }
+        if (Constants::includeSeverityObjective()) {
+            outStream << setw(COLUMN_WIDTH * 2) << "Failure Severity";
         }
         outStream << endl;
 
@@ -768,6 +793,22 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
            objectives.size(), Constants::EXPERIMENT_MODE);
     
                     objectives.push_back(1.0);
+                }
+            }
+            
+            // Calculate failure severity objective - only if included
+            if (Constants::includeSeverityObjective()) {
+                if (!wss_collectors.empty()) {
+                    vector<vector<WSSDataCollector *>> utility_wss_collectors_severity;
+                    isolateWSSDataCollectors(u, utility_wss_collectors_severity);
+                    
+                    objectives.push_back
+                            (ObjectivesCalculator::calculateFailureSeverityObjective_WSS_Configurable(
+                                utility_wss_collectors_severity,
+                                realizations_ran,
+                                Constants::getReliabilityAggregationMethod()));
+                } else {
+                    objectives.push_back(0.0);
                 }
             }
         }
@@ -1044,19 +1085,67 @@ void MasterDataCollector::printWeeklyReliabilityByWSSCsv(const string &file_name
         return realization_max_affordability[index_95th];
     };
 
+    auto annual_severity = [&](const vector<WSSDataCollector *> *wss_data, unsigned long y, bool &has_data) {
+        has_data = false;
+        if (wss_data == nullptr || realizations_ran.empty()) return 0.0;
+
+        double total_failure_weeks = 0.0;
+        const int n_realizations = (int) realizations_ran.size();
+        int year_start = (int) round(y * WEEKS_IN_YEAR);
+        int year_end = (int) round((y + 1) * WEEKS_IN_YEAR);
+
+        for (const auto &r : realizations_ran) {
+            if (r >= wss_data->size() || wss_data->at(r) == nullptr) {
+                continue;
+            }
+
+            const auto &storage_vec = wss_data->at(r)->getCombined_storage();
+            const auto &capacity_vec = wss_data->at(r)->getStorage_capacity();
+            if (storage_vec.empty() || capacity_vec.empty()) {
+                continue;
+            }
+
+            for (int w = year_start; w < year_end; ++w) {
+                if (w >= (int) storage_vec.size() || w >= (int) capacity_vec.size()) {
+                    continue;
+                }
+
+                double capacity = capacity_vec[w];
+                if (capacity <= 0.0) {
+                    continue;
+                }
+
+                has_data = true;
+                if (storage_vec[w] / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                    total_failure_weeks += 1.0;
+                }
+            }
+        }
+
+        if (!has_data || n_realizations == 0) {
+            return 0.0;
+        }
+
+        return total_failure_weeks / n_realizations;
+    };
+
     unsigned long n_weeks = std::max(get_n_weeks(wss0), get_n_weeks(wss1));
     unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
-    out_stream << "0reliability,1reliability,0afford,1afford" << endl;
+    out_stream << "0reliability,1reliability,0afford,1afford,0severity,1severity" << endl;
 
     for (unsigned long y = 0; y < n_years; ++y) {
         bool has_0 = false;
         bool has_1 = false;
         bool has_afford_0 = false;
         bool has_afford_1 = false;
+        bool has_sev_0 = false;
+        bool has_sev_1 = false;
         double rel_0 = annual_reliability(wss0, y, has_0);
         double rel_1 = annual_reliability(wss1, y, has_1);
         double afford_0 = annual_affordability(wss0, y, has_afford_0);
         double afford_1 = annual_affordability(wss1, y, has_afford_1);
+        double sev_0 = annual_severity(wss0, y, has_sev_0);
+        double sev_1 = annual_severity(wss1, y, has_sev_1);
 
         if (has_0) {
             out_stream << rel_0;
@@ -1072,6 +1161,14 @@ void MasterDataCollector::printWeeklyReliabilityByWSSCsv(const string &file_name
         out_stream << ",";
         if (has_afford_1) {
             out_stream << afford_1;
+        }
+        out_stream << ",";
+        if (has_sev_0) {
+            out_stream << sev_0;
+        }
+        out_stream << ",";
+        if (has_sev_1) {
+            out_stream << sev_1;
         }
         out_stream << endl;
     }

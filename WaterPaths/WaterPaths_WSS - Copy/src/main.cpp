@@ -119,6 +119,11 @@ int main(int argc, char *argv[]) {
             }
             c_num_obj = Constants::getNumObjectives(); // Update objective count
         }
+        else if (arg == "-V" && i + 1 < argc) {
+            int sev_flag = atoi(argv[++i]);
+            Constants::INCLUDE_SEVERITY = (sev_flag != 0);
+            c_num_obj = Constants::getNumObjectives(); // Update objective count
+        }
         else if (arg == "-y" && i + 1 < argc) bootstrap_file = argv[++i];
         else if (arg == "-R" && i + 1 < argc) rdm_no = atoi(argv[++i]);
         else if (arg == "-U" && i + 1 < argc) utilities_rdm_file = argv[++i];
@@ -171,7 +176,8 @@ int main(int argc, char *argv[]) {
                     "\t    1: 4 objs, reliability=MIN (worst case)\n"
                     "\t    2: 4 objs, reliability=AVERAGE\n"
                     "\t    3: 5 objs, reliability=MIN, affordability=MAX [DEFAULT]\n"
-                    "\t    4: 5 objs, reliability=AVERAGE, affordability=AVERAGE\n",
+                    "\t    4: 5 objs, reliability=AVERAGE, affordability=AVERAGE\n"
+                    "\t-V: Include severity objective (1=yes [default], 0=no)\n",
                     argv[0], n_realizations, n_weeks, system_io.c_str());
             return -1;
         }
@@ -195,6 +201,11 @@ int main(int argc, char *argv[]) {
                Constants::getAffordabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MAX");
     } else {
         printf("  Affordability: NOT INCLUDED\n");
+    }
+    if (Constants::includeSeverityObjective()) {
+        printf("  Severity: INCLUDED (aggregation follows reliability)\n");
+    } else {
+        printf("  Severity: NOT INCLUDED\n");
     }
     printf("========================================\n\n");
     #endif
@@ -393,6 +404,11 @@ int main(int argc, char *argv[]) {
                        Constants::getAffordabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MAX");
             } else {
                 printf("  Affordability: NOT INCLUDED\n");
+            }
+            if (Constants::includeSeverityObjective()) {
+                printf("  Severity: INCLUDED (aggregation follows reliability)\n");
+            } else {
+                printf("  Severity: NOT INCLUDED\n");
             }
             printf("========================================\n");
         }
