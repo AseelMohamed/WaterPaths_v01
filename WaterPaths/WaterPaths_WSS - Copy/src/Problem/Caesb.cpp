@@ -909,15 +909,14 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 //    drought_mitigation_policies.push_back(&transfer_tortoSM_descoberto);
 //    drought_mitigation_policies.push_back(&transfer_descoberto_tortoSM);
 
-    // FIXME: Order must match Original model (illogically swapped): [0]=TortoSM trigger, [1]=Descoberto trigger
-    // But IDs are still [0]=Descoberto, [1]=TortoSM, so constructor assigns them backwards
-    vector<double> transfer_rofs = {caesb_tortoSM_transfer_trigger,      // [0] assigned to system_id 0 (Descoberto)
-                                    caesb_descoberto_transfer_trigger};  // [1] assigned to system_id 1 (TortoSM)
-        //This pipline capacity for transfers was updated on May 2025 to 1.2 m3/sec                             
+    vector<double> transfer_rofs = {caesb_descoberto_transfer_trigger,  // [0] assigned to system_id 0 (Descoberto)
+                                    caesb_tortoSM_transfer_trigger};  // [1] assigned to system_id 1 (TortoSM)
+
+       //This pipline capacity for transfers was updated on May 2025 to 1.0 m3/sec                             
 //     vector<double> transfer_capacities = {0.5e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
 //                                           0.7e-6 * 3600 * 24 * 7};        // Capacity Descoberto→TortoSM
 
-    vector<double> transfer_capacities = {1.2e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
+    vector<double> transfer_capacities = {1.0e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
                                           0};        // Capacity Descoberto→TortoSM
 
     vector<int> tranfers_wss_ids = {0, 1};  // system_id 0=Descoberto, system_id 1=TortoSM
