@@ -778,14 +778,14 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                            rofs_infra_caesb_tortoSM);
 
     // Set average monthly income for affordability index calculation
-    // Descoberto WSS (system_id = 0): average income per household = 1397 BRL/month
-        wss_descoberto.setAverageMonthlyIncome(1397.0);
-        // Torto/Santa Maria WSS (system_id = 1): average income per household = 4015 BRL/month
-        wss_tortoSM.setAverageMonthlyIncome(4015.0);
+    // Descoberto WSS (system_id = 0): average income per household = 1472 BRL/month
+        wss_descoberto.setAverageMonthlyIncome(1472.0);
+        // Torto/Santa Maria WSS (system_id = 1): average income per household = 4064 BRL/month
+        wss_tortoSM.setAverageMonthlyIncome(4064.0);
 
         // Set initial households for per-household affordability scaling
-        wss_descoberto.setInitialHouseholds(698801);
-        wss_tortoSM.setInitialHouseholds(318098);
+        wss_descoberto.setInitialHouseholds(747880); 
+        wss_tortoSM.setInitialHouseholds(288154); 
 
         // Set per-reservoir failure thresholds for reliability calculation
         // WSS 0 (Descoberto): existing reservoirs
