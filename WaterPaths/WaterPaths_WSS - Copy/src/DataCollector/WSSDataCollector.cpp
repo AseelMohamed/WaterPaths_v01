@@ -174,6 +174,44 @@ void WSSDataCollector::collect_data() {
     short_term_rof.push_back(wss->getShort_term_risk_of_failure());
     long_term_rof.push_back(wss->getLong_term_risk_of_failure());
 
+    // Per-source failure check: week fails if ANY online source with an
+    // explicit failure threshold falls below that threshold.
+    // Only sources with thresholds set via setSourceFailureThreshold() are checked.
+    bool week_failed = false;
+    const auto& sources = wss->getWater_sources();
+    const auto& thresholds = wss->getSourceFailureThresholds();
+    for (auto* ws : sources) {
+        if (ws == nullptr || !ws->isOnline()) continue;
+        // Only check sources that have storage (reservoirs), not intakes
+        if (ws->source_type == INTAKE) continue;
+        // Skip reservoir expansions — they don't track their own volume.
+        // Their capacity is added to the parent reservoir, which is checked separately.
+        if (ws->source_type == RESERVOIR_EXPANSION) continue;
+        
+        // Only check sources with explicit thresholds
+        auto th_it = thresholds.find(ws->id);
+        if (th_it == thresholds.end()) continue;
+        
+        double capacity = ws->getAllocatedCapacity(wss->system_id);
+        if (capacity <= 0.0) continue;
+        
+        double volume = ws->getAvailableAllocatedVolume(wss->system_id);
+        double threshold = th_it->second;
+        
+        bool source_failed = (volume / capacity < threshold);
+        
+        // Record per-source failure
+        if (source_names.find(ws->id) == source_names.end()) {
+            source_names[ws->id] = string(ws->name);
+        }
+        per_source_failure_flag[ws->id].push_back(source_failed ? 1 : 0);
+        
+        if (source_failed) {
+            week_failed = true;
+        }
+    }
+    weekly_failure_flag.push_back(week_failed ? 1 : 0);
+
     double residential_price = wss->getWssResidentialPrice();
     residential_current_price.push_back(residential_price);
 
@@ -361,4 +399,16 @@ const Utility *WSSDataCollector::getOwner() const {
 
 const vector<vector<int>> &WSSDataCollector::getPathways() const {
     return pathways;
+}
+
+const vector<int> &WSSDataCollector::getWeekly_failure_flag() const {
+    return weekly_failure_flag;
+}
+
+const map<int, vector<int>> &WSSDataCollector::getPer_source_failure_flag() const {
+    return per_source_failure_flag;
+}
+
+const map<int, string> &WSSDataCollector::getSource_names() const {
+    return source_names;
 }

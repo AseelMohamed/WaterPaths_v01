@@ -469,13 +469,13 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         vector<int> year_reliabilities(n_years, 0);
         
         // Check failures for this WSS across all realizations
+        // Uses pre-computed per-source failure flags from WSSDataCollector
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
-                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
                 
                 // Skip if empty
-                if (storage_vec.empty() || capacity_vec.empty()) {
+                if (failure_flag.empty()) {
                     continue;
                 }
                 
@@ -483,19 +483,15 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
                     for (int w = (int) round(y * WEEKS_IN_YEAR);
                          w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
                         
-                        // Bounds check before accessing vectors
-                        if (w >= (int)storage_vec.size() || w >= (int)capacity_vec.size()) {
+                        if (w >= (int)failure_flag.size()) {
                             char error[512];
-                            sprintf(error, "ERROR: Week %d out of bounds for WSS data (storage size=%zu, capacity size=%zu) "
+                            sprintf(error, "ERROR: Week %d out of bounds for WSS failure flag data (size=%zu) "
                                     "in realization %lu, year %lu. Expected %lu weeks.",
-                                    w, storage_vec.size(), capacity_vec.size(), r, y, n_weeks);
+                                    w, failure_flag.size(), r, y, n_weeks);
                             throw std::out_of_range(error);
                         }
                         
-                        double storage = storage_vec[w];
-                        double capacity = capacity_vec[w];
-                        
-                        if (capacity > 0 && storage / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                        if (failure_flag[w] == 1) {
                             realizations_year_reliabilities[r][y] = FAILURE;
                             break; // Year already failed, no need to check more weeks
                         }
@@ -754,12 +750,12 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
         vector<int> year_reliabilities(n_years, 0);
         
         // Check failures for this WSS across all realizations
+        // Uses pre-computed per-source failure flags from WSSDataCollector
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
-                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
                 
-                if (storage_vec.empty() || capacity_vec.empty()) {
+                if (failure_flag.empty()) {
                     continue;
                 }
                 
@@ -767,16 +763,13 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
                     for (int w = (int) round(y * WEEKS_IN_YEAR);
                          w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
                         
-                        if (w >= (int)storage_vec.size() || w >= (int)capacity_vec.size()) {
+                        if (w >= (int)failure_flag.size()) {
                             char error[512];
-                            sprintf(error, "ERROR: Week %d out of bounds for WSS data", w);
+                            sprintf(error, "ERROR: Week %d out of bounds for WSS failure flag data", w);
                             throw std::out_of_range(error);
                         }
                         
-                        double storage = storage_vec[w];
-                        double capacity = capacity_vec[w];
-                        
-                        if (capacity > 0 && storage / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                        if (failure_flag[w] == 1) {
                             realizations_year_reliabilities[r][y] = FAILURE;
                             break;
                         }
@@ -1016,24 +1009,20 @@ double ObjectivesCalculator::calculateFailureSeverityObjective_WSS(
         double total_failure_weeks = 0.0;
         
         // Count failure weeks for this WSS across all realizations
+        // Uses pre-computed per-source failure flags from WSSDataCollector
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
-                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
                 
-                if (storage_vec.empty() || capacity_vec.empty()) {
+                if (failure_flag.empty()) {
                     continue;
                 }
                 
                 unsigned long realization_n_weeks = std::min(
-                    (unsigned long)storage_vec.size(),
-                    (unsigned long)capacity_vec.size());
-                realization_n_weeks = std::min(realization_n_weeks, n_weeks);
+                    (unsigned long)failure_flag.size(), n_weeks);
                 
                 for (unsigned long w = 0; w < realization_n_weeks; ++w) {
-                    double capacity = capacity_vec[w];
-                    if (capacity > 0 &&
-                        storage_vec[w] / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                    if (failure_flag[w] == 1) {
                         total_failure_weeks += 1.0;
                     }
                 }
@@ -1127,24 +1116,20 @@ double ObjectivesCalculator::calculateFailureSeverityObjective_WSS_Configurable(
 
         double total_failure_weeks = 0.0;
 
+        // Uses pre-computed per-source failure flags from WSSDataCollector
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
-                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
 
-                if (storage_vec.empty() || capacity_vec.empty()) {
+                if (failure_flag.empty()) {
                     continue;
                 }
 
                 unsigned long realization_n_weeks = std::min(
-                    (unsigned long)storage_vec.size(),
-                    (unsigned long)capacity_vec.size());
-                realization_n_weeks = std::min(realization_n_weeks, n_weeks);
+                    (unsigned long)failure_flag.size(), n_weeks);
 
                 for (unsigned long w = 0; w < realization_n_weeks; ++w) {
-                    double capacity = capacity_vec[w];
-                    if (capacity > 0 &&
-                        storage_vec[w] / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                    if (failure_flag[w] == 1) {
                         total_failure_weeks += 1.0;
                     }
                 }

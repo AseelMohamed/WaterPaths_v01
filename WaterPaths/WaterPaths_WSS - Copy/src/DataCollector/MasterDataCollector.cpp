@@ -989,25 +989,19 @@ void MasterDataCollector::printWeeklyReliabilityByWSSCsv(const string &file_name
                 continue;
             }
 
-            const auto &storage_vec = wss_data->at(r)->getCombined_storage();
-            const auto &capacity_vec = wss_data->at(r)->getStorage_capacity();
-            if (storage_vec.empty() || capacity_vec.empty()) {
+            const auto &failure_flag = wss_data->at(r)->getWeekly_failure_flag();
+            if (failure_flag.empty()) {
                 continue;
             }
 
             bool realization_failed = false;
             for (int w = year_start; w < year_end; ++w) {
-                if (w >= (int) storage_vec.size() || w >= (int) capacity_vec.size()) {
-                    continue;
-                }
-
-                double capacity = capacity_vec[w];
-                if (capacity <= 0.0) {
+                if (w >= (int) failure_flag.size()) {
                     continue;
                 }
 
                 has_data = true;
-                if (storage_vec[w] / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                if (failure_flag[w] == 1) {
                     realization_failed = true;
                     break;
                 }
@@ -1099,24 +1093,18 @@ void MasterDataCollector::printWeeklyReliabilityByWSSCsv(const string &file_name
                 continue;
             }
 
-            const auto &storage_vec = wss_data->at(r)->getCombined_storage();
-            const auto &capacity_vec = wss_data->at(r)->getStorage_capacity();
-            if (storage_vec.empty() || capacity_vec.empty()) {
+            const auto &failure_flag = wss_data->at(r)->getWeekly_failure_flag();
+            if (failure_flag.empty()) {
                 continue;
             }
 
             for (int w = year_start; w < year_end; ++w) {
-                if (w >= (int) storage_vec.size() || w >= (int) capacity_vec.size()) {
-                    continue;
-                }
-
-                double capacity = capacity_vec[w];
-                if (capacity <= 0.0) {
+                if (w >= (int) failure_flag.size()) {
                     continue;
                 }
 
                 has_data = true;
-                if (storage_vec[w] / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                if (failure_flag[w] == 1) {
                     total_failure_weeks += 1.0;
                 }
             }
@@ -1169,6 +1157,131 @@ void MasterDataCollector::printWeeklyReliabilityByWSSCsv(const string &file_name
         out_stream << ",";
         if (has_sev_1) {
             out_stream << sev_1;
+        }
+        out_stream << endl;
+    }
+
+    out_stream.close();
+}
+
+void MasterDataCollector::printAnnualReliabilityBySourceCsv(const string &file_name) const {
+    if (wss_collectors.empty() || realizations_ran.empty()) {
+        printf("Annual source reliability CSV: no WSS data available.\n");
+        return;
+    }
+
+    if (output_directory.empty()) {
+        printf("Annual source reliability CSV: output directory is not set.\n");
+        return;
+    }
+
+    string csv_path = output_directory + file_name + ".csv";
+    ofstream out_stream;
+    out_stream.open(csv_path);
+
+    if (!out_stream.is_open()) {
+        char error_msg[512];
+        sprintf(error_msg, "Could not open annual source reliability CSV for writing: %s", csv_path.c_str());
+        throw runtime_error(error_msg);
+    }
+
+    // Collect all source IDs and names across all WSS and realizations
+    // Use a map to preserve source_id ordering
+    map<int, string> all_source_info;  // source_id -> "wssId_sourceName"
+    unsigned long n_weeks = 0;
+
+    for (const auto &wss_realization_data : wss_collectors) {
+        for (const auto &r : realizations_ran) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                int wss_id = wss_realization_data[r]->id;
+                const auto &src_names = wss_realization_data[r]->getSource_names();
+                const auto &src_flags = wss_realization_data[r]->getPer_source_failure_flag();
+                for (const auto &entry : src_names) {
+                    // Only add if not already present (first WSS to claim it wins)
+                    if (all_source_info.find(entry.first) == all_source_info.end()) {
+                        all_source_info[entry.first] = to_string(wss_id) + "_" + entry.second;
+                    }
+                }
+                for (const auto &entry : src_flags) {
+                    n_weeks = std::max(n_weeks, (unsigned long)entry.second.size());
+                }
+            }
+        }
+    }
+
+    if (all_source_info.empty() || n_weeks == 0) {
+        out_stream << "No source data collected." << endl;
+        out_stream.close();
+        return;
+    }
+
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
+
+    // Write header: source columns in order of source_id
+    bool first = true;
+    for (const auto &entry : all_source_info) {
+        if (!first) out_stream << ",";
+        out_stream << entry.second << "(id" << entry.first << ")";
+        first = false;
+    }
+    out_stream << endl;
+
+    // For each year, calculate per-source reliability across realizations
+    for (unsigned long y = 0; y < n_years; ++y) {
+        int year_start = (int) round(y * WEEKS_IN_YEAR);
+        int year_end = (int) round((y + 1) * WEEKS_IN_YEAR);
+
+        // For each source, count how many realizations had a failure in this year
+        map<int, double> source_reliability;
+        for (const auto &entry : all_source_info) {
+            int src_id = entry.first;
+            int failed_realizations = 0;
+            int counted_realizations = 0;
+
+            for (const auto &wss_realization_data : wss_collectors) {
+                for (const auto &r : realizations_ran) {
+                    if (r >= wss_realization_data.size() || wss_realization_data[r] == nullptr) {
+                        continue;
+                    }
+
+                    const auto &src_flags = wss_realization_data[r]->getPer_source_failure_flag();
+                    auto it = src_flags.find(src_id);
+                    if (it == src_flags.end()) continue;
+
+                    const auto &flags = it->second;
+                    counted_realizations++;
+                    bool realization_failed = false;
+
+                    for (int w = year_start; w < year_end; ++w) {
+                        if (w >= (int) flags.size()) continue;
+                        if (flags[w] == 1) {
+                            realization_failed = true;
+                            break;
+                        }
+                    }
+
+                    if (realization_failed) {
+                        failed_realizations++;
+                    }
+                }
+            }
+
+            if (counted_realizations > 0) {
+                source_reliability[src_id] = 1.0 - (double) failed_realizations / counted_realizations;
+            } else {
+                source_reliability[src_id] = -1.0;  // No data marker
+            }
+        }
+
+        // Write row
+        first = true;
+        for (const auto &entry : all_source_info) {
+            if (!first) out_stream << ",";
+            double rel = source_reliability[entry.first];
+            if (rel >= 0.0) {
+                out_stream << rel;
+            }
+            first = false;
         }
         out_stream << endl;
     }

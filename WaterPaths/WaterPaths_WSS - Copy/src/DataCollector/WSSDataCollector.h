@@ -45,6 +45,14 @@ private:
     // Infrastructure pathways built by this WSS
     vector<vector<int>> pathways;
     
+    // Per-source failure flag: 1 if ANY source in WSS failed that week, 0 otherwise
+    vector<int> weekly_failure_flag;
+    
+    // Per-source failure tracking: source_id -> weekly failure flag (1=failed, 0=ok)
+    map<int, vector<int>> per_source_failure_flag;
+    // Per-source names for CSV headers (source_id -> name)
+    map<int, string> source_names;
+    
     const WaterSupplySystems *wss;
     const Utility *owner;  // Store owner directly to avoid accessing deleted WSS
     int owner_id;  // Store owner ID to avoid dangling pointer access
@@ -100,6 +108,9 @@ public:
     const Utility *getOwner() const;  // Direct access to owner (safe after WSS deletion)
     int getOwnerId() const;  // Get stored owner ID (safe even after WSS deletion)
     const vector<vector<int>> &getPathways() const;
+    const vector<int> &getWeekly_failure_flag() const;
+    const map<int, vector<int>> &getPer_source_failure_flag() const;
+    const map<int, string> &getSource_names() const;
 };
 
 #endif //TRIANGLEMODEL_WSSDATACOLLECTOR_H

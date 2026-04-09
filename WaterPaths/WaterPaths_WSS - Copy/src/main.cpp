@@ -322,6 +322,9 @@ int main(int argc, char *argv[]) {
                 problem_ptr->getMaster_data_collector()->printWeeklyReliabilityByWSSCsv(
                     "annualWSS_s" + std::to_string(standard_solution) +
                     (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
+                problem_ptr->getMaster_data_collector()->printAnnualReliabilityBySourceCsv(
+                    "annualSource_s" + std::to_string(standard_solution) +
+                    (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
             }
 
             // Export pathways and objectives, otherwise, if required, run bootstrap sub-sampling.
@@ -355,6 +358,9 @@ int main(int argc, char *argv[]) {
                     problem_ptr->getMaster_data_collector()->setOutputDirectory(system_io);
                     problem_ptr->getMaster_data_collector()->printWeeklyReliabilityByWSSCsv(
                             "annualWSS_s" + std::to_string(s) +
+                            (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
+                    problem_ptr->getMaster_data_collector()->printAnnualReliabilityBySourceCsv(
+                            "annualSource_s" + std::to_string(s) +
                             (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
                 }
                 vector<double> objectives = problem_ptr->calculateAndPrintObjectives(false);

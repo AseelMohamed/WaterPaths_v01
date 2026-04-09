@@ -268,6 +268,8 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     average_monthly_income = other.average_monthly_income;
     initial_households = other.initial_households;
     wss_residential_price = other.wss_residential_price;
+    // Copy per-source failure thresholds
+    source_failure_thresholds = other.source_failure_thresholds;
     // NOTE: current_realization_id is NOT copied - it will be set correctly by setRealization() 
     // after this copy is created, avoiding race condition from shared original WSS
     // NOTE: wss_infrastructure_npc deliberately NOT copied - realization WSS should get NPC from ROF WSS via references
@@ -1106,4 +1108,16 @@ void WaterSupplySystems::setInitialHouseholds(double households) {
 
 double WaterSupplySystems::getInitialHouseholds() const {
     return initial_households;
+}
+
+void WaterSupplySystems::setSourceFailureThreshold(int source_id, double threshold) {
+    source_failure_thresholds[source_id] = threshold;
+}
+
+double WaterSupplySystems::getSourceFailureThreshold(int source_id) const {
+    auto it = source_failure_thresholds.find(source_id);
+    if (it != source_failure_thresholds.end()) {
+        return it->second;
+    }
+    return STORAGE_CAPACITY_RATIO_FAIL;  // Default threshold
 }

@@ -787,6 +787,26 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         wss_descoberto.setInitialHouseholds(698801);
         wss_tortoSM.setInitialHouseholds(318098);
 
+        // Set per-reservoir failure thresholds for reliability calculation
+        // WSS 0 (Descoberto): existing reservoirs
+        wss_descoberto.setSourceFailureThreshold(0, 0.20);  // Descoberto
+        wss_descoberto.setSourceFailureThreshold(2, 0.20);  // Corumba
+        // WSS 0 (Descoberto): infrastructure expansions
+        wss_descoberto.setSourceFailureThreshold(5, 0.20);  // Corumba Etapa1
+        wss_descoberto.setSourceFailureThreshold(6, 0.20);  // Corumba Etapa2
+        // Note: Descoberto Expansion (id=10) is NOT checked independently.
+        // Its capacity is added to parent Descoberto (id=0) when built, so the
+        // parent's failure check already covers the expanded capacity.
+        wss_descoberto.setSourceFailureThreshold(11, 0.20); // Dummy
+        // WSS 1 (TortoSM): existing reservoirs
+        wss_tortoSM.setSourceFailureThreshold(1, 0.20);     // SantaMaria/Torto
+        wss_tortoSM.setSourceFailureThreshold(3, 0.20);     // Paranoa
+        // WSS 1 (TortoSM): infrastructure expansions
+        wss_tortoSM.setSourceFailureThreshold(4, 0.20);     // Bananal/Torto (Intake)
+        wss_tortoSM.setSourceFailureThreshold(7, 0.20);     // Paranoa Etapa1
+        wss_tortoSM.setSourceFailureThreshold(8, 0.20);     // Paranoa Etapa2
+        wss_tortoSM.setSourceFailureThreshold(9, 0.20);     // Paranoa Etapa3
+
         vector<Utility *> utilities; //vetor que contém a única companhia CAESB
         utilities.push_back(&caesb);
 
@@ -893,8 +913,13 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // But IDs are still [0]=Descoberto, [1]=TortoSM, so constructor assigns them backwards
     vector<double> transfer_rofs = {caesb_tortoSM_transfer_trigger,      // [0] assigned to system_id 0 (Descoberto)
                                     caesb_descoberto_transfer_trigger};  // [1] assigned to system_id 1 (TortoSM)
-    vector<double> transfer_capacities = {0.5e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
-                                          0.7e-6 * 3600 * 24 * 7};        // Capacity Descoberto→TortoSM
+        //This pipline capacity for transfers was updated on May 2025 to 1.2 m3/sec                             
+//     vector<double> transfer_capacities = {0.5e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
+//                                           0.7e-6 * 3600 * 24 * 7};        // Capacity Descoberto→TortoSM
+
+    vector<double> transfer_capacities = {1.2e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
+                                          0};        // Capacity Descoberto→TortoSM
+
     vector<int> tranfers_wss_ids = {0, 1};  // system_id 0=Descoberto, system_id 1=TortoSM
     TransfersBilateral transfers(0, transfer_capacities, 0.1, 1.1,
                                  transfer_rofs, tranfers_wss_ids);
