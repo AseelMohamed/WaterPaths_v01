@@ -936,14 +936,16 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
 }
 
 /**
- * Calculate the average number of failure weeks across all realizations at WSS level.
- * A failure week is any week where storage/capacity < STORAGE_CAPACITY_RATIO_FAIL.
- * This measures the severity/duration of failures rather than just whether a year failed.
- * The result is the maximum average failure weeks across all WSS (worst-case WSS).
+ * Calculate failure severity at WSS level using a worst-case approach similar to WCC.
+ * For each WSS and each realization:
+ *   - Count failure weeks per year
+ *   - Take the worst (maximum) year as the realization's severity
+ * Then take the 95th percentile across realizations for each WSS.
+ * The result is the maximum 95th-percentile severity across all WSS (worst-case WSS).
  *
  * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
  * @param realizations Optional vector of realization indices to include
- * @return Maximum average failure weeks across all WSS
+ * @return Maximum 95th-percentile worst-year failure weeks across all WSS
  */
 double ObjectivesCalculator::calculateFailureSeverityObjective_WSS(
         const vector<vector<WSSDataCollector *>>& wss_data,
@@ -962,7 +964,7 @@ double ObjectivesCalculator::calculateFailureSeverityObjective_WSS(
     }
     
     if (realizations.empty()) {
-        throw std::runtime_error("ERROR: realizations vector is empty in calculateFailureDurationObjective_WSS");
+        throw std::runtime_error("ERROR: realizations vector is empty in calculateFailureSeverityObjective_WSS");
     }
     
     // Check if first realization data exists
@@ -974,10 +976,11 @@ double ObjectivesCalculator::calculateFailureSeverityObjective_WSS(
     }
     
     unsigned long n_weeks = wss_data[0][realizations[0]]->getCombined_storage().size();
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
     
-    vector<double> wss_avg_failure_weeks; // Average failure weeks per WSS
+    vector<double> wss_severity_95th; // 95th percentile severity per WSS
     
-    // Calculate average failure weeks for EACH WSS independently
+    // Calculate severity for EACH WSS independently
     for (const auto& wss_realization_data : wss_data) {
         // Check if this WSS has any storage capacity > 0
         bool has_storage_data = false;
@@ -1006,43 +1009,62 @@ double ObjectivesCalculator::calculateFailureSeverityObjective_WSS(
             continue;
         }
         
-        double total_failure_weeks = 0.0;
+        vector<double> realization_worst_year_failures; // Worst-year failure weeks per realization
         
-        // Count failure weeks for this WSS across all realizations
-        // Uses pre-computed per-source failure flags from WSSDataCollector
+        // For each realization, find the year with the most failure weeks
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
                 const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
                 
                 if (failure_flag.empty()) {
+                    realization_worst_year_failures.push_back(0.0);
                     continue;
                 }
                 
-                unsigned long realization_n_weeks = std::min(
-                    (unsigned long)failure_flag.size(), n_weeks);
+                vector<double> year_failure_weeks(n_years, 0.0);
                 
-                for (unsigned long w = 0; w < realization_n_weeks; ++w) {
-                    if (failure_flag[w] == 1) {
-                        total_failure_weeks += 1.0;
+                // Count failure weeks per year
+                for (unsigned long y = 0; y < n_years; ++y) {
+                    for (int w = (int) round(y * WEEKS_IN_YEAR);
+                         w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
+                        if (w < (int)failure_flag.size() && failure_flag[w] == 1) {
+                            year_failure_weeks[y] += 1.0;
+                        }
                     }
                 }
+                
+                // Store the worst (maximum) year's failure weeks for this realization
+                double worst_year = *max_element(year_failure_weeks.begin(),
+                                                 year_failure_weeks.end());
+                realization_worst_year_failures.push_back(worst_year);
             }
         }
         
-        double avg_failure_weeks = total_failure_weeks / n_realizations;
-        wss_avg_failure_weeks.push_back(avg_failure_weeks);
+        // Sort and take 95th percentile across realizations for this WSS
+        if (!realization_worst_year_failures.empty()) {
+            sort(realization_worst_year_failures.begin(),
+                 realization_worst_year_failures.end());
+            
+            unsigned long percentile_index = (unsigned long) floor(
+                    WORSE_CASE_COST_PERCENTILE * realization_worst_year_failures.size());
+            if (percentile_index >= realization_worst_year_failures.size()) {
+                percentile_index = realization_worst_year_failures.size() - 1;
+            }
+            double severity_95th = realization_worst_year_failures.at(percentile_index);
+            wss_severity_95th.push_back(severity_95th);
+        }
     }
     
-    if (wss_avg_failure_weeks.empty()) {
+    if (wss_severity_95th.empty()) {
         return 0.0;
     }
     
-    // Return the worst (maximum) average failure weeks across all WSS
-    double obj_value = *max_element(wss_avg_failure_weeks.begin(),
-                                    wss_avg_failure_weeks.end());
+    // Return the worst (maximum) 95th-percentile severity across all WSS
+    double obj_value = *max_element(wss_severity_95th.begin(),
+                                    wss_severity_95th.end());
     
     if (std::isinf(obj_value)) {
-        string error_inf = "Infinite failure duration (WSS-level).";
+        string error_inf = "Infinite failure severity (WSS-level).";
         throw logic_error(error_inf.c_str());
     }
     
@@ -1051,9 +1073,10 @@ double ObjectivesCalculator::calculateFailureSeverityObjective_WSS(
 
 /**
  * Configurable failure severity calculation with choice of aggregation method.
+ * Uses WCC-like approach: worst year per realization, 95th percentile across realizations per WSS.
  * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
  * @param realizations Vector of realization indices to include
- * @param aggregation_method 0=MAX (worst case), 1=AVERAGE
+ * @param aggregation_method 0=MAX (worst case), 1=AVERAGE across WSS
  * @return Failure severity based on chosen aggregation method
  */
 double ObjectivesCalculator::calculateFailureSeverityObjective_WSS_Configurable(
@@ -1085,8 +1108,9 @@ double ObjectivesCalculator::calculateFailureSeverityObjective_WSS_Configurable(
     }
 
     unsigned long n_weeks = wss_data[0][realizations[0]]->getCombined_storage().size();
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
 
-    vector<double> wss_avg_failure_weeks;
+    vector<double> wss_severity_95th; // 95th percentile severity per WSS
 
     for (const auto& wss_realization_data : wss_data) {
         bool has_storage_data = false;
@@ -1114,44 +1138,64 @@ double ObjectivesCalculator::calculateFailureSeverityObjective_WSS_Configurable(
             continue;
         }
 
-        double total_failure_weeks = 0.0;
+        vector<double> realization_worst_year_failures; // Worst-year failure weeks per realization
 
-        // Uses pre-computed per-source failure flags from WSSDataCollector
+        // For each realization, find the year with the most failure weeks
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
                 const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
 
                 if (failure_flag.empty()) {
+                    realization_worst_year_failures.push_back(0.0);
                     continue;
                 }
 
-                unsigned long realization_n_weeks = std::min(
-                    (unsigned long)failure_flag.size(), n_weeks);
+                vector<double> year_failure_weeks(n_years, 0.0);
 
-                for (unsigned long w = 0; w < realization_n_weeks; ++w) {
-                    if (failure_flag[w] == 1) {
-                        total_failure_weeks += 1.0;
+                // Count failure weeks per year
+                for (unsigned long y = 0; y < n_years; ++y) {
+                    for (int w = (int) round(y * WEEKS_IN_YEAR);
+                         w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
+                        if (w < (int)failure_flag.size() && failure_flag[w] == 1) {
+                            year_failure_weeks[y] += 1.0;
+                        }
                     }
                 }
+
+                // Store the worst (maximum) year's failure weeks for this realization
+                double worst_year = *max_element(year_failure_weeks.begin(),
+                                                 year_failure_weeks.end());
+                realization_worst_year_failures.push_back(worst_year);
             }
         }
 
-        double avg_failure_weeks = total_failure_weeks / n_realizations;
-        wss_avg_failure_weeks.push_back(avg_failure_weeks);
+        // Sort and take 95th percentile across realizations for this WSS
+        if (!realization_worst_year_failures.empty()) {
+            sort(realization_worst_year_failures.begin(),
+                 realization_worst_year_failures.end());
+
+            unsigned long percentile_index = (unsigned long) floor(
+                    WORSE_CASE_COST_PERCENTILE * realization_worst_year_failures.size());
+            if (percentile_index >= realization_worst_year_failures.size()) {
+                percentile_index = realization_worst_year_failures.size() - 1;
+            }
+            double severity_95th = realization_worst_year_failures.at(percentile_index);
+            wss_severity_95th.push_back(severity_95th);
+        }
     }
 
-    if (wss_avg_failure_weeks.empty()) {
+    if (wss_severity_95th.empty()) {
         return 0.0;
     }
 
     double obj_value;
 
-    if (aggregation_method == 1) { // AVERAGE
-        obj_value = accumulate(wss_avg_failure_weeks.begin(),
-                               wss_avg_failure_weeks.end(), 0.0) / wss_avg_failure_weeks.size();
-    } else { // MAX (worst case) - default
-        obj_value = *max_element(wss_avg_failure_weeks.begin(),
-                                 wss_avg_failure_weeks.end());
+    if (aggregation_method == 1) { // AVERAGE across WSS
+        obj_value = accumulate(wss_severity_95th.begin(),
+                               wss_severity_95th.end(), 0.0) / wss_severity_95th.size();
+    } else { // MAX (worst case) across WSS - default
+        obj_value = *max_element(wss_severity_95th.begin(),
+                                 wss_severity_95th.end());
     }
 
     if (std::isinf(obj_value)) {

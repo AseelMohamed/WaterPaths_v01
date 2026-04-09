@@ -1083,8 +1083,7 @@ void MasterDataCollector::printWeeklyReliabilityByWSSCsv(const string &file_name
         has_data = false;
         if (wss_data == nullptr || realizations_ran.empty()) return 0.0;
 
-        double total_failure_weeks = 0.0;
-        const int n_realizations = (int) realizations_ran.size();
+        vector<double> realization_failure_weeks; // failure weeks per realization for this year
         int year_start = (int) round(y * WEEKS_IN_YEAR);
         int year_end = (int) round((y + 1) * WEEKS_IN_YEAR);
 
@@ -1098,6 +1097,7 @@ void MasterDataCollector::printWeeklyReliabilityByWSSCsv(const string &file_name
                 continue;
             }
 
+            double realization_count = 0.0;
             for (int w = year_start; w < year_end; ++w) {
                 if (w >= (int) failure_flag.size()) {
                     continue;
@@ -1105,16 +1105,24 @@ void MasterDataCollector::printWeeklyReliabilityByWSSCsv(const string &file_name
 
                 has_data = true;
                 if (failure_flag[w] == 1) {
-                    total_failure_weeks += 1.0;
+                    realization_count += 1.0;
                 }
             }
+            realization_failure_weeks.push_back(realization_count);
         }
 
-        if (!has_data || n_realizations == 0) {
+        if (!has_data || realization_failure_weeks.empty()) {
             return 0.0;
         }
 
-        return total_failure_weeks / n_realizations;
+        // Sort and take 95th percentile (WCC-like approach)
+        sort(realization_failure_weeks.begin(), realization_failure_weeks.end());
+        unsigned long percentile_index = (unsigned long) floor(
+                WORSE_CASE_COST_PERCENTILE * realization_failure_weeks.size());
+        if (percentile_index >= realization_failure_weeks.size()) {
+            percentile_index = realization_failure_weeks.size() - 1;
+        }
+        return realization_failure_weeks.at(percentile_index);
     };
 
     unsigned long n_weeks = std::max(get_n_weeks(wss0), get_n_weeks(wss1));
