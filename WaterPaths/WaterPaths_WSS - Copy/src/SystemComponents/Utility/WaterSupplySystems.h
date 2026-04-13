@@ -97,6 +97,9 @@ public:
     // Infrastructure decision-making (WSS-level triggers based on individual ROF)
     int infrastructureConstructionHandler(double long_term_rof, int week);
     
+    // Force infrastructure construction when another WSS triggers shared infrastructure
+    void forceInfrastructureConstruction(int week, const vector<int>& new_infra_triggered);
+
     // Infrastructure management accessors
     const vector<int>& getRof_infra_construction_order() const;
     

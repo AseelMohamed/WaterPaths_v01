@@ -987,6 +987,50 @@ int WaterSupplySystems::infrastructureConstructionHandler(double long_term_rof, 
 }
 
 /**
+ * Force infrastructure construction when another WSS triggers shared
+ * infrastructure (e.g. Paranoá expansions shared by both WSS).
+ * Delegates to the WSS's own InfrastructureManager so that treatment
+ * capacity is added to this WSS's WTP mapping when construction completes.
+ */
+void WaterSupplySystems::forceInfrastructureConstruction(
+        int week, const vector<int>& new_infra_triggered) {
+    infrastructure_construction_manager.forceInfrastructureConstruction(
+            week, new_infra_triggered);
+
+    // Issue bonds for any newly forced construction (mirrors Utility logic)
+    if (used_for_realization && owner) {
+        const auto& under_construction =
+                infrastructure_construction_manager.getUnder_construction();
+        for (int ws : new_infra_triggered) {
+            if (ws >= 0 &&
+                ws < (int) under_construction.size() &&
+                under_construction.at((unsigned long) ws)) {
+                try {
+                    WaterSource* target = nullptr;
+                    for (auto* source : water_sources) {
+                        if (source && source->id == ws) {
+                            target = source;
+                            break;
+                        }
+                    }
+                    if (target) {
+                        Bond& bond = target->getBond(system_id);
+                        if (!bond.isIssued()) {
+                            owner->issueBond(ws, week, this,
+                                             infra_discount_rate,
+                                             bond_term_multiplier,
+                                             bond_interest_rate_multiplier);
+                        }
+                    }
+                } catch (...) {
+                    // Bond may not exist for this WSS — OK to skip
+                }
+            }
+        }
+    }
+}
+
+/**
  * Get the ROF-based infrastructure construction order for this WSS.
  * Used by ContinuityModel to coordinate shared infrastructure decisions.
  * 

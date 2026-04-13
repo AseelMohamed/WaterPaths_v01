@@ -94,10 +94,18 @@ void ContinuityModelRealization::setLongTermROFs(const vector<double> &risks_of_
     // If infrastructure was built, force wss to build their share of
     // that infrastructure option (which will only happen it the listed
     // option is in the list of sources to be built for other wss.
-    if (!new_infra_triggered.empty())
+    if (!new_infra_triggered.empty()) {
+        // Force construction on each WSS directly so cross-WSS shared
+        // infrastructure (e.g. Paranoá expansions) propagates treatment
+        // capacity to all WSS that list the source in their infra order.
+        for (auto& w : continuity_wss) {
+            w->forceInfrastructureConstruction(week, new_infra_triggered);
+        }
+        // Also force on owner utilities for backward compatibility.
         for (auto& w : continuity_wss) {
             w->getOwner()->forceInfrastructureConstruction(week, new_infra_triggered);
         }
+    }
 }
 
 void ContinuityModelRealization::applyDroughtMitigationPolicies(int week) {

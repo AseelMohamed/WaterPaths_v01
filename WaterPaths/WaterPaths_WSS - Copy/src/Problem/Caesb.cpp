@@ -56,6 +56,8 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 15, 0.0, 1.0); //Ordem de "construção" da expansão do Descoberto (ID 10: + 25% storage)
     BORG_Problem_set_bounds(problem, 16, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - descoberto
     BORG_Problem_set_bounds(problem, 17, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - tortoSM
+    BORG_Problem_set_bounds(problem, 18, 0.0, 1.0); //Fração de alocação do Lago Paranoá para o WSS Descoberto
+    BORG_Problem_set_bounds(problem, 19, 0.0, 1.0); //Fração de alocação do Lago Paranoá para o WSS TortoSM
 
     // Set epsilons for objectives //(problem, n° de identificação da função objetivo, valor do epsilon). O valor do epsilon indica a precisão das funções objetivo.
     BORG_Problem_set_epsilon(problem, 0, 0.001);
@@ -116,17 +118,34 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double descoberto_expansao_ranking = vars[15]; // ID 10: Expansão do Reservatório do Descoberto (+25% storage)
     double caesb_descoberto_inf_buffer = vars[16];
     double caesb_tortoSM_inf_buffer = vars[17];
+    double caesb_descoberto_paranoa_alloc = vars[18]; 
+    double caesb_tortoSM_paranoa_alloc = vars[19]; 
+
+    // Normalize Paranoá allocations in case they exceed 1
+    double sum_paranoa_allocations = caesb_descoberto_paranoa_alloc + caesb_tortoSM_paranoa_alloc;
+    if (sum_paranoa_allocations == 0.)
+        throw invalid_argument("Paranoa allocations cannot be all zero.");
+    if (sum_paranoa_allocations > 1) {
+        caesb_descoberto_paranoa_alloc /= sum_paranoa_allocations;
+        caesb_tortoSM_paranoa_alloc /= sum_paranoa_allocations;
+    }
 
     //ANALISAR POSSIBILIDADE DE INCLUIR O RIO DO SAL COMO OPÇÃO DE AMPLIAÇÃO DA INFRAESTRUTURA DE OFERTA
 
     //IDENTIFICADOR DE CADA INFRAESTRUTURA FUTURA. Obs: as infraestruturas já existentes devem ser numeradas antes, começando do 0.
 
-    vector<infraRank> caesb_descoberto_infra_order_raw = { // WSS Descoberto: reservatórios Descoberto e Corumbá IV
-            // ID 5: ETA Corumbá Etapa 2 (+1.4 m³/s, total 2.8 m³/s)
-            // ID 6: ETA Corumbá Etapa 3 (+1.2 m³/s, total 4.0 m³/s)
+    vector<infraRank> caesb_descoberto_infra_order_raw = { // WSS Descoberto: reservatórios Descoberto, Corumbá IV and Paranoá
+            // ID 5: ETA Corumbá Etapa 1 (+1.4 m³/s, total 2.8 m³/s)
+            // ID 6: ETA Corumbá Etapa 2 (+1.2 m³/s, total 4.0 m³/s)
+            // ID 7: ETA Paranoá Sul Etapa 1 (+0.7 m³/s) - shared with WSS1
+            // ID 8: ETA Paranoá Sul Etapa 2 (+0.7 m³/s) - shared with WSS1
+            // ID 9: ETAs Paranoá Sul e Norte Etapa 3 (+0.7 m³/s) - shared with WSS1
             // ID 10: Expansão do Descoberto (+25% storage)
             infraRank(5, ETA_corumba_upgrade1_ranking),
             infraRank(6, ETA_corumba_upgrade2_ranking),
+            infraRank(7, ETA_paranoaSul_upgrade1_ranking),
+            infraRank(8, ETA_paranoaSul_upgrade2_ranking),
+            infraRank(9, ETA_paranoaSul_upgrade3_ranking),
             infraRank(10, descoberto_expansao_ranking)
     };
 
@@ -482,18 +501,22 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
 //460.490
     // Lago Paranoá parameters
-    double lp_supply_capacity = 36.966 *
+    // Total supply = half of 36.966 = 18.483 hm³ (4% of total reservoir volume)
+    double lp_supply_capacity = 18.483 *
                                 table_gen_storage_multiplier; //volume destinado a abastecimento em hm³
-    double lp_wq_capacity = 423.524 *
+    double lp_wq_capacity = 442.007 *
                             table_gen_storage_multiplier; //volume destinado a qualidade da água do lago em hm³
     double lp_storage_capacity = lp_wq_capacity + lp_supply_capacity;
-    vector<int> lp_allocations_ids = {1,  // TortoSM system id (system that uses Paranoa)
-                                      WATER_QUALITY_ALLOCATION}; //1 é a id da companhia do TortoSM
+    vector<int> lp_allocations_ids = {0, 1,  // WSS 0 (Descoberto) and WSS 1 (TortoSM) share Paranoá
+                                      WATER_QUALITY_ALLOCATION};
     vector<double> lp_allocation_fractions = {
-            lp_supply_capacity / lp_storage_capacity,
+            caesb_descoberto_paranoa_alloc * lp_supply_capacity / lp_storage_capacity,
+            caesb_tortoSM_paranoa_alloc * lp_supply_capacity / lp_storage_capacity,
             lp_wq_capacity / lp_storage_capacity};
+    double sum_paranoa_for_treatment = caesb_descoberto_paranoa_alloc + caesb_tortoSM_paranoa_alloc;
     vector<double> lp_treatment_allocation_fractions = {
-            1.0}; //The TortoSM system treats water from Lago Paranoá
+            caesb_descoberto_paranoa_alloc / sum_paranoa_for_treatment,
+            caesb_tortoSM_paranoa_alloc / sum_paranoa_for_treatment};
 
     AllocatedReservoir paranoa("Lago Paranoa", 3,
                                bacia_paranoa,
@@ -579,16 +602,20 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     //Sistema Paranoá - Construção da ETA Paranoá Sul (0.7 m³/s), sua primeira ampliação (upgrade 2, com + 0.7 m³/s), segunda ampliação (upgrade 3, com + 0.35 m³/s) e
     // ampliação da ETA Lago Norte (upgrade 3, com + 0.35 m³/s))
 
-    vector<double> capacities_ETA_paranoaSul_upgrade_1 = {0,
-                                                          0.7e-6 * 3600 * 24 *
-                                                          7}; //capacidade de produção da ETA paranoá Sul na sua etapa 1 = 0.7 m³/s
-    vector<double> capacities_ETA_paranoaSul_upgrade_2 = {0,
-                                                          0.7e-6 * 3600 * 24 *
-                                                          7}; //aumento da capacidade de produção da ETA Paranoá Sul na sua etapa 2 = 0.7 m³/s
-    vector<double> capacities_ETAs_paranoa_upgrade_3 = {0,
-                                                        0.7e-6 * 3600 * 24 *
-                                                        7}; // aumento da capacidade de produção da ETA paranoá Sul na sua etapa 3 = 0.350 m³/s
-    // + ampliação da ETA paranoá Norte em 0.350 m³/s
+    // Treatment capacity for Paranoa expansions split based on allocation fractions.
+    // Each WSS gets treatment proportional to its share of Paranoa supply allocation.
+    double paranoa_etapa1_capacity = 0.7e-6 * 3600 * 24 * 7;
+    double paranoa_etapa2_capacity = 0.7e-6 * 3600 * 24 * 7;
+    double paranoa_etapa3_capacity = 0.7e-6 * 3600 * 24 * 7;
+    vector<double> capacities_ETA_paranoaSul_upgrade_1 = {
+            caesb_descoberto_paranoa_alloc / sum_paranoa_for_treatment * paranoa_etapa1_capacity,
+            caesb_tortoSM_paranoa_alloc / sum_paranoa_for_treatment * paranoa_etapa1_capacity};
+    vector<double> capacities_ETA_paranoaSul_upgrade_2 = {
+            caesb_descoberto_paranoa_alloc / sum_paranoa_for_treatment * paranoa_etapa2_capacity,
+            caesb_tortoSM_paranoa_alloc / sum_paranoa_for_treatment * paranoa_etapa2_capacity};
+    vector<double> capacities_ETAs_paranoa_upgrade_3 = {
+            caesb_descoberto_paranoa_alloc / sum_paranoa_for_treatment * paranoa_etapa3_capacity,
+            caesb_tortoSM_paranoa_alloc / sum_paranoa_for_treatment * paranoa_etapa3_capacity};
 
     // Empréstimos para a implantação e ampliação da ETA Paranoá Sul e Norte (Norte: apenas upgrade 3)
 
@@ -717,14 +744,16 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     //Criação das companhias de água. A descrição de cada termo está no arquivo .doc.
 
     vector<vector<int>> water_sources_to_wtp_caesb_1 = {{0},  // WTP 0 treats Descoberto
-                                                        {2}};  // WTP 1 treats Corumba
+                                                        {2},  // WTP 1 treats Corumba
+                                                        {3}};  // WTP 2 treats Paranoa (WSS0's allocation share)
     vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7,   // WTP 0: Descoberto ETA (6.0 m³/s)
-                                             1.4e-6 * 3600 * 24 * 7};  // WTP 1: Corumba ETA (1.4 m³/s) - NOW ONLINE!
+                                             1.4e-6 * 3600 * 24 * 7,   // WTP 1: Corumba ETA (1.4 m³/s)
+                                             caesb_descoberto_paranoa_alloc / sum_paranoa_for_treatment * 0.7e-6 * 3600 * 24 * 7};  // WTP 2: Paranoa ETA (WSS0 share)
     vector<vector<int>> water_sources_to_wtp_caesb_2 = {{1, 4},
                                                         {3}};
     vector<double> wtp_capacities_caesb_2 = {
             1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7,
-            0.7e-6 * 3600 * 24 * 7};
+            caesb_tortoSM_paranoa_alloc / sum_paranoa_for_treatment * 0.7e-6 * 3600 * 24 * 7};  // Paranoa ETA (WSS1 share)
 
     // Create single CAESB utility with two water supply systems
     // First system: Descoberto (system_id=0, utility_id=0)
@@ -784,16 +813,20 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         wss_tortoSM.setAverageMonthlyIncome(4064.0);
 
         // Set initial households for per-household affordability scaling
-        wss_descoberto.setInitialHouseholds(747880); 
+        wss_descoberto.setInitialHouseholds(687805); 
         wss_tortoSM.setInitialHouseholds(288154); 
 
         // Set per-reservoir failure thresholds for reliability calculation
         // WSS 0 (Descoberto): existing reservoirs
         wss_descoberto.setSourceFailureThreshold(0, 0.20);  // Descoberto
         wss_descoberto.setSourceFailureThreshold(2, 0.20);  // Corumba
+        wss_descoberto.setSourceFailureThreshold(3, 0.20);  // Paranoa (shared)
         // WSS 0 (Descoberto): infrastructure expansions
         wss_descoberto.setSourceFailureThreshold(5, 0.20);  // Corumba Etapa1
         wss_descoberto.setSourceFailureThreshold(6, 0.20);  // Corumba Etapa2
+        wss_descoberto.setSourceFailureThreshold(7, 0.20);  // Paranoa Etapa1 (shared)
+        wss_descoberto.setSourceFailureThreshold(8, 0.20);  // Paranoa Etapa2 (shared)
+        wss_descoberto.setSourceFailureThreshold(9, 0.20);  // Paranoa Etapa3 (shared)
         // Note: Descoberto Expansion (id=10) is NOT checked independently.
         // Its capacity is added to parent Descoberto (id=0) when built, so the
         // parent's failure check already covers the expanded capacity.
@@ -811,11 +844,12 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         utilities.push_back(&caesb);
 
     // Water-source-WSS connectivity matrix: each row corresponds to a WSS
-    // WSS 0 (Descoberto): sources {0, 2, 5, 6, 10, 11}
+    // Paranoa (3) and its expansions (7,8,9) are shared by both WSS via allocation fractions.
+    // WSS 0 (Descoberto): sources {0, 2, 3, 5, 6, 7, 8, 9, 10, 11}
     // WSS 1 (TortoSM): sources {1, 3, 4, 7, 8, 9}
     vector<vector<int>> reservoir_wss_connectivity_matrix = {
-            {0, 2, 5, 6, 10, 11},  // Descoberto(0), Corumba(2), Corumba_Etapa1(5), Corumba_Etapa2(6), Descoberto_Exp(10), Dummy(11)
-            {1, 3, 4, 7, 8, 9}     // TortoSM(1), Paranoa(3), Bananal/Torto(4), Paranoa_Etapa1(7), Paranoa_Etapa2(8), Paranoa_Etapa3(9)
+            {0, 2, 3, 5, 6, 7, 8, 9, 10, 11},  // Descoberto(0), Corumba(2), Paranoa(3), Corumba_E1(5), Corumba_E2(6), Paranoa_E1(7), Paranoa_E2(8), Paranoa_E3(9), Descoberto_Exp(10), Dummy(11)
+            {1, 3, 4, 7, 8, 9}                  // TortoSM(1), Paranoa(3), Bananal/Torto(4), Paranoa_E1(7), Paranoa_E2(8), Paranoa_E3(9)
     };
 
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
@@ -916,7 +950,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 //     vector<double> transfer_capacities = {0.5e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
 //                                           0.7e-6 * 3600 * 24 * 7};        // Capacity Descoberto→TortoSM
 
-    vector<double> transfer_capacities = {1.0e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
+    vector<double> transfer_capacities = {50.0e-6 * 3600 * 24 * 7,        // Capacity TortoSM→Descoberto
                                           0};        // Capacity Descoberto→TortoSM
 
     vector<int> tranfers_wss_ids = {0, 1};  // system_id 0=Descoberto, system_id 1=TortoSM
@@ -979,7 +1013,13 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     printf("Simulation took %fs\n", realization_end - realization_start);
 
     /// Calculate objectives and store them in Borg decision variables array.
-    objectives = calculateAndPrintObjectives(false);
+    /// Skip objective calculation when exporting ROF tables, since no data
+    /// was collected and realization models have already been deleted.
+    if (import_export_rof_tables == EXPORT_ROF_TABLES) {
+        objectives = vector<double>(Constants::getNumObjectives(), 0.0);
+    } else {
+        objectives = calculateAndPrintObjectives(false);
+    }
 
 // With WSS architecture, there is only ONE utility (CAESB) with 2 WSS.
 // The objectives vector has variable elements depending on experiment mode:
@@ -1025,7 +1065,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 int Caesb::simulationExceptionHander(const std::exception &e,
                                      Simulation *s, // :: significa "resolução de escopo"
                                      double *objs, const double *vars) {
-    int num_dec_var = 18; //número de variáveis desse estudo de caso
+    int num_dec_var = 20; //número de variáveis desse estudo de caso
 //        printf("Exception called during calculations. Decision variables are below:\n");
     ofstream sol;
     int world_rank;
