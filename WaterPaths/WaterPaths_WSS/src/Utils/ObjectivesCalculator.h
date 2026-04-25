@@ -58,6 +58,15 @@ public:
             vector<unsigned long> realizations,
             int aggregation_method); // 0=MAX, 1=AVERAGE
 
+    static double calculateFailureSeverityObjective_WSS(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            vector<unsigned long> realizations = vector<unsigned long>(0));
+
+    static double calculateFailureSeverityObjective_WSS_Configurable(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            vector<unsigned long> realizations,
+            int aggregation_method); // 0=MAX (worst case), 1=AVERAGE
+
 };
 
 

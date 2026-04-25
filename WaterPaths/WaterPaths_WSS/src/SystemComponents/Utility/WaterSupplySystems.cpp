@@ -268,6 +268,8 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     average_monthly_income = other.average_monthly_income;
     initial_households = other.initial_households;
     wss_residential_price = other.wss_residential_price;
+    // Copy per-source failure thresholds
+    source_failure_thresholds = other.source_failure_thresholds;
     // NOTE: current_realization_id is NOT copied - it will be set correctly by setRealization() 
     // after this copy is created, avoiding race condition from shared original WSS
     // NOTE: wss_infrastructure_npc deliberately NOT copied - realization WSS should get NPC from ROF WSS via references
@@ -985,6 +987,50 @@ int WaterSupplySystems::infrastructureConstructionHandler(double long_term_rof, 
 }
 
 /**
+ * Force infrastructure construction when another WSS triggers shared
+ * infrastructure (e.g. Paranoá expansions shared by both WSS).
+ * Delegates to the WSS's own InfrastructureManager so that treatment
+ * capacity is added to this WSS's WTP mapping when construction completes.
+ */
+void WaterSupplySystems::forceInfrastructureConstruction(
+        int week, const vector<int>& new_infra_triggered) {
+    infrastructure_construction_manager.forceInfrastructureConstruction(
+            week, new_infra_triggered);
+
+    // Issue bonds for any newly forced construction (mirrors Utility logic)
+    if (used_for_realization && owner) {
+        const auto& under_construction =
+                infrastructure_construction_manager.getUnder_construction();
+        for (int ws : new_infra_triggered) {
+            if (ws >= 0 &&
+                ws < (int) under_construction.size() &&
+                under_construction.at((unsigned long) ws)) {
+                try {
+                    WaterSource* target = nullptr;
+                    for (auto* source : water_sources) {
+                        if (source && source->id == ws) {
+                            target = source;
+                            break;
+                        }
+                    }
+                    if (target) {
+                        Bond& bond = target->getBond(system_id);
+                        if (!bond.isIssued()) {
+                            owner->issueBond(ws, week, this,
+                                             infra_discount_rate,
+                                             bond_term_multiplier,
+                                             bond_interest_rate_multiplier);
+                        }
+                    }
+                } catch (...) {
+                    // Bond may not exist for this WSS — OK to skip
+                }
+            }
+        }
+    }
+}
+
+/**
  * Get the ROF-based infrastructure construction order for this WSS.
  * Used by ContinuityModel to coordinate shared infrastructure decisions.
  * 
@@ -1106,4 +1152,16 @@ void WaterSupplySystems::setInitialHouseholds(double households) {
 
 double WaterSupplySystems::getInitialHouseholds() const {
     return initial_households;
+}
+
+void WaterSupplySystems::setSourceFailureThreshold(int source_id, double threshold) {
+    source_failure_thresholds[source_id] = threshold;
+}
+
+double WaterSupplySystems::getSourceFailureThreshold(int source_id) const {
+    auto it = source_failure_thresholds.find(source_id);
+    if (it != source_failure_thresholds.end()) {
+        return it->second;
+    }
+    return STORAGE_CAPACITY_RATIO_FAIL;  // Default threshold
 }

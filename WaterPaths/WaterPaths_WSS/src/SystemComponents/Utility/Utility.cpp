@@ -736,7 +736,7 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
             int month_index = min((int) (week_of_year / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
             if (month_index >= 0 && month_index < (int)monthly_prices.size() &&
                 !monthly_prices[month_index].empty()) {
-                wss_residential_base_price = monthly_prices[month_index][0] / WEEKS_IN_MONTH;
+                wss_residential_base_price = monthly_prices[month_index][0] / WEEKS_IN_MONTH * price_rdm_multiplier;
             }
         }
 

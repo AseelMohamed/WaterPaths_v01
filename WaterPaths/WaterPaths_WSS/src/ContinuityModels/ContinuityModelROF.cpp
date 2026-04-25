@@ -450,12 +450,13 @@ void ContinuityModelROF::printROFTable(const string &folder) {
         ofstream output_file(file_name);
 
         auto num_weeks = wss_storage_to_rof_table[u].get_i();
+        auto num_cols = wss_storage_to_rof_table[u].get_j();
         for (int w = 0; w < num_weeks; ++w) {
             auto data = wss_storage_to_rof_table[u].getPointerToElement(w, 0);
             std::ostringstream week_table;
             week_table << std::fixed;
             week_table << std::setprecision(0);
-            for (int t = 0; t < NO_OF_INSURANCE_STORAGE_TIERS; ++t) {
+            for (int t = 0; t < num_cols; ++t) {
                 week_table << to_string(data[t]) + ",";
             }
 

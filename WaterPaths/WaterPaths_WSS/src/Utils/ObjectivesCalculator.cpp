@@ -469,13 +469,13 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         vector<int> year_reliabilities(n_years, 0);
         
         // Check failures for this WSS across all realizations
+        // Uses pre-computed per-source failure flags from WSSDataCollector
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
-                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
                 
                 // Skip if empty
-                if (storage_vec.empty() || capacity_vec.empty()) {
+                if (failure_flag.empty()) {
                     continue;
                 }
                 
@@ -483,19 +483,15 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
                     for (int w = (int) round(y * WEEKS_IN_YEAR);
                          w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
                         
-                        // Bounds check before accessing vectors
-                        if (w >= (int)storage_vec.size() || w >= (int)capacity_vec.size()) {
+                        if (w >= (int)failure_flag.size()) {
                             char error[512];
-                            sprintf(error, "ERROR: Week %d out of bounds for WSS data (storage size=%zu, capacity size=%zu) "
+                            sprintf(error, "ERROR: Week %d out of bounds for WSS failure flag data (size=%zu) "
                                     "in realization %lu, year %lu. Expected %lu weeks.",
-                                    w, storage_vec.size(), capacity_vec.size(), r, y, n_weeks);
+                                    w, failure_flag.size(), r, y, n_weeks);
                             throw std::out_of_range(error);
                         }
                         
-                        double storage = storage_vec[w];
-                        double capacity = capacity_vec[w];
-                        
-                        if (capacity > 0 && storage / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                        if (failure_flag[w] == 1) {
                             realizations_year_reliabilities[r][y] = FAILURE;
                             break; // Year already failed, no need to check more weeks
                         }
@@ -602,6 +598,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
                 const auto& residential_prices = wss_realization_data[r]->getResidential_current_price();
                 const auto& restricted_demand = wss_realization_data[r]->getRestricted_demand();
+                const auto& demand_offset = wss_realization_data[r]->getDemand_offset();
                 double average_monthly_income = wss_realization_data[r]->getAverage_monthly_income();
                 double initial_households = wss_realization_data[r]->getInitial_households();
                 double weekly_average_income = (average_monthly_income > 0.0)
@@ -616,7 +613,8 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS(
 
                     for (size_t w = 0; w < n_weeks; ++w) {
                         double weekly_price = residential_prices[w];
-                        double weekly_demand = restricted_demand[w];
+                        // Add demand_offset back: transfers are paid by the utility, not residents
+                        double weekly_demand = restricted_demand[w] + (w < demand_offset.size() ? demand_offset[w] : 0.0);
                         if (weekly_price > 0.0 && weekly_demand > 0.0) {
                             double weekly_cost = (weekly_price * weekly_demand) / initial_households;
                             double affordability = weekly_cost / weekly_average_income;
@@ -754,12 +752,12 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
         vector<int> year_reliabilities(n_years, 0);
         
         // Check failures for this WSS across all realizations
+        // Uses pre-computed per-source failure flags from WSSDataCollector
         for (const unsigned long &r : realizations) {
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
-                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
-                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
                 
-                if (storage_vec.empty() || capacity_vec.empty()) {
+                if (failure_flag.empty()) {
                     continue;
                 }
                 
@@ -767,16 +765,13 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
                     for (int w = (int) round(y * WEEKS_IN_YEAR);
                          w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
                         
-                        if (w >= (int)storage_vec.size() || w >= (int)capacity_vec.size()) {
+                        if (w >= (int)failure_flag.size()) {
                             char error[512];
-                            sprintf(error, "ERROR: Week %d out of bounds for WSS data", w);
+                            sprintf(error, "ERROR: Week %d out of bounds for WSS failure flag data", w);
                             throw std::out_of_range(error);
                         }
                         
-                        double storage = storage_vec[w];
-                        double capacity = capacity_vec[w];
-                        
-                        if (capacity > 0 && storage / capacity < STORAGE_CAPACITY_RATIO_FAIL) {
+                        if (failure_flag[w] == 1) {
                             realizations_year_reliabilities[r][y] = FAILURE;
                             break;
                         }
@@ -872,6 +867,7 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
                 const auto& residential_prices = wss_realization_data[r]->getResidential_current_price();
                 const auto& restricted_demand = wss_realization_data[r]->getRestricted_demand();
+                const auto& demand_offset = wss_realization_data[r]->getDemand_offset();
                 double average_monthly_income = wss_realization_data[r]->getAverage_monthly_income();
                 double initial_households = wss_realization_data[r]->getInitial_households();
                 double weekly_average_income = (average_monthly_income > 0.0)
@@ -886,7 +882,8 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
 
                     for (size_t w = 0; w < n_weeks; ++w) {
                         double weekly_price = residential_prices[w];
-                        double weekly_demand = restricted_demand[w];
+                        // Add demand_offset back: transfers are paid by the utility, not residents
+                        double weekly_demand = restricted_demand[w] + (w < demand_offset.size() ? demand_offset[w] : 0.0);
                         if (weekly_price > 0.0 && weekly_demand > 0.0) {
                             double weekly_cost = (weekly_price * weekly_demand) / initial_households;
                             double affordability = weekly_cost / weekly_average_income;
@@ -940,4 +937,275 @@ double ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurab
     }
     
     return result_affordability;
+}
+
+/**
+ * Calculate failure severity at WSS level using a worst-case approach similar to WCC.
+ * For each WSS and each realization:
+ *   - Count failure weeks per year
+ *   - Take the worst (maximum) year as the realization's severity
+ * Then take the 95th percentile across realizations for each WSS.
+ * The result is the maximum 95th-percentile severity across all WSS (worst-case WSS).
+ *
+ * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
+ * @param realizations Optional vector of realization indices to include
+ * @return Maximum 95th-percentile worst-year failure weeks across all WSS
+ */
+double ObjectivesCalculator::calculateFailureSeverityObjective_WSS(
+        const vector<vector<WSSDataCollector *>>& wss_data,
+        vector<unsigned long> realizations) {
+    
+    if (wss_data.empty()) {
+        throw std::runtime_error("ERROR: wss_data is empty in calculateFailureSeverityObjective_WSS");
+    }
+    
+    unsigned long n_realizations = wss_data[0].size();
+    if (realizations.empty()) {
+        realizations = vector<unsigned long>(n_realizations);
+        iota(realizations.begin(), realizations.end(), 0);
+    } else {
+        n_realizations = realizations.size();
+    }
+    
+    if (realizations.empty()) {
+        throw std::runtime_error("ERROR: realizations vector is empty in calculateFailureSeverityObjective_WSS");
+    }
+    
+    // Check if first realization data exists
+    if (realizations[0] >= wss_data[0].size() || wss_data[0][realizations[0]] == nullptr) {
+        char error[512];
+        sprintf(error, "ERROR: First realization %lu is invalid or nullptr in wss_data[0] (size=%zu)",
+                realizations[0], wss_data[0].size());
+        throw std::runtime_error(error);
+    }
+    
+    unsigned long n_weeks = wss_data[0][realizations[0]]->getCombined_storage().size();
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
+    
+    vector<double> wss_severity_95th; // 95th percentile severity per WSS
+    
+    // Calculate severity for EACH WSS independently
+    for (const auto& wss_realization_data : wss_data) {
+        // Check if this WSS has any storage capacity > 0
+        bool has_storage_data = false;
+        bool has_any_data = false;
+        
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
+                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                
+                if (!storage_vec.empty() && !capacity_vec.empty()) {
+                    has_any_data = true;
+                    for (const auto& cap : capacity_vec) {
+                        if (cap > 0.0) {
+                            has_storage_data = true;
+                            break;
+                        }
+                    }
+                    if (has_storage_data) break;
+                }
+            }
+        }
+        
+        // Skip WSS with no data or no storage capacity (flow-through systems)
+        if (!has_any_data || !has_storage_data) {
+            continue;
+        }
+        
+        vector<double> realization_worst_year_failures; // Worst-year failure weeks per realization
+        
+        // For each realization, find the year with the most failure weeks
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
+                
+                if (failure_flag.empty()) {
+                    realization_worst_year_failures.push_back(0.0);
+                    continue;
+                }
+                
+                vector<double> year_failure_weeks(n_years, 0.0);
+                
+                // Count failure weeks per year
+                for (unsigned long y = 0; y < n_years; ++y) {
+                    for (int w = (int) round(y * WEEKS_IN_YEAR);
+                         w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
+                        if (w < (int)failure_flag.size() && failure_flag[w] == 1) {
+                            year_failure_weeks[y] += 1.0;
+                        }
+                    }
+                }
+                
+                // Store the worst (maximum) year's failure weeks for this realization
+                double worst_year = *max_element(year_failure_weeks.begin(),
+                                                 year_failure_weeks.end());
+                realization_worst_year_failures.push_back(worst_year);
+            }
+        }
+        
+        // Sort and take 95th percentile across realizations for this WSS
+        if (!realization_worst_year_failures.empty()) {
+            sort(realization_worst_year_failures.begin(),
+                 realization_worst_year_failures.end());
+            
+            unsigned long percentile_index = (unsigned long) floor(
+                    WORSE_CASE_COST_PERCENTILE * realization_worst_year_failures.size());
+            if (percentile_index >= realization_worst_year_failures.size()) {
+                percentile_index = realization_worst_year_failures.size() - 1;
+            }
+            double severity_95th = realization_worst_year_failures.at(percentile_index);
+            wss_severity_95th.push_back(severity_95th);
+        }
+    }
+    
+    if (wss_severity_95th.empty()) {
+        return 0.0;
+    }
+    
+    // Return the worst (maximum) 95th-percentile severity across all WSS
+    double obj_value = *max_element(wss_severity_95th.begin(),
+                                    wss_severity_95th.end());
+    
+    if (std::isinf(obj_value)) {
+        string error_inf = "Infinite failure severity (WSS-level).";
+        throw logic_error(error_inf.c_str());
+    }
+    
+    return obj_value;
+}
+
+/**
+ * Configurable failure severity calculation with choice of aggregation method.
+ * Uses WCC-like approach: worst year per realization, 95th percentile across realizations per WSS.
+ * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
+ * @param realizations Vector of realization indices to include
+ * @param aggregation_method 0=MAX (worst case), 1=AVERAGE across WSS
+ * @return Failure severity based on chosen aggregation method
+ */
+double ObjectivesCalculator::calculateFailureSeverityObjective_WSS_Configurable(
+        const vector<vector<WSSDataCollector *>>& wss_data,
+        vector<unsigned long> realizations,
+        int aggregation_method) {
+
+    if (wss_data.empty()) {
+        throw std::runtime_error("ERROR: wss_data is empty in calculateFailureSeverityObjective_WSS_Configurable");
+    }
+
+    unsigned long n_realizations = wss_data[0].size();
+    if (realizations.empty()) {
+        realizations = vector<unsigned long>(n_realizations);
+        iota(realizations.begin(), realizations.end(), 0);
+    } else {
+        n_realizations = realizations.size();
+    }
+
+    if (realizations.empty()) {
+        throw std::runtime_error("ERROR: realizations vector is empty in calculateFailureSeverityObjective_WSS_Configurable");
+    }
+
+    if (realizations[0] >= wss_data[0].size() || wss_data[0][realizations[0]] == nullptr) {
+        char error[512];
+        sprintf(error, "ERROR: First realization %lu is invalid or nullptr in wss_data[0] (size=%zu)",
+                realizations[0], wss_data[0].size());
+        throw std::runtime_error(error);
+    }
+
+    unsigned long n_weeks = wss_data[0][realizations[0]]->getCombined_storage().size();
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
+
+    vector<double> wss_severity_95th; // 95th percentile severity per WSS
+
+    for (const auto& wss_realization_data : wss_data) {
+        bool has_storage_data = false;
+        bool has_any_data = false;
+
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
+                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+
+                if (!storage_vec.empty() && !capacity_vec.empty()) {
+                    has_any_data = true;
+                    for (const auto& cap : capacity_vec) {
+                        if (cap > 0.0) {
+                            has_storage_data = true;
+                            break;
+                        }
+                    }
+                    if (has_storage_data) break;
+                }
+            }
+        }
+
+        if (!has_any_data || !has_storage_data) {
+            continue;
+        }
+
+        vector<double> realization_worst_year_failures; // Worst-year failure weeks per realization
+
+        // For each realization, find the year with the most failure weeks
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
+
+                if (failure_flag.empty()) {
+                    realization_worst_year_failures.push_back(0.0);
+                    continue;
+                }
+
+                vector<double> year_failure_weeks(n_years, 0.0);
+
+                // Count failure weeks per year
+                for (unsigned long y = 0; y < n_years; ++y) {
+                    for (int w = (int) round(y * WEEKS_IN_YEAR);
+                         w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
+                        if (w < (int)failure_flag.size() && failure_flag[w] == 1) {
+                            year_failure_weeks[y] += 1.0;
+                        }
+                    }
+                }
+
+                // Store the worst (maximum) year's failure weeks for this realization
+                double worst_year = *max_element(year_failure_weeks.begin(),
+                                                 year_failure_weeks.end());
+                realization_worst_year_failures.push_back(worst_year);
+            }
+        }
+
+        // Sort and take 95th percentile across realizations for this WSS
+        if (!realization_worst_year_failures.empty()) {
+            sort(realization_worst_year_failures.begin(),
+                 realization_worst_year_failures.end());
+
+            unsigned long percentile_index = (unsigned long) floor(
+                    WORSE_CASE_COST_PERCENTILE * realization_worst_year_failures.size());
+            if (percentile_index >= realization_worst_year_failures.size()) {
+                percentile_index = realization_worst_year_failures.size() - 1;
+            }
+            double severity_95th = realization_worst_year_failures.at(percentile_index);
+            wss_severity_95th.push_back(severity_95th);
+        }
+    }
+
+    if (wss_severity_95th.empty()) {
+        return 0.0;
+    }
+
+    double obj_value;
+
+    if (aggregation_method == 1) { // AVERAGE across WSS
+        obj_value = accumulate(wss_severity_95th.begin(),
+                               wss_severity_95th.end(), 0.0) / wss_severity_95th.size();
+    } else { // MAX (worst case) across WSS - default
+        obj_value = *max_element(wss_severity_95th.begin(),
+                                 wss_severity_95th.end());
+    }
+
+    if (std::isinf(obj_value)) {
+        string error_inf = "Infinite failure severity (WSS-level configurable).";
+        throw logic_error(error_inf.c_str());
+    }
+
+    return obj_value;
 }

@@ -253,13 +253,13 @@ vector<double> InsuranceStorageToROF::calculateShortTermROFTable(int week) {
         double storage_convert = wss_storage +
                                  STORAGE_CAPACITY_RATIO_FAIL * wss_base_storage_capacity[u] *
                                  (1. - m) + current_storage_table_shift[u];
-        int tier = (int) (storage_convert * NO_OF_INSURANCE_STORAGE_TIERS /
-                          wss_base_storage_capacity[u]);
+        int tier = min((int) (storage_convert * NO_OF_INSURANCE_STORAGE_TIERS /
+                          wss_base_storage_capacity[u]), NO_OF_INSURANCE_STORAGE_TIERS - 1);
         // Mean ROF between the two tiers of the ROF table where
         // current storage is located.
 //        risk_of_failure[u] = getRofFromRealizationTable(u, week, tier);
         risk_of_failure[u] = (getRofFromRealizationTable(u, week, tier) +
-                getRofFromRealizationTable(u, week, min(NO_OF_INSURANCE_STORAGE_TIERS, tier + 1))) / 2;
+                getRofFromRealizationTable(u, week, min(NO_OF_INSURANCE_STORAGE_TIERS - 1, tier + 1))) / 2;
     }
 
     return risk_of_failure;

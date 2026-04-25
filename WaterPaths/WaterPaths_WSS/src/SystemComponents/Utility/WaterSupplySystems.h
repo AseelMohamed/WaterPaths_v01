@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <map>
 #include "../WaterSources/Reservoir.h"
 #include "../../Utils/Constants.h"
 #include "../../Controls/WwtpDischargeRule.h"
@@ -96,6 +97,9 @@ public:
     // Infrastructure decision-making (WSS-level triggers based on individual ROF)
     int infrastructureConstructionHandler(double long_term_rof, int week);
     
+    // Force infrastructure construction when another WSS triggers shared infrastructure
+    void forceInfrastructureConstruction(int week, const vector<int>& new_infra_triggered);
+
     // Infrastructure management accessors
     const vector<int>& getRof_infra_construction_order() const;
     
@@ -156,6 +160,11 @@ public:
     bool isUsedForRealization() const { return used_for_realization; }
     void setUsedForRealization(bool value) { used_for_realization = value; }
     unsigned long getCurrentRealizationId() const { return current_realization_id; }
+
+    // Per-source failure thresholds for reliability calculation
+    void setSourceFailureThreshold(int source_id, double threshold);
+    double getSourceFailureThreshold(int source_id) const;
+    const std::map<int, double>& getSourceFailureThresholds() const { return source_failure_thresholds; }
 
     // Operational drought response
     void setDemand_multiplier(double demand_multiplier); //checked
@@ -232,6 +241,10 @@ private:
     double wss_residential_price = 0.0;  // Current residential first-tier weekly price
     double average_monthly_income = 0.0;  // Average monthly income for affordability calculation
     double initial_households = 0.0;  // Initial households for affordability scaling
+    
+    // Per-source failure thresholds (source_id -> threshold ratio)
+    // If a source is not in this map, it uses STORAGE_CAPACITY_RATIO_FAIL default
+    std::map<int, double> source_failure_thresholds;
     
     bool hasTreatmentCapacity() const;
 };
