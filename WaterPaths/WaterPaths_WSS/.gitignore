@@ -13,13 +13,7 @@ FDBsimulation
 cmake-build-*/
 CMakeFiles/
 
-# Runtime/generated outputs
-output/
-rof_tables/
-
-# Keep large generated artifacts out of any nested experimental folders
-**/output/
-**/rof_tables/
+# Keep binaries out of any nested experimental folders
 **/FDBsimulation
 **/*.a
 **/*.o
