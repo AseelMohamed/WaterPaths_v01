@@ -1,0 +1,22 @@
+# Build artifacts
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.exe
+
+# Project binaries
+FDBsimulation
+
+# CMake and build folders
+cmake-build-*/
+CMakeFiles/
+
+# Keep binaries out of any nested experimental folders
+**/FDBsimulation
+**/*.a
+**/*.o
+
+# Logs/reports
+valgrind.xml
