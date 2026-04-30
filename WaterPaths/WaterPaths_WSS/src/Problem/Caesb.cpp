@@ -44,8 +44,8 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 3, 0.001, 1.0); //Diferença entre um estágio de maior restrição para o estágio de menor restrição - tortoSM
     BORG_Problem_set_bounds(problem, 4, 0.001, 1.0); //Gatilho para acionar a transferência de água entre sistemas - descoberto
     BORG_Problem_set_bounds(problem, 5, 0.001, 1.0); //Gatilho para acionar a transferência de água entre sistemas - tortoSM
-    BORG_Problem_set_bounds(problem, 6, 0.0, 0.03); // Percentual da receita anual alocada para o fundo de contingência da companhia 0. O limite superior representa 10% da receita anual.
-    BORG_Problem_set_bounds(problem, 7, 0.0, 0.03); // Percentual da receita anual alocada para o fundo de contingência da companhia 1. O limite superior representa 10% da receita anual.
+    BORG_Problem_set_bounds(problem, 6, 0.0, 0.00); // Percentual da receita anual alocada para o fundo de contingência da companhia 0. O limite superior representa 10% da receita anual.
+    BORG_Problem_set_bounds(problem, 7, 0.0, 0.00); // Percentual da receita anual alocada para o fundo de contingência da companhia 1. O limite superior representa 10% da receita anual.
     BORG_Problem_set_bounds(problem, 8, 0.001, 1.0); //Gatilho para acionar construção de infraestrutura pela Caesb - descoberto
     BORG_Problem_set_bounds(problem, 9, 0.001, 1.0); //Gatilho para acionar construção de infraestrutura pela Caesb - tortoSM
     BORG_Problem_set_bounds(problem, 10, 0.0, 1.0); //Ordem de "construção" da Etapa 1 da ETA Paranoá Sul (ID 7: + 0.7 m³/s)
