@@ -26,6 +26,7 @@
 #include "../SystemComponents/Bonds/BalloonPaymentBond.h"
 #include "../DroughtMitigationInstruments/Transfers.h"
 #include "../DroughtMitigationInstruments/TransfersBilateral.h"
+#include "../DroughtMitigationInstruments/InsuranceStorageToROF.h"
 #include "../SystemComponents/WaterSources/AllocatedReservoir.h"
 
 /**
@@ -58,6 +59,9 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 17, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - tortoSM
     BORG_Problem_set_bounds(problem, 18, 0.0, 1.0); //Fração de alocação do Lago Paranoá para o WSS Descoberto
     BORG_Problem_set_bounds(problem, 19, 0.0, 1.0); //Fração de alocação do Lago Paranoá para o WSS TortoSM
+    BORG_Problem_set_bounds(problem, 20, 0.001, 1.0); //Gatilho de ROF para acionar pagamento do seguro - Descoberto
+    BORG_Problem_set_bounds(problem, 21, 0.001, 1.0); //Gatilho de ROF para acionar pagamento do seguro - TortoSM
+    BORG_Problem_set_bounds(problem, 22, 1.0, 2.0);   //Multiplicador do prêmio do seguro (1.0 = sem margem, 2.0 = 100% acima do valor esperado)
 
     // Set epsilons for objectives //(problem, n° de identificação da função objetivo, valor do epsilon). O valor do epsilon indica a precisão das funções objetivo.
     BORG_Problem_set_epsilon(problem, 0, 0.001);
@@ -101,8 +105,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double delta_tortoSM_restriction_trigger = vars[3];
     double caesb_descoberto_transfer_trigger = vars[4]; //gatilho para acionar transferência de água para o Descoberto
     double caesb_tortoSM_transfer_trigger = vars[5]; //gatilho para acionar transferência de água para o Descoberto
-    double caesb_descoberto_annual_payment = 0; //vars[6]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
-    double caesb_tortoSM_annual_payment = 0; //vars[7]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
+    double caesb_descoberto_annual_payment = vars[6]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
+    double caesb_tortoSM_annual_payment = vars[7]; // pagamento anual ao fundo de contingência. O valor é constante (igual para todo ano).
     
     double caesb_descoberto_inftrigger = vars[8]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Descoberto
     double caesb_tortoSM_inftrigger = vars[9]; //gatilho para acionar a construção de nova infraestrutura por parte da Companhia Torto/SM
@@ -120,6 +124,9 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double caesb_tortoSM_inf_buffer = vars[17];
     double caesb_descoberto_paranoa_alloc = vars[18]; 
     double caesb_tortoSM_paranoa_alloc = vars[19]; 
+    double caesb_descoberto_insurance_trigger = vars[20]; // Gatilho de ROF para acionar pagamento do seguro - Descoberto
+    double caesb_tortoSM_insurance_trigger = vars[21];    // Gatilho de ROF para acionar pagamento do seguro - TortoSM
+    double caesb_insurance_premium = vars[22];            // Multiplicador do prêmio do seguro
 
     // Normalize Paranoá allocations in case they exceed 1
     double sum_paranoa_allocations = caesb_descoberto_paranoa_alloc + caesb_tortoSM_paranoa_alloc;
@@ -958,6 +965,19 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                  transfer_rofs, tranfers_wss_ids);
     drought_mitigation_policies.push_back(&transfers);
 
+    // POLÍTICA DE SEGURO CONTRA SECA
+    vector<double> insurance_rof_triggers = {caesb_descoberto_insurance_trigger,
+                                             caesb_tortoSM_insurance_trigger};
+    vector<double> insurance_fixed_payouts = {0.1, 0.1}; 
+    vector<WaterSupplySystems *> wss_for_insurance = {&wss_descoberto, &wss_tortoSM};
+    InsuranceStorageToROF insurance(2, water_sources, g, reservoir_wss_connectivity_matrix,
+                                    wss_for_insurance, drought_mitigation_policies,
+                                    min_env_flow_controls, wss_rdm, water_sources_rdm,
+                                    policies_rdm, insurance_rof_triggers,
+                                    caesb_insurance_premium, insurance_fixed_payouts,
+                                    (unsigned long) demand_n_weeks);
+    drought_mitigation_policies.push_back(&insurance);
+
     /// Creates simulation object depending on use (or lack thereof) ROF tables
     if (import_export_rof_tables == EXPORT_ROF_TABLES) {
         s = new Simulation(water_sources,
@@ -1065,7 +1085,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 int Caesb::simulationExceptionHander(const std::exception &e,
                                      Simulation *s, // :: significa "resolução de escopo"
                                      double *objs, const double *vars) {
-    int num_dec_var = 20; //número de variáveis desse estudo de caso
+    int num_dec_var = 23; //número de variáveis desse estudo de caso
 //        printf("Exception called during calculations. Decision variables are below:\n");
     ofstream sol;
     int world_rank;
