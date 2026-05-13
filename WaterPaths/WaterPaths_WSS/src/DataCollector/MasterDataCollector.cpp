@@ -10,6 +10,7 @@
 #include <random>
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include "../DroughtMitigationInstruments/TransfersBilateral.h"
 
 #ifdef NETCDF
@@ -39,6 +40,8 @@ static const int NC_ERR = 2;
 #include "AllocatedReservoirDataCollector.h"
 #include "EmptyDataCollector.h"
 #include "TransfersBilateralDataCollector.h"
+#include "EmergencyTransferParanoaDataCollector.h"
+#include "../DroughtMitigationInstruments/EmergencyTransferParanoa.h"
 
 using namespace Constants;
 
@@ -1442,21 +1445,82 @@ void MasterDataCollector::printPathways(string file_name) {
 
     outStream << "Realization\tutility\tWSS\tweek\tinfra." << endl;
 
+    struct PathwayRow {
+        unsigned long realization;
+        int utility_id;
+        int wss_id;
+        int week;
+        int infra_id;
+        double long_term_rof;
+    };
+
+    auto is_shared_paranoa = [](int infra_id) {
+        return infra_id == 7 || infra_id == 8 || infra_id == 9;
+    };
+
+    vector<PathwayRow> output_rows;
+    map<pair<unsigned long, int>, PathwayRow> best_paranoa_by_realization;
+
     int total_pathways = 0;
     // Collect pathways from WSS collectors (which point to realization WSS where infrastructure is actually built)
-    for (auto &wss_collector_vec : wss_collectors)
+    for (auto &wss_collector_vec : wss_collectors) {
         for (int rr = 0; rr < (int) realizations_ran.size(); ++rr) {
             auto r = realizations_ran[rr];
-            if (wss_collector_vec[r]) {
-                vector<vector<int>> pathways = wss_collector_vec[r]->getPathways();
-                total_pathways += pathways.size();
-                for (const vector<int>& infra : pathways) {
-                    // Format: realization, utility_id, wss_id, week, water_source_id
-                    outStream << r << "\t" << infra[0] << "\t" << infra[1] << "\t"
-                              << infra[2] << "\t" << infra[3] << endl;
+            if (!wss_collector_vec[r]) {
+                continue;
+            }
+
+            vector<vector<int>> pathways = wss_collector_vec[r]->getPathways();
+            total_pathways += pathways.size();
+            for (const vector<int>& infra : pathways) {
+                // Format: realization, utility_id, wss_id, week, water_source_id
+                PathwayRow row = {r, infra[0], infra[1], infra[2], infra[3], 0.0};
+
+                if (is_shared_paranoa(row.infra_id)) {
+                    const auto &lt_rof = wss_collector_vec[r]->getLong_term_rof();
+                    if (row.week >= 0 && row.week < (int) lt_rof.size()) {
+                        row.long_term_rof = lt_rof[row.week];
+                    } else {
+                        row.long_term_rof = -1.0;
+                    }
+
+                    auto key = make_pair(row.realization, row.infra_id);
+                    auto it = best_paranoa_by_realization.find(key);
+                    if (it == best_paranoa_by_realization.end()) {
+                        best_paranoa_by_realization[key] = row;
+                    } else {
+                        const auto &best = it->second;
+                        bool replace = false;
+                        if (row.week < best.week) {
+                            replace = true;
+                        } else if (row.week == best.week) {
+                            if (row.long_term_rof > best.long_term_rof) {
+                                replace = true;
+                            } else if (row.long_term_rof == best.long_term_rof &&
+                                       row.wss_id < best.wss_id) {
+                                replace = true;
+                            }
+                        }
+
+                        if (replace) {
+                            it->second = row;
+                        }
+                    }
+                } else {
+                    output_rows.push_back(row);
                 }
             }
         }
+    }
+
+    for (const auto &kv : best_paranoa_by_realization) {
+        output_rows.push_back(kv.second);
+    }
+
+    for (const auto &row : output_rows) {
+        outStream << row.realization << "\t" << row.utility_id << "\t" << row.wss_id << "\t"
+                  << row.week << "\t" << row.infra_id << endl;
+    }
     outStream.close();
 }
 
@@ -1478,6 +1542,9 @@ DataCollector* MasterDataCollector::createPolicyDataCollector(DroughtMitigationP
         return new TransfersBilateralDataCollector(dynamic_cast<TransfersBilateral *> (dmp), r);
     else if (dmp->type == INSURANCE_STORAGE_ROF)
         return new EmptyDataCollector();
+    else if (dmp->type == EMERGENCY_TRANSFER_PARANOA)
+        return new EmergencyTransferParanoaDataCollector(
+                dynamic_cast<EmergencyTransferParanoa *>(dmp), r);
     else
         throw invalid_argument("Drought mitigation policy not recognized. "
                                  "Did you forget to add it to the "

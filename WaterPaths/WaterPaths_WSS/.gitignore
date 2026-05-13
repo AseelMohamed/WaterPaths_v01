@@ -20,3 +20,8 @@ CMakeFiles/
 
 # Logs/reports
 valgrind.xml
+
+# Simulation output (large generated files — not version-controlled)
+output/
+rof_tables/
+10solutions/

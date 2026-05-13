@@ -236,48 +236,47 @@ InfrastructureManager::waterTreatmentPlantConstructionHandler(
     auto wtp = dynamic_cast<SequentialJointTreatmentExpansion *>
     (water_sources->at(source_id));
 
-    /// Add treatment capacity to source
+    /// Only update WTP capacity and draw lists when this expansion actually
+    /// contributes capacity. A zero-capacity expansion (e.g. a WTP built for
+    /// cost-accounting purposes whose water reaches the WSS via a fixed transfer
+    /// pipeline rather than direct draw) must not touch the draw lists or WTP
+    /// capacity vector, and must not access water_source_to_wtp for a source that
+    /// may not be mapped (NON_INITIALIZED entry).
     double added_capacity = wtp->implementTreatmentCapacity(id);
-    try {
-//        water_sources->at(wtp->parent_reservoir_ID)
-//                ->addTreatmentCapacity(added_capacity, id);
-        utility_owned_wtp_capacities[water_source_to_wtp[wtp->parent_reservoir_ID]] += added_capacity;
-    } catch (...) {
-        throw runtime_error("Could not add treatment capacity to reservoir.");
-    }
+    if (added_capacity > 0.0) {
+        try {
+            utility_owned_wtp_capacities[water_source_to_wtp[wtp->parent_reservoir_ID]] += added_capacity;
+        } catch (...) {
+            throw runtime_error("Could not add treatment capacity to reservoir.");
+        }
+        bool is_priority_source =
+                water_sources->at(wtp->parent_reservoir_ID)->source_type ==
+                INTAKE ||
+                water_sources->at(wtp->parent_reservoir_ID)->source_type ==
+                WATER_REUSE;
+        bool is_not_in_priority_list =
+                find(priority_draw_water_source->begin(),
+                     priority_draw_water_source->end(),
+                     wtp->parent_reservoir_ID)
+                == priority_draw_water_source->end();
+        bool is_not_in_non_priority_list =
+                find(non_priority_draw_water_source->begin(),
+                     non_priority_draw_water_source->end(),
+                     wtp->parent_reservoir_ID)
+                == non_priority_draw_water_source->end();
 
-    /// If source is intake or reuse and is not in the list of active
-    /// sources, add it to the priority list.
-    /// If source is not intake or reuse and is not in the list of active
-    /// sources, add it to the non-priority list.
-    bool is_priority_source =
-            water_sources->at(wtp->parent_reservoir_ID)->source_type ==
-            INTAKE ||
-            water_sources->at(wtp->parent_reservoir_ID)->source_type ==
-            WATER_REUSE;
-    bool is_not_in_priority_list =
-            find(priority_draw_water_source->begin(),
-                 priority_draw_water_source->end(),
-                 wtp->parent_reservoir_ID)
-            == priority_draw_water_source->end();
-    bool is_not_in_non_priority_list =
-            find(non_priority_draw_water_source->begin(),
-                 non_priority_draw_water_source->end(),
-                 wtp->parent_reservoir_ID)
-            == non_priority_draw_water_source->end();
-
-    /// Finally, the checking.
-    if (is_not_in_priority_list && is_priority_source) {
-        priority_draw_water_source->push_back((int) wtp->parent_reservoir_ID);
-        total_storage_capacity +=
-                water_sources->at(wtp->parent_reservoir_ID)
-                        ->getAllocatedCapacity(id);
-    } else if (is_not_in_non_priority_list && !is_priority_source) {
-        non_priority_draw_water_source
-                ->push_back((int) wtp->parent_reservoir_ID);
-        total_storage_capacity +=
-                water_sources->at(wtp->parent_reservoir_ID)
-                        ->getAllocatedCapacity(id);
+        if (is_not_in_priority_list && is_priority_source) {
+            priority_draw_water_source->push_back((int) wtp->parent_reservoir_ID);
+            total_storage_capacity +=
+                    water_sources->at(wtp->parent_reservoir_ID)
+                            ->getAllocatedCapacity(id);
+        } else if (is_not_in_non_priority_list && !is_priority_source) {
+            non_priority_draw_water_source
+                    ->push_back((int) wtp->parent_reservoir_ID);
+            total_storage_capacity +=
+                    water_sources->at(wtp->parent_reservoir_ID)
+                            ->getAllocatedCapacity(id);
+        }
     }
     water_sources->at(source_id)->setOnline();
 }

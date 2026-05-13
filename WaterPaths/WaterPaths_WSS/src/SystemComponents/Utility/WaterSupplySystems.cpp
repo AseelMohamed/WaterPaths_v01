@@ -283,6 +283,7 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     demand_series_realization = vector<double>();
     
     wss_owned_wtp_capacities = other.wss_owned_wtp_capacities;
+    wtp_max_delivery_capacities = other.wtp_max_delivery_capacities;
     water_source_to_wtp = other.water_source_to_wtp;
     
     // Initialize empty water_sources vector
@@ -380,9 +381,21 @@ void WaterSupplySystems::updateTotalAvailableVolume() {
         if (ws_id < water_sources.size() && water_sources[ws_id] != nullptr) {
             auto ws = water_sources[ws_id];
             double stored_volume = max(1.0e-6, ws->getAvailableAllocatedVolume(system_id));
-            total_available_volume += stored_volume;
+            // Cap contribution to total_available_volume at the WTP's weekly delivery
+            // capacity. This ensures sources with a pipeline/treatment bottleneck (e.g.
+            // Paranoa, whose weekly throughput is limited to 0.5e-6 * 3600 * 24 * 7
+            // regardless of how much is stored in its WSS1 allocation) do not inflate
+            // the available-volume metric or ROF table lookups.
+            // total_stored_volume is kept uncapped so that the proportional demand-split
+            // in splitDemands() remains consistent with its own storages[] array.
+            int wtp_idx = water_source_to_wtp[ws_id];
+            double deliverable_volume = (wtp_idx < (int)wss_owned_wtp_capacities.size() &&
+                                         wss_owned_wtp_capacities[wtp_idx] > 0.0)
+                                        ? min(stored_volume, wss_owned_wtp_capacities[wtp_idx])
+                                        : stored_volume;
+            total_available_volume += deliverable_volume;
             total_stored_volume += stored_volume;
-            non_priority_vol += stored_volume;
+            non_priority_vol += deliverable_volume;
             net_stream_inflow += ws->getAllocatedInflow(system_id);
         }
     }
@@ -660,6 +673,16 @@ void WaterSupplySystems::setWaterSourceOnline(unsigned int source_id, int week) 
             source_id, week, wss_owned_wtp_capacities, water_source_to_wtp,
             total_storage_capacity, total_available_volume,
             total_stored_volume);
+
+    // Apply per-slot pipeline delivery caps: after construction adds to
+    // wss_owned_wtp_capacities, clamp each slot to its maximum delivery capacity.
+    for (int i = 0; i < (int)wtp_max_delivery_capacities.size(); ++i) {
+        if (i < (int)wss_owned_wtp_capacities.size() &&
+            wtp_max_delivery_capacities[i] > 0.0) {
+            wss_owned_wtp_capacities[i] = min(wss_owned_wtp_capacities[i],
+                                              wtp_max_delivery_capacities[i]);
+        }
+    }
 
     updateTreatmentAndNumberOfStorageSources();
 }
@@ -1156,6 +1179,21 @@ double WaterSupplySystems::getInitialHouseholds() const {
 
 void WaterSupplySystems::setSourceFailureThreshold(int source_id, double threshold) {
     source_failure_thresholds[source_id] = threshold;
+}
+
+/**
+ * Set a maximum weekly delivery capacity for a specific WTP slot.
+ * This enforces a pipeline/infrastructure cap independent of how much
+ * treatment capacity is built via expansions.
+ * A value of 0 means no cap is applied.
+ * @param wtp_slot  Index into wss_owned_wtp_capacities
+ * @param max_delivery_capacity  Maximum hm³/week deliverable through this slot
+ */
+void WaterSupplySystems::setWtpMaxDeliveryCapacity(int wtp_slot, double max_delivery_capacity) {
+    if (wtp_slot >= (int)wtp_max_delivery_capacities.size()) {
+        wtp_max_delivery_capacities.resize(wtp_slot + 1, 0.0);
+    }
+    wtp_max_delivery_capacities[wtp_slot] = max_delivery_capacity;
 }
 
 double WaterSupplySystems::getSourceFailureThreshold(int source_id) const {

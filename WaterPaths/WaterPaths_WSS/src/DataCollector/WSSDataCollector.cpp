@@ -314,6 +314,10 @@ const vector<double> &WSSDataCollector::getStorage_to_capacity_ratio() const {
     return storage_to_capacity_ratio;
 }
 
+const vector<double> &WSSDataCollector::getLong_term_rof() const {
+    return long_term_rof;
+}
+
 const vector<double> &WSSDataCollector::getUnrestricted_demand() const {
     return unrestricted_demand;
 }

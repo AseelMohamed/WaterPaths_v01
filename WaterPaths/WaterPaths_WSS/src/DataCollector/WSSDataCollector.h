@@ -92,6 +92,7 @@ public:
     const vector<double> &getTotal_storage_capacity() const;
     const vector<int> &getWater_sources_count() const;
     const WaterSupplySystems *getWss() const;
+    const vector<double> &getLong_term_rof() const;
     
     // Getters - Financial data
     const vector<double> &getGross_revenues() const;

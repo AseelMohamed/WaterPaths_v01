@@ -191,6 +191,9 @@ public:
     double getAverageMonthlyIncome() const;
     void setInitialHouseholds(double households);
     double getInitialHouseholds() const;
+
+    // Per-WTP-slot maximum delivery capacity (pipeline cap independent of WTP size)
+    void setWtpMaxDeliveryCapacity(int wtp_slot, double max_delivery_capacity);
     
 private:
     Utility* owner;
@@ -219,6 +222,7 @@ private:
     vector<vector<double>> &demands_all_realizations;
     vector<double> demand_series_realization;
     vector<double> wss_owned_wtp_capacities;
+    vector<double> wtp_max_delivery_capacities; // Per-slot pipeline delivery caps (0 = no cap)
     vector<int> water_source_to_wtp;
     InfrastructureManager infrastructure_construction_manager;
 

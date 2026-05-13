@@ -43,7 +43,7 @@ namespace Constants {
     
     const int NUM_OBJECTIVES = 6;  // Maximum number of objectives (for array sizing)
 //#define NUM_DEC_VAR 57;
-    const int NUM_DEC_VAR = 20;
+    const int NUM_DEC_VAR = 19;
 
     const std::string DEFAULT_DATA_DIR = "InputFiles" + BAR;
     const std::string DEFAULT_OUTPUT_DIR = "output" + BAR;
@@ -109,6 +109,7 @@ namespace Constants {
     const int TRANSFERS = 0;
     const int RESTRICTIONS = 1;
     const int TRANSFERS_CAESB = 2;
+    const int EMERGENCY_TRANSFER_PARANOA = 3;
     const int INSURANCE_STORAGE_ROF = 100;
 
     const int SUPPLY_INSTRUMENT_LIM = 99;

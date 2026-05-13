@@ -8,6 +8,7 @@
 #include "../SystemComponents/WaterSources/ReservoirExpansion.h"
 #include "../SystemComponents/WaterSources/Quarry.h"
 #include "../DroughtMitigationInstruments/InsuranceStorageToROF.h"
+#include "../DroughtMitigationInstruments/EmergencyTransferParanoa.h"
 #include "../SystemComponents/WaterSources/WaterReuse.h"
 #include "../SystemComponents/WaterSources/AllocatedReservoir.h"
 #include "../SystemComponents/WaterSources/SequentialJointTreatmentExpansion.h"
@@ -254,6 +255,9 @@ Utils::copyDroughtMitigationPolicyVector(
         else if (dmp->type == TRANSFERS_CAESB)
             drought_mitigation_policy_new.push_back(
                     new TransfersBilateral(*dynamic_cast<TransfersBilateral *>(dmp)));
+        else if (dmp->type == EMERGENCY_TRANSFER_PARANOA)
+            drought_mitigation_policy_new.push_back(
+                    new EmergencyTransferParanoa(*dynamic_cast<EmergencyTransferParanoa *>(dmp)));
         else if (dmp->type == INSURANCE_STORAGE_ROF)
             drought_mitigation_policy_new.push_back(
                     new InsuranceStorageToROF(
