@@ -763,14 +763,22 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         double wss_offset_rate = wss->getOffset_rate_per_volume();
         double wss_transfer_volume = max(wss_offset, 0.0);
         
+        // Revenue is based on what customers are billed (unrestricted × multiplier), NOT on
+        // wss_restricted (= unrestricted × mult − demand_offset).  demand_offset only controls
+        // which physical source supplies the water; it does not change what customers pay.
+        // Using wss_restricted would inflate the sender's revenue and deflate the receiver's
+        // revenue during intra-utility transfers, which is incorrect.
+        double customer_demand = wss_unrestricted * wss_demand_mult;
+
         // Calculate WSS-specific gross revenue using WSS-specific price
-        double wss_gross_revenue = wss_restricted * wss_current_price;
+        double wss_gross_revenue = customer_demand * wss_current_price;
         
         // Calculate WSS-specific drought mitigation costs using WSS-specific price
         double lost_demand_vol_sales = (wss_unrestricted * (1 - wss_demand_mult) + wss_unfulfilled);
         double revenue_losses = lost_demand_vol_sales * wss_unrestricted_price;
         double transfer_costs = wss_transfer_volume * (wss_offset_rate - wss_unrestricted_price);
-        double recouped_loss_price_surcharge = wss_restricted * (wss_current_price - wss_unrestricted_price);
+        // Surcharge revenue is also based on the customer-facing demand volume.
+        double recouped_loss_price_surcharge = customer_demand * (wss_current_price - wss_unrestricted_price);
         double wss_drought_cost = max(revenue_losses + transfer_costs - recouped_loss_price_surcharge, 0.0);
 
         double wss_contingency_pct = 0.0;
