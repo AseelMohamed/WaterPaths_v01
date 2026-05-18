@@ -115,6 +115,51 @@ double ObjectivesCalculator::calculateRestrictionFrequencyObjective(
         return NONE;
 }
 
+double ObjectivesCalculator::calculateRestrictionFrequencyObjective_WSS(
+        const vector<vector<WSSDataCollector *>> &wss_data,
+        vector<unsigned long> realizations) {
+    if (wss_data.empty() || wss_data[0].empty()) return NONE;
+
+    unsigned long n_realizations = wss_data[0].size();
+    if (realizations.empty()) {
+        realizations = vector<unsigned long>(n_realizations);
+        iota(realizations.begin(), realizations.end(), 0);
+    } else {
+        n_realizations = realizations.size();
+    }
+
+    unsigned long n_weeks = wss_data[0][realizations[0]]->getDemand_multiplier().size();
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
+
+    double restriction_frequency = 0;
+
+    // A year is restricted if ANY WSS had demand_multiplier != 1.0 in any week of that year.
+    // This is consistent with the policies CSV output which reports WSS-level multipliers.
+    for (const unsigned long &r : realizations) {
+        for (unsigned long y = 0; y < n_years; ++y) {
+            bool year_restricted = false;
+            for (int w = (int) round(y * WEEKS_IN_YEAR);
+                 w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)) && !year_restricted;
+                 ++w) {
+                for (const auto &wss_vec : wss_data) {
+                    if (r < wss_vec.size() && wss_vec[r] != nullptr) {
+                        const auto &mults = wss_vec[r]->getDemand_multiplier();
+                        if (w < (int) mults.size() && mults[w] != 1.0) {
+                            year_restricted = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (year_restricted) restriction_frequency++;
+        }
+    }
+
+    double obj_value = restriction_frequency / (n_realizations * n_years);
+    if (std::isinf(obj_value)) throw logic_error("Infinite restriction frequency (WSS).");
+    return obj_value;
+}
+
 double ObjectivesCalculator::calculateNetPresentCostInfrastructureObjective(
         const vector<UtilitiesDataCollector *> &utility_data,
         vector<unsigned long> realizations) {

@@ -499,7 +499,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     AllocatedReservoir paranoa("Lago Paranoa", 3,
                                bacia_paranoa,
                                lp_total_capacity,
-                               0.5e-6 * 3600 * 24 * 7, // emergency pipe capacity to TortoSM (hm³/week)
+                               0.1e-6 * 3600 * 24 * 7, // emergency pipe capacity to TortoSM (hm³/week)
                                evaporation_paranoa,
                                &paranoa_storage_area,
                                &lp_allocations_ids,
@@ -582,7 +582,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     // Paranoa WTP expansions (IDs 7-9) are ROF-triggered investments that expand treatment
     // capacity at Paranoa. However, water from Paranoa reaches TortoSM ONLY through the
-    // fixed pipeline (EmergencyTransferParanoa, capped at 0.5 m³/s). The pipeline is always
+    // fixed pipeline (EmergencyTransferParanoa, capped at 0.1 m³/s). The pipeline is always
     // the bottleneck — WTP expansions do not add direct draw capacity to WSS1.
     // Capacities are set to {0.0, 0.0}: the builds still occur (costs are incurred) but
     // waterTreatmentPlantConstructionHandler skips draw-list addition when added_capacity == 0.
@@ -719,7 +719,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // Descoberto WSS: WTP 0 (Descoberto reservoir) + WTP 1 (Corumba reservoir).
     // TortoSM WSS: WTP 0 only (TortoSM + Bananal/Torto intakes).
     // Paranoa has NO WTP slot in TortoSM — all Paranoa→TortoSM flow goes via the
-    // fixed transfer pipeline (EmergencyTransferParanoa, 0.5 m³/s cap).
+    // fixed transfer pipeline (EmergencyTransferParanoa, 0.1 m³/s cap).
     vector<vector<int>> water_sources_to_wtp_caesb_1 = {{0},   // WTP 0 treats Descoberto
                                                         {2}};  // WTP 1 treats Corumba
     vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7,    // WTP 0: Descoberto ETA (6.0 m³/s)
@@ -928,7 +928,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     // POLÍTICA DE TRANSFERÊNCIA DE EMERGÊNCIA — Paranoá → TortoSM
     // Activated when TortoSM ROF exceeds caesb_paranoa_transfer_trigger.
-    // Pipe capacity: 0.5 m³/s. Volume capped at 0.8% of Paranoa total capacity.
+    // Pipe capacity: 0.1 m³/s. Volume capped at 0.8% of Paranoa total capacity.
     // Must be added AFTER TransfersBilateral so that TransfersBilateral's demand
     // offset reset does not overwrite the emergency supply offset.
     // Transfer cost: receiver (TortoSM) is charged at its current water price ×
@@ -937,7 +937,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             (int) drought_mitigation_policies.size(),  // unique policy id
             1,                                          // receiver: TortoSM (system_id = 1)
             3,                                          // Paranoa water source id = 3
-            0.5e-6 * 3600 * 24 * 7,                   // pipe capacity (hm³/week)
+            0.1e-6 * 3600 * 24 * 7,                   // pipe capacity (hm³/week)
             caesb_paranoa_transfer_trigger,             // ROF trigger
             1.1);                                       // cost multiplier (10% surcharge over water price)
     drought_mitigation_policies.push_back(&paranoa_emergency);

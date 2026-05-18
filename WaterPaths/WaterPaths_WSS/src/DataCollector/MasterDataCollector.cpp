@@ -572,9 +572,18 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
         reliability = ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran);
     }
     
-    /// Restriction Frequency
-    double restriction_freq = ObjectivesCalculator::
-    calculateRestrictionFrequencyObjective(utility_restrictions, realizations_ran);
+    /// Restriction Frequency — use WSS demand multipliers (covers all WSS, consistent with policies CSV)
+    double restriction_freq = NONE;
+    if (!wss_collectors.empty()) {
+        vector<vector<WSSDataCollector *>> utility_wss_collectors_rf;
+        isolateWSSDataCollectors(u, utility_wss_collectors_rf);
+        if (!utility_wss_collectors_rf.empty())
+            restriction_freq = ObjectivesCalculator::
+                calculateRestrictionFrequencyObjective_WSS(utility_wss_collectors_rf, realizations_ran);
+    }
+    if (restriction_freq == NONE)
+        restriction_freq = ObjectivesCalculator::
+            calculateRestrictionFrequencyObjective(utility_restrictions, realizations_ran);
     
     /// Infrastructure NPC and Worse Case Costs - Use WSS-level calculations
     double inf_npc = 0.0;

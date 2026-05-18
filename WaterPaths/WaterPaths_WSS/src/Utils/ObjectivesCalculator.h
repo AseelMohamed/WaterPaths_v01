@@ -21,6 +21,10 @@ public:
             const vector<RestrictionsDataCollector *>& restriction_data,
             vector<unsigned long> realizations = vector<unsigned long>(0));
 
+    static double calculateRestrictionFrequencyObjective_WSS(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            vector<unsigned long> realizations = vector<unsigned long>(0));
+
     static double calculateNetPresentCostInfrastructureObjective(
             const vector<UtilitiesDataCollector *>& utility_data,
             vector<unsigned long> realizations = vector<unsigned long>(0));

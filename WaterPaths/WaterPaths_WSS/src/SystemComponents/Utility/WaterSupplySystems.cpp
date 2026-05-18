@@ -371,6 +371,7 @@ void WaterSupplySystems::updateTotalAvailableVolume() {
         if (ws < water_sources.size() && water_sources[ws] != nullptr) {
             double vol = max(1.0e-6, water_sources[ws]->getAvailableAllocatedVolume(system_id));
             total_available_volume += vol;
+            total_stored_volume += vol;
             priority_vol += vol;
             net_stream_inflow += water_sources[ws]->getAllocatedInflow(system_id);
         }
