@@ -2,6 +2,9 @@
 // Created by bernardoct on 5/1/17.
 //
 
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
 #include "InsuranceStorageToROF.h"
 #include "../Utils/Utils.h"
 
@@ -28,7 +31,8 @@ InsuranceStorageToROF::InsuranceStorageToROF(const int id, vector<WaterSource *>
                                              vector<vector<double>>& water_sources_rdm,
                                              vector<vector<double>>& policy_rdm, vector<double> &rof_triggers,
                                              const double insurance_premium, const vector<double> &fixed_payouts,
-                                             unsigned long total_simulation_time)
+                                             unsigned long total_simulation_time,
+                                             const vector<string> &rof_freq_table_files)
         : DroughtMitigationPolicy(id, INSURANCE_STORAGE_ROF),
           ContinuityModelROF(Utils::copyWaterSourceVector(water_sources), water_sources_graph,
                              water_sources_to_wss, convertToUniquePtr(wss, true),
@@ -41,7 +45,8 @@ InsuranceStorageToROF::InsuranceStorageToROF(const int id, vector<WaterSource *>
           fixed_payouts(fixed_payouts),
           utilities_revenue_update(vector<double>((unsigned long) n_wss, 0.)),
           utilities_revenue_last_year(vector<double>((unsigned long) n_wss, 0.)),
-          drought_mitigation_policies(Utils::copyDroughtMitigationPolicyVector(drought_mitigation_policies))
+          drought_mitigation_policies(Utils::copyDroughtMitigationPolicyVector(drought_mitigation_policies)),
+          rof_freq_table_files(rof_freq_table_files)
 {
 
     for (WaterSupplySystems *w : wss) wss_ids.push_back(w->system_id);
@@ -62,6 +67,18 @@ InsuranceStorageToROF::InsuranceStorageToROF(const int id, vector<WaterSource *>
 
     insurance_price = vector<double>((unsigned long) n_wss, 0.);
     payout_multiplier = vector<double>((unsigned long) n_wss, 1.);
+
+    // Load the 4 ROF frequency lookup tables (one per infrastructure state).
+    if (rof_freq_table_files.size() != 4)
+        throw invalid_argument("InsuranceStorageToROF: exactly 4 ROF frequency table files must be provided.");
+    for (const auto &filepath : rof_freq_table_files)
+        rof_freq_tables.push_back(loadROFFreqTable(filepath));
+
+    // Derive time-period dimensions from the loaded tables.
+    // Each row has: [rof_threshold, fail_freq_period_0, ..., fail_freq_period_(N-1)]
+    // years_per_period = 40 years / N periods.
+    n_time_periods  = (int) rof_freq_tables[0][0].size() - 1;
+    years_per_period = (n_time_periods > 0) ? (40 / n_time_periods) : 1;
 }
 
 InsuranceStorageToROF::InsuranceStorageToROF(
@@ -84,7 +101,13 @@ InsuranceStorageToROF::InsuranceStorageToROF(
         fixed_payouts(insurance.fixed_payouts),
         utilities_revenue_update(vector<double>((unsigned long) n_wss, 0.)),
         utilities_revenue_last_year(vector<double>((unsigned long) n_wss, 0.)),
-        drought_mitigation_policies(Utils::copyDroughtMitigationPolicyVector(insurance.drought_mitigation_policies)) {
+        drought_mitigation_policies(Utils::copyDroughtMitigationPolicyVector(insurance.drought_mitigation_policies)),
+        rof_freq_tables(insurance.rof_freq_tables),
+        rof_freq_table_files(insurance.rof_freq_table_files),
+        n_time_periods(insurance.n_time_periods),
+        years_per_period(insurance.years_per_period),
+        initial_treatment_capacity(insurance.initial_treatment_capacity),
+        initial_storage_capacity(insurance.initial_storage_capacity) {
     wss_ids = insurance.wss_ids;
 }
 
@@ -97,14 +120,12 @@ InsuranceStorageToROF::~InsuranceStorageToROF() {
 
 
 void InsuranceStorageToROF::applyPolicy(int week) {
-    // Update utilities year revenue.
-    for (unsigned long u = 0; u < continuity_wss.size(); ++u) {
-        utilities_revenue_update[u] +=
-                DroughtMitigationPolicy::realization_wss[u]->getOwner()->getGrossRevenue();
-    }
+    // Both WSSes belong to ONE utility. Track that utility's gross revenue once
+    // per week (iterating over each WSS would double-count the same owner).
+    utilities_revenue_update[0] +=
+            DroughtMitigationPolicy::realization_wss[wss_ids[0]]->getOwner()->getGrossRevenue();
 
-    // If first week of the year, price insurance for coming year and update
-    // gross revenue to base payouts.
+    // If first week of the year, price insurance for coming year and snapshot revenue.
     if (Utils::isFirstWeekOfTheYear(week + 1)) {
         utilities_revenue_last_year = utilities_revenue_update;
         std::fill(utilities_revenue_update.begin(), utilities_revenue_update.end(), NONE);
@@ -121,14 +142,21 @@ void InsuranceStorageToROF::applyPolicy(int week) {
             wss_rof[u] = DroughtMitigationPolicy::realization_wss[u]->getRisk_of_failure();
         }
 
-        // Make payouts, if needed.
-        for (unsigned long u = 0; u < continuity_wss.size(); ++u)
-            if (wss_rof[u] > rof_triggers[u])
-                // payout multiplier adjusts for partially paid insurance price due to insufficient contingency fund.
-                DroughtMitigationPolicy::realization_wss[u]->getOwner()->addInsurancePayout(
-                        fixed_payouts[u] * utilities_revenue_last_year[u] * payout_multiplier[u]);
-            else
-                DroughtMitigationPolicy::realization_wss[u]->getOwner()->addInsurancePayout(NONE);
+        // Accumulate payouts from all triggering WSSes into the single utility.
+        // Each triggering WSS contributes fixed_payout * utility_revenue to the total.
+        double total_payout = NONE;
+        for (size_t i = 0; i < wss_ids.size(); ++i) {
+            int u = wss_ids[i];
+            if (wss_rof[u] > rof_triggers[u]) {
+                if (total_payout == NONE) total_payout = 0.;
+                // payout_multiplier[0] applies to the utility as a whole.
+                total_payout += fixed_payouts[u] * utilities_revenue_last_year[0]
+                                * payout_multiplier[0];
+            }
+        }
+        // Call addInsurancePayout once for the single utility owner.
+        DroughtMitigationPolicy::realization_wss[wss_ids[0]]->getOwner()
+                ->addInsurancePayout(total_payout);
     }
 }
 
@@ -140,6 +168,15 @@ void InsuranceStorageToROF::addSystemComponents(vector<WaterSupplySystems *> wss
         DroughtMitigationPolicy::realization_wss[i] = wss[i];
     }
 
+    // Capture baseline capacities for infrastructure-state detection in priceInsurance.
+    // Stored in the same order as wss_ids (index 0 = Descoberto, 1 = TortoSM).
+    initial_treatment_capacity.clear();
+    initial_storage_capacity.clear();
+    for (int id : wss_ids) {
+        initial_treatment_capacity.push_back(wss[id]->getTotal_treatment_capacity());
+        initial_storage_capacity.push_back(wss[id]->getTotal_storage_capacity());
+    }
+
     for (WaterSupplySystems *w : wss) {
         wss_base_storage_capacity.push_back(w->getTotal_storage_capacity());
     }
@@ -149,64 +186,140 @@ void InsuranceStorageToROF::addSystemComponents(vector<WaterSupplySystems *> wss
 }
 
 /**
- * Runs a ROF set of 50 year long simulations in order to estimate how likely payouts are expected
- * to occur. The price of the insurance is set as the average sum of payouts across all 50 years
- * times the insurance premium.
- * @param week
+ * Prices the insurance using pre-computed static ROF-frequency lookup tables.
+ *
+ * Four CSV tables (one per infrastructure state) encode the combined expected
+ * trigger-weeks per year from BOTH WSSes, for a range of ROF trigger values and
+ * across multiple time periods (5-year windows over a 40-year horizon).
+ *
+ * This reflects that:
+ *  - Both WSSes belong to ONE utility (single revenue basis, single payout).
+ *  - Infrastructure build-out changes trigger statistics (4 states).
+ *  - Demand and operating conditions evolve over the simulation (time periods).
+ *
+ * Price formula:
+ *   insurance_price = combined_fail_freq * fixed_payout_rate
+ *                     * utility_annual_revenue * insurance_premium
  */
 void InsuranceStorageToROF::priceInsurance(int week) {
 
     // Reset prices.
     for (int u : wss_ids) insurance_price[u] = 0;
 
-    // checks if new infrastructure became available and, if so, set the corresponding realization
-    // infrastructure online.
+    // Bring any newly built infrastructure online in the continuity model.
     updateOnlineInfrastructure(week);
 
-    for (int r = 0; r < NUMBER_REALIZATIONS_ROF; ++r) {
-        // reset reservoirs' and wss' storage and combined storage, respectively, they currently
-        // have in the corresponding realization simulation.
-        resetWSSAndReservoirs(SHORT_TERM_ROF);// CHECK IF NEED TO OVERWRITE THIS FUNCTION AND RESET RESTRICTION AND TRANSFER VOLUMES
+    // Select the lookup table that matches the current infrastructure state.
+    int state = getInfraState();
 
-        for (int w = week - (int) WEEKS_IN_YEAR + 1; w <= week; ++w) {
-            // one week continuity time-step.
-            continuityStep(w, r);
+    // Select the time-period column: maps simulation year → 5-year window index.
+    // Clamped to the last period for years beyond the 40-year pre-computed horizon.
+    int current_year = (int)(week / WEEKS_IN_YEAR);
+    int time_period_idx = (years_per_period > 0)
+        ? min(current_year / years_per_period, n_time_periods - 1)
+        : 0;
 
-            // Get WSS' approximate rof from storage-rof-table.
-            auto wss_rofs = InsuranceStorageToROF::calculateShortTermROFTable(w);
+    // Combined fail_freq for both WSSes.
+    // Each WSS may have a different absolute trigger (restriction_trigger + shared_offset).
+    // Use the average of both triggers as the representative lookup value.
+    double avg_trigger = 0.0;
+    for (int u : wss_ids) avg_trigger += rof_triggers[u];
+    avg_trigger /= static_cast<double>(wss_ids.size());
+    double combined_fail_freq = lookupFailFreq(state, time_period_idx, avg_trigger);
 
-            for (size_t u = 0; u < continuity_wss.size(); ++u) {
-                continuity_wss[u]->setRisk_of_failure(wss_rofs[u]);
-            }
+    // Single utility revenue (tracked once per week; stored at index 0).
+    double utility_revenue = utilities_revenue_last_year[0];
 
-            // apply supply drought mitigation instruments.
-            for (DroughtMitigationPolicy* dmp : drought_mitigation_policies) {
-                dmp->applyPolicy(week);
-            }
+    // Annual insurance price = expected combined payout exposure * premium loading.
+    // fixed_payouts[wss_ids[0]] is the payout rate DV (same for all WSSes).
+    double price = combined_fail_freq * fixed_payouts[wss_ids[0]]
+                   * utility_revenue * insurance_premium;
 
-            // Increase the price of the insurance if payout is triggered and reset dmp wss-variables.
-            for (const int &u : wss_ids) {
-                if (wss_rofs[u] > rof_triggers[u]) {
-                    insurance_price[u] += fixed_payouts[u] *
-                            utilities_revenue_last_year[u] * insurance_premium;
-                }
-                continuity_wss[u]->getOwner()->resetDroughtMitigationVariables();
-            }
-        }
+    // Store price and multiplier at index 0 (single-utility convention).
+    insurance_price[wss_ids[0]] = price;
+    payout_multiplier[0] = (price == 0) ? 0. : 1.;
+
+    // Charge the single utility once.
+    DroughtMitigationPolicy::realization_wss[wss_ids[0]]->getOwner()->
+            purchaseInsurance(price);
+}
+
+// ---------------------------------------------------------------------------
+// Static helper: load a CSV with columns:
+//   rof_threshold, fail_freq_period_0, fail_freq_period_1, ...
+// The header row is skipped. Each data row must have at least 2 columns.
+// Returns a vector of rows (each row is a vector<double>).
+// ---------------------------------------------------------------------------
+vector<vector<double>> InsuranceStorageToROF::loadROFFreqTable(const string &filepath) {
+    vector<vector<double>> table;
+    ifstream file(filepath);
+    if (!file.is_open())
+        throw runtime_error(
+            "InsuranceStorageToROF: cannot open ROF frequency table: " + filepath);
+
+    string line;
+    getline(file, line); // skip header row
+    while (getline(file, line)) {
+        if (line.empty()) continue;
+        istringstream ss(line);
+        string token;
+        vector<double> row;
+        while (getline(ss, token, ','))
+            row.push_back(stod(token));
+        if (row.size() < 2)
+            throw runtime_error(
+                "InsuranceStorageToROF: each row must have at least 2 columns "
+                "(rof_threshold, fail_freq_period_0 [, ...]): " + filepath);
+        table.push_back(row);
     }
+    if (table.empty())
+        throw runtime_error(
+            "InsuranceStorageToROF: ROF frequency table contains no data rows: " + filepath);
+    return table;
+}
 
-    // Average out insurance price across realizations
-    for (int u : wss_ids) {
-        insurance_price[u] /= NUMBER_REALIZATIONS_ROF;
+// ---------------------------------------------------------------------------
+// Determine infrastructure state (0-3) by comparing current WSS capacities
+// against the baseline captured when addSystemComponents was called.
+//   State 0: no new infra for either WSS
+//   State 1: new infra for Descoberto (wss_ids[0]) only
+//   State 2: new infra for TortoSM  (wss_ids[1]) only
+//   State 3: new infra for both
+// ---------------------------------------------------------------------------
+int InsuranceStorageToROF::getInfraState() const {
+    const double eps = 1e-6;
+    auto hasNewInfra = [&](size_t idx) -> bool {
+        int u = wss_ids[idx];
+        return (DroughtMitigationPolicy::realization_wss[u]->getTotal_treatment_capacity()
+                    > initial_treatment_capacity[idx] + eps)
+            || (DroughtMitigationPolicy::realization_wss[u]->getTotal_storage_capacity()
+                    > initial_storage_capacity[idx] + eps);
+    };
+    bool d_infra = hasNewInfra(0); // Descoberto
+    bool t_infra = hasNewInfra(1); // TortoSM
+    if (!d_infra && !t_infra) return 0;
+    if ( d_infra && !t_infra) return 1;
+    if (!d_infra &&  t_infra) return 2;
+    return 3;
+}
 
-        if (insurance_price[u] == 0) {
-            payout_multiplier[u] = 0.;
-        } else {
-            payout_multiplier[u] = 1.;
-        }
-        DroughtMitigationPolicy::realization_wss[u]->getOwner()->
-                purchaseInsurance(insurance_price[u]);
+// ---------------------------------------------------------------------------
+// Look up the combined expected annual trigger frequency for the utility in
+// infrastructure state `state`, simulation time period `time_period_idx`, and
+// ROF trigger value `rof_trigger`.
+// The first row whose rof_threshold column exceeds rof_trigger is used.
+// If rof_trigger exceeds all thresholds, the last row is used.
+// ---------------------------------------------------------------------------
+double InsuranceStorageToROF::lookupFailFreq(int state, int time_period_idx,
+                                             double rof_trigger) const {
+    const auto &table = rof_freq_tables[state];
+    // Column 0 = rof_threshold; columns 1..N = fail_freq for each time period.
+    int col = time_period_idx + 1;
+    for (const auto &row : table) {
+        if (rof_trigger < row[0])
+            return row[col];
     }
+    return table.back()[col]; // rof_trigger >= all thresholds
 }
 
 void InsuranceStorageToROF::setRealization(unsigned long realization_id, vector<double> &wss_rdm,
