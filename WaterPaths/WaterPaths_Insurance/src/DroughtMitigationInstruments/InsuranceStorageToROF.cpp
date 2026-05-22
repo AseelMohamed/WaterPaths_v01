@@ -122,8 +122,9 @@ InsuranceStorageToROF::~InsuranceStorageToROF() {
 void InsuranceStorageToROF::applyPolicy(int week) {
     // Both WSSes belong to ONE utility. Track that utility's gross revenue once
     // per week (iterating over each WSS would double-count the same owner).
-    utilities_revenue_update[0] +=
+    double weekly_gross_rev =
             DroughtMitigationPolicy::realization_wss[wss_ids[0]]->getOwner()->getGrossRevenue();
+    utilities_revenue_update[0] += weekly_gross_rev;
 
     // If first week of the year, price insurance for coming year and snapshot revenue.
     if (Utils::isFirstWeekOfTheYear(week + 1)) {
@@ -142,18 +143,19 @@ void InsuranceStorageToROF::applyPolicy(int week) {
             wss_rof[u] = DroughtMitigationPolicy::realization_wss[u]->getRisk_of_failure();
         }
 
-        // Accumulate payouts from all triggering WSSes into the single utility.
-        // Each triggering WSS contributes fixed_payout * utility_revenue to the total.
-        double total_payout = NONE;
+        // If ANY WSS triggers, issue a single lump-sum payout to the utility once.
+        // The payout is not per-WSS; it is one fixed amount regardless of how many WSSes triggered.
+        bool any_triggered = false;
         for (size_t i = 0; i < wss_ids.size(); ++i) {
-            int u = wss_ids[i];
-            if (wss_rof[u] > rof_triggers[u]) {
-                if (total_payout == NONE) total_payout = 0.;
-                // payout_multiplier[0] applies to the utility as a whole.
-                total_payout += fixed_payouts[u] * utilities_revenue_last_year[0]
-                                * payout_multiplier[0];
+            if (wss_rof[wss_ids[i]] > rof_triggers[wss_ids[i]]) {
+                any_triggered = true;
+                break;
             }
         }
+        double total_payout = any_triggered
+            ? fixed_payouts[wss_ids[0]] * utilities_revenue_last_year[0] * payout_multiplier[0]
+            : NONE;
+
         // Call addInsurancePayout once for the single utility owner.
         DroughtMitigationPolicy::realization_wss[wss_ids[0]]->getOwner()
                 ->addInsurancePayout(total_payout);
@@ -221,10 +223,9 @@ void InsuranceStorageToROF::priceInsurance(int week) {
 
     // Combined fail_freq for both WSSes.
     // Each WSS may have a different absolute trigger (restriction_trigger + shared_offset).
-    // Use the average of both triggers as the representative lookup value.
-    double avg_trigger = 0.0;
-    for (int u : wss_ids) avg_trigger += rof_triggers[u];
-    avg_trigger /= static_cast<double>(wss_ids.size());
+    // Use the minimum of both triggers as the representative lookup value.
+    double avg_trigger = rof_triggers[wss_ids[0]];
+    for (int u : wss_ids) avg_trigger = min(avg_trigger, rof_triggers[u]);
     double combined_fail_freq = lookupFailFreq(state, time_period_idx, avg_trigger);
 
     // Single utility revenue (tracked once per week; stored at index 0).
@@ -307,19 +308,28 @@ int InsuranceStorageToROF::getInfraState() const {
 // Look up the combined expected annual trigger frequency for the utility in
 // infrastructure state `state`, simulation time period `time_period_idx`, and
 // ROF trigger value `rof_trigger`.
-// The first row whose rof_threshold column exceeds rof_trigger is used.
-// If rof_trigger exceeds all thresholds, the last row is used.
+//
+// The table rows are in ASCENDING threshold order, but fail_freq is
+// DECREASING (lower threshold crossed more often than higher threshold).
+// We scan forward and keep updating the result for every row whose threshold
+// is <= rof_trigger; this yields the value at the closest threshold that does
+// not exceed the trigger.  If the trigger falls below all table thresholds,
+// we return the highest-frequency row (table.front()).
 // ---------------------------------------------------------------------------
 double InsuranceStorageToROF::lookupFailFreq(int state, int time_period_idx,
                                              double rof_trigger) const {
     const auto &table = rof_freq_tables[state];
     // Column 0 = rof_threshold; columns 1..N = fail_freq for each time period.
     int col = time_period_idx + 1;
+    // Default: highest frequency (trigger below all table thresholds).
+    double result = table.front()[col];
     for (const auto &row : table) {
-        if (rof_trigger < row[0])
-            return row[col];
+        if (row[0] <= rof_trigger + 1e-9)
+            result = row[col];  // last update before threshold exceeds trigger
+        else
+            break;              // thresholds are ascending; no need to continue
     }
-    return table.back()[col]; // rof_trigger >= all thresholds
+    return result;
 }
 
 void InsuranceStorageToROF::setRealization(unsigned long realization_id, vector<double> &wss_rdm,
