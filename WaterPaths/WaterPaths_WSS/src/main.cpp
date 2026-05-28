@@ -113,8 +113,8 @@ int main(int argc, char *argv[]) {
         else if (arg == "-e" && i + 1 < argc) seed = atoi(argv[++i]);
         else if (arg == "-E" && i + 1 < argc) {
             Constants::EXPERIMENT_MODE = atoi(argv[++i]);
-            if (Constants::EXPERIMENT_MODE < 1 || Constants::EXPERIMENT_MODE > 4) {
-                fprintf(stderr, "Invalid experiment mode. Must be 1, 2, 3, or 4.\n");
+            if (Constants::EXPERIMENT_MODE < 1 || Constants::EXPERIMENT_MODE > 5) {
+                fprintf(stderr, "Invalid experiment mode. Must be 1, 2, 3, 4, or 5.\n");
                 return -1;
             }
             c_num_obj = Constants::getNumObjectives(); // Update objective count
@@ -172,11 +172,12 @@ int main(int argc, char *argv[]) {
                     "\t-C: Import/export rof tables (1: export, 0:"
                     " do nothing (standard), -1: import)\n"
                     "\t-B: Export objectives for all utilities on a single line\n"
-                    "\t-E: Experiment mode (1-4):\n"
+                    "\t-E: Experiment mode (1-5):\n"
                     "\t    1: 4 objs, reliability=MIN (worst case)\n"
                     "\t    2: 4 objs, reliability=AVERAGE\n"
                     "\t    3: 5 objs, reliability=MIN, affordability=MAX [DEFAULT]\n"
                     "\t    4: 5 objs, reliability=AVERAGE, affordability=AVERAGE\n"
+                    "\t    5: 7 objs, per-WSS reliability and affordability (no aggregation)\n"
                     "\t-V: Include severity objective (1=yes [default], 0=no)\n",
                     argv[0], n_realizations, n_weeks, system_io.c_str());
             return -1;
@@ -194,6 +195,9 @@ int main(int argc, char *argv[]) {
     printf("Experiment Configuration:\n");
     printf("  Experiment Mode: %d\n", Constants::EXPERIMENT_MODE);
     printf("  Number of Objectives: %d\n", Constants::getNumObjectives());
+    if (Constants::includePerWSSObjectives()) {
+        printf("  Mode: per-WSS (no aggregation across WSS)\n");
+    } else {
     printf("  Reliability Aggregation: %s\n", 
            Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
     if (Constants::includeAffordabilityObjective()) {
@@ -206,6 +210,7 @@ int main(int argc, char *argv[]) {
         printf("  Severity: INCLUDED (aggregation follows reliability)\n");
     } else {
         printf("  Severity: NOT INCLUDED\n");
+    }
     }
     printf("========================================\n\n");
     #endif
@@ -403,6 +408,9 @@ int main(int argc, char *argv[]) {
             printf("Experiment Configuration:\n");
             printf("  Experiment Mode: %d\n", Constants::EXPERIMENT_MODE);
             printf("  Number of Objectives: %d\n", Constants::getNumObjectives());
+            if (Constants::includePerWSSObjectives()) {
+                printf("  Mode: per-WSS (no aggregation across WSS)\n");
+            } else {
             printf("  Reliability Aggregation: %s\n", 
                    Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
             if (Constants::includeAffordabilityObjective()) {
@@ -415,6 +423,7 @@ int main(int argc, char *argv[]) {
                 printf("  Severity: INCLUDED (aggregation follows reliability)\n");
             } else {
                 printf("  Severity: NOT INCLUDED\n");
+            }
             }
             printf("========================================\n");
         }

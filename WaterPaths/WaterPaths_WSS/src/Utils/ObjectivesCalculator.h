@@ -71,6 +71,15 @@ public:
             vector<unsigned long> realizations,
             int aggregation_method); // 0=MAX (worst case), 1=AVERAGE
 
+    // Per-WSS functions for experiment mode 5 (no aggregation across WSS)
+    static vector<double> calculateReliabilityObjective_WSS_PerWSS(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            vector<unsigned long> realizations = vector<unsigned long>(0));
+
+    static vector<double> calculateAffordabilityIndexObjective_WSS_PerWSS(
+            const vector<vector<WSSDataCollector *>>& wss_data,
+            vector<unsigned long> realizations = vector<unsigned long>(0));
+
 };
 
 

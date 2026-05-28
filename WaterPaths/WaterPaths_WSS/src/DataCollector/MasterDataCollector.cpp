@@ -636,46 +636,74 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
         }
     }
 
-    outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
-              /// Reliability
-              << setw(COLUMN_WIDTH * 2)
-              << setprecision(COLUMN_PRECISION)
-              << reliability
-              /// Restriction Frequency
-              << setw(COLUMN_WIDTH * 2)
-              << setprecision(COLUMN_PRECISION)
-              << restriction_freq
-              /// Infrastructure NPC
-              << setw(COLUMN_WIDTH * 2)
-              << setprecision(COLUMN_PRECISION)
-              << inf_npc
-              /// Worse Case Costs
-              << setw(COLUMN_WIDTH * 2)
-              << setprecision(COLUMN_PRECISION)
-              << worse_cost;
-    
-    // Only print affordability if included in experiment
-    if (Constants::includeAffordabilityObjective()) {
-        outStream << setw(COLUMN_WIDTH * 2)
+    if (Constants::includePerWSSObjectives()) {
+        // Mode 5: keep each WSS's reliability and affordability as separate objectives
+        vector<double> per_wss_rel;
+        vector<double> per_wss_afford;
+        if (!wss_collectors.empty()) {
+            vector<vector<WSSDataCollector *>> utility_wss_mode5;
+            isolateWSSDataCollectors(u, utility_wss_mode5);
+            if (!utility_wss_mode5.empty()) {
+                per_wss_rel    = ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
+                    utility_wss_mode5, realizations_ran);
+                per_wss_afford = ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_PerWSS(
+                    utility_wss_mode5, realizations_ran);
+            }
+        }
+        outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name;
+        for (double r : per_wss_rel)
+            outStream << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << r;
+        outStream << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << restriction_freq
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << inf_npc
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << worse_cost;
+        for (double a : per_wss_afford)
+            outStream << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << a;
+        outStream << endl;
+        for (double r : per_wss_rel)    objectives.push_back(r);
+        objectives.push_back(restriction_freq);
+        objectives.push_back(inf_npc);
+        objectives.push_back(worse_cost);
+        for (double a : per_wss_afford) objectives.push_back(a);
+    } else {
+        // Modes 1-4: aggregated objectives
+        outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
+                  /// Reliability
+                  << setw(COLUMN_WIDTH * 2)
                   << setprecision(COLUMN_PRECISION)
-                  << affordability_index;
-    }
-    if (Constants::includeSeverityObjective()) {
-        outStream << setw(COLUMN_WIDTH * 2)
+                  << reliability
+                  /// Restriction Frequency
+                  << setw(COLUMN_WIDTH * 2)
                   << setprecision(COLUMN_PRECISION)
-                  << failure_severity;
-    }
-    outStream << endl;
-
-    objectives.push_back(reliability);
-    objectives.push_back(restriction_freq);
-    objectives.push_back(inf_npc);
-    objectives.push_back(worse_cost);
-    if (Constants::includeAffordabilityObjective()) {
-        objectives.push_back(affordability_index);
-    }
-    if (Constants::includeSeverityObjective()) {
-        objectives.push_back(failure_severity);
+                  << restriction_freq
+                  /// Infrastructure NPC
+                  << setw(COLUMN_WIDTH * 2)
+                  << setprecision(COLUMN_PRECISION)
+                  << inf_npc
+                  /// Worse Case Costs
+                  << setw(COLUMN_WIDTH * 2)
+                  << setprecision(COLUMN_PRECISION)
+                  << worse_cost;
+        if (Constants::includeAffordabilityObjective()) {
+            outStream << setw(COLUMN_WIDTH * 2)
+                      << setprecision(COLUMN_PRECISION)
+                      << affordability_index;
+        }
+        if (Constants::includeSeverityObjective()) {
+            outStream << setw(COLUMN_WIDTH * 2)
+                      << setprecision(COLUMN_PRECISION)
+                      << failure_severity;
+        }
+        outStream << endl;
+        objectives.push_back(reliability);
+        objectives.push_back(restriction_freq);
+        objectives.push_back(inf_npc);
+        objectives.push_back(worse_cost);
+        if (Constants::includeAffordabilityObjective()) {
+            objectives.push_back(affordability_index);
+        }
+        if (Constants::includeSeverityObjective()) {
+            objectives.push_back(failure_severity);
+        }
     }
     } catch (const std::exception& e) {
         printf("ERROR in printUtilityObjectivesToRowOutStream: %s\n", e.what());
@@ -695,21 +723,33 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
         outStream.open(obj_file_path);
 
         // Dynamic header based on experiment mode
-        outStream << setw(COLUMN_WIDTH) << "      " << setw((COLUMN_WIDTH * 2))
-                  << "Reliability"
-                  << setw(COLUMN_WIDTH * 2) << "Restriction Freq."
-                  //              << setw(COLUMN_WIDTH * 2) << "Jordan Lake Alloc."
-                  << setw(COLUMN_WIDTH * 2) << "Infrastructure NPC"
-                  << setw(COLUMN_WIDTH * 2) << "Worse Case Costs";
-        
-        // Only add affordability header if included in experiment
-        if (Constants::includeAffordabilityObjective()) {
-            outStream << setw(COLUMN_WIDTH * 2) << "Affordability Index";
+        if (Constants::includePerWSSObjectives()) {
+            // Mode 5: per-WSS headers
+            outStream << setw(COLUMN_WIDTH) << "      "
+                      << setw(COLUMN_WIDTH * 2) << "Reliability WSS0"
+                      << setw(COLUMN_WIDTH * 2) << "Reliability WSS1"
+                      << setw(COLUMN_WIDTH * 2) << "Restriction Freq."
+                      << setw(COLUMN_WIDTH * 2) << "Infrastructure NPC"
+                      << setw(COLUMN_WIDTH * 2) << "Worse Case Costs"
+                      << setw(COLUMN_WIDTH * 2) << "Affordability WSS0"
+                      << setw(COLUMN_WIDTH * 2) << "Affordability WSS1"
+                      << endl;
+        } else {
+            outStream << setw(COLUMN_WIDTH) << "      " << setw((COLUMN_WIDTH * 2))
+                      << "Reliability"
+                      << setw(COLUMN_WIDTH * 2) << "Restriction Freq."
+                      //              << setw(COLUMN_WIDTH * 2) << "Jordan Lake Alloc."
+                      << setw(COLUMN_WIDTH * 2) << "Infrastructure NPC"
+                      << setw(COLUMN_WIDTH * 2) << "Worse Case Costs";
+            // Only add affordability header if included in experiment
+            if (Constants::includeAffordabilityObjective()) {
+                outStream << setw(COLUMN_WIDTH * 2) << "Affordability Index";
+            }
+            if (Constants::includeSeverityObjective()) {
+                outStream << setw(COLUMN_WIDTH * 2) << "Failure Severity";
+            }
+            outStream << endl;
         }
-        if (Constants::includeSeverityObjective()) {
-            outStream << setw(COLUMN_WIDTH * 2) << "Failure Severity";
-        }
-        outStream << endl;
 
         for (auto &u : utility_collectors) {
             printUtilityObjectivesToRowOutStream(u, outStream, objectives);
@@ -737,7 +777,26 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
             isolateRestrictionDataCollectors(u, utility_restrictions);
 
             // Reliability - Use WSS-level calculation (utility = minimum reliability of its WSS)
-            if (!wss_collectors.empty()) {
+            if (Constants::includePerWSSObjectives()) {
+                // Mode 5: push one reliability objective per WSS
+                if (!wss_collectors.empty()) {
+                    vector<vector<WSSDataCollector *>> utility_wss_mode5;
+                    isolateWSSDataCollectors(u, utility_wss_mode5);
+                    if (!utility_wss_mode5.empty()) {
+                        vector<double> per_wss_rel =
+                            ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
+                                utility_wss_mode5, realizations_ran);
+                        for (double r : per_wss_rel) objectives.push_back(r);
+                    } else {
+                        objectives.push_back(ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran));
+                        objectives.push_back(ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran));
+                    }
+                } else {
+                    double rel = ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran);
+                    objectives.push_back(rel);
+                    objectives.push_back(rel);
+                }
+            } else if (!wss_collectors.empty()) {
                 // Filter WSS collectors to only include those belonging to this utility
                 vector<vector<WSSDataCollector *>> utility_wss_collectors;
                 isolateWSSDataCollectors(u, utility_wss_collectors);
@@ -765,8 +824,22 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                 objectives.push_back(reliability);
             }
             
-            objectives.push_back
-                    (ObjectivesCalculator::calculateRestrictionFrequencyObjective(utility_restrictions, realizations_ran));
+            // Restriction Frequency — use WSS demand multipliers (covers ALL WSS including TortoSM,
+            // consistent with print path). Fallback to utility-level if WSS collectors unavailable.
+            {
+                double restriction_freq = NONE;
+                if (!wss_collectors.empty()) {
+                    vector<vector<WSSDataCollector *>> utility_wss_collectors_rf;
+                    isolateWSSDataCollectors(u, utility_wss_collectors_rf);
+                    if (!utility_wss_collectors_rf.empty())
+                        restriction_freq = ObjectivesCalculator::
+                            calculateRestrictionFrequencyObjective_WSS(utility_wss_collectors_rf, realizations_ran);
+                }
+                if (restriction_freq == NONE)
+                    restriction_freq = ObjectivesCalculator::
+                        calculateRestrictionFrequencyObjective(utility_restrictions, realizations_ran);
+                objectives.push_back(restriction_freq);
+            }
             
             // Use WSS-level calculations for infrastructure NPC and worse case costs
             if (!wss_collectors.empty()) {
@@ -784,32 +857,42 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
             objectives.push_back
                     (ObjectivesCalculator::calculateWorseCaseCostsObjective(u, realizations_ran));
             
-            // Calculate affordability index (5th objective) - only if included in experiment
+            // Calculate affordability index - only if included in experiment
             if (Constants::includeAffordabilityObjective()) {
-                if (!wss_collectors.empty()) {
-                    // Filter WSS collectors to only include those belonging to this utility
+                if (Constants::includePerWSSObjectives()) {
+                    // Mode 5: push one affordability objective per WSS
+                    if (!wss_collectors.empty()) {
+                        vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;
+                        isolateWSSDataCollectors(u, utility_wss_collectors_affordability);
+                        if (!utility_wss_collectors_affordability.empty()) {
+                            vector<double> per_wss_afford =
+                                ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_PerWSS(
+                                    utility_wss_collectors_affordability, realizations_ran);
+                            for (double a : per_wss_afford) objectives.push_back(a);
+                        } else {
+                            objectives.push_back(1.0);
+                            objectives.push_back(1.0);
+                        }
+                    } else {
+                        objectives.push_back(1.0);
+                        objectives.push_back(1.0);
+                    }
+                } else if (!wss_collectors.empty()) {
+                    // Modes 3/4: aggregated affordability
                     vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;
                     isolateWSSDataCollectors(u, utility_wss_collectors_affordability);
-                    
-                    // Use configurable aggregation method based on experiment mode
                     objectives.push_back
                             (ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_Configurable(
-                                utility_wss_collectors_affordability, 
+                                utility_wss_collectors_affordability,
                                 realizations_ran,
                                 Constants::getAffordabilityAggregationMethod()));
                 } else {
-                    // No WSS data available - use a default high value (worst affordability)
-    
-    // Print final objective count
-    printf("Calculated %zu objectives for experiment mode %d\n", 
-           objectives.size(), Constants::EXPERIMENT_MODE);
-    
                     objectives.push_back(1.0);
                 }
             }
-            
-            // Calculate failure severity objective - only if included
-            if (Constants::includeSeverityObjective()) {
+
+            // Calculate failure severity objective - only if included (not supported in mode 5)
+            if (Constants::includeSeverityObjective() && !Constants::includePerWSSObjectives()) {
                 if (!wss_collectors.empty()) {
                     vector<vector<WSSDataCollector *>> utility_wss_collectors_severity;
                     isolateWSSDataCollectors(u, utility_wss_collectors_severity);

@@ -1254,3 +1254,186 @@ double ObjectivesCalculator::calculateFailureSeverityObjective_WSS_Configurable(
 
     return obj_value;
 }
+
+/**
+ * Return per-WSS reliability (one value per WSS) for experiment mode 5.
+ * Uses the same logic as calculateReliabilityObjective_WSS_Configurable but
+ * returns the intermediate per-WSS vector instead of aggregating it.
+ * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
+ * @param realizations Optional vector of realization indices to include
+ * @return Vector of reliability values, one per WSS (in WSS order)
+ */
+vector<double> ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
+        const vector<vector<WSSDataCollector *>>& wss_data,
+        vector<unsigned long> realizations) {
+
+    if (wss_data.empty()) {
+        throw std::runtime_error("ERROR: wss_data is empty in calculateReliabilityObjective_WSS_PerWSS");
+    }
+
+    unsigned long n_realizations = wss_data[0].size();
+    if (realizations.empty()) {
+        realizations = vector<unsigned long>(n_realizations);
+        iota(realizations.begin(), realizations.end(), 0);
+    } else {
+        n_realizations = realizations.size();
+    }
+
+    if (realizations.empty()) {
+        throw std::runtime_error("ERROR: realizations vector is empty in calculateReliabilityObjective_WSS_PerWSS");
+    }
+
+    if (realizations[0] >= wss_data[0].size() || wss_data[0][realizations[0]] == nullptr) {
+        char error[512];
+        sprintf(error, "ERROR: First realization %lu is invalid in wss_data[0] (size=%zu)",
+                realizations[0], wss_data[0].size());
+        throw std::runtime_error(error);
+    }
+
+    unsigned long n_weeks = wss_data[0][realizations[0]]->getCombined_storage().size();
+    unsigned long n_years = (unsigned long) round(n_weeks / WEEKS_IN_YEAR);
+
+    vector<double> wss_reliabilities;
+
+    for (const auto& wss_realization_data : wss_data) {
+        bool has_storage_data = false;
+        bool has_any_data = false;
+
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& storage_vec = wss_realization_data[r]->getCombined_storage();
+                const auto& capacity_vec = wss_realization_data[r]->getStorage_capacity();
+                if (!storage_vec.empty() && !capacity_vec.empty()) {
+                    has_any_data = true;
+                    for (const auto& cap : capacity_vec) {
+                        if (cap > 0.0) { has_storage_data = true; break; }
+                    }
+                    if (has_storage_data) break;
+                }
+            }
+        }
+
+        if (!has_any_data || !has_storage_data) {
+            // WSS has no storage data — assign perfect reliability as a neutral fallback
+            wss_reliabilities.push_back(1.0);
+            continue;
+        }
+
+        vector<vector<int>> realizations_year_reliabilities(
+                n_realizations, vector<int>(n_years, NON_INITIALIZED));
+        vector<int> year_reliabilities(n_years, 0);
+
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
+                if (failure_flag.empty()) continue;
+                for (unsigned long y = 0; y < n_years; ++y) {
+                    for (int w = (int) round(y * WEEKS_IN_YEAR);
+                         w < (int) min((int) n_weeks, (int) round((y + 1) * WEEKS_IN_YEAR)); ++w) {
+                        if (w >= (int)failure_flag.size()) {
+                            char error[512];
+                            sprintf(error, "ERROR: Week %d out of bounds for WSS failure flag data", w);
+                            throw std::out_of_range(error);
+                        }
+                        if (failure_flag[w] == 1) {
+                            realizations_year_reliabilities[r][y] = FAILURE;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (unsigned long y = 0; y < n_years; ++y) {
+            for (const unsigned long &r : realizations) {
+                if (r < realizations_year_reliabilities.size() &&
+                    realizations_year_reliabilities[r][y] == FAILURE) {
+                    year_reliabilities[y]++;
+                }
+            }
+        }
+
+        int max_failures = *max_element(year_reliabilities.begin(), year_reliabilities.end());
+        wss_reliabilities.push_back(1.0 - (double)max_failures / n_realizations);
+    }
+
+    return wss_reliabilities;
+}
+
+/**
+ * Return per-WSS 95th-percentile affordability index (one value per WSS) for experiment mode 5.
+ * Uses the same logic as calculateAffordabilityIndexObjective_WSS_Configurable but
+ * returns the intermediate per-WSS vector instead of aggregating it.
+ * @param wss_data Vector of vectors: outer index = WSS ID, inner index = realization
+ * @param realizations Optional vector of realization indices to include
+ * @return Vector of affordability values, one per WSS (in WSS order)
+ */
+vector<double> ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_PerWSS(
+        const vector<vector<WSSDataCollector *>>& wss_data,
+        vector<unsigned long> realizations) {
+
+    if (wss_data.empty()) {
+        throw std::runtime_error("ERROR: wss_data is empty in calculateAffordabilityIndexObjective_WSS_PerWSS");
+    }
+
+    unsigned long n_realizations = wss_data[0].size();
+    if (realizations.empty()) {
+        realizations = vector<unsigned long>(n_realizations);
+        iota(realizations.begin(), realizations.end(), 0);
+    } else {
+        n_realizations = realizations.size();
+    }
+
+    if (realizations.empty()) {
+        throw std::runtime_error("ERROR: realizations vector is empty in calculateAffordabilityIndexObjective_WSS_PerWSS");
+    }
+
+    vector<double> wss_affordability_95th;
+
+    for (const auto& wss_realization_data : wss_data) {
+        vector<double> realization_max_affordability;
+
+        for (const unsigned long &r : realizations) {
+            if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
+                const auto& residential_prices = wss_realization_data[r]->getResidential_current_price();
+                const auto& restricted_demand   = wss_realization_data[r]->getRestricted_demand();
+                const auto& demand_offset       = wss_realization_data[r]->getDemand_offset();
+                double average_monthly_income   = wss_realization_data[r]->getAverage_monthly_income();
+                double initial_households       = wss_realization_data[r]->getInitial_households();
+                double weekly_average_income    = (average_monthly_income > 0.0)
+                                                  ? (average_monthly_income / WEEKS_IN_MONTH)
+                                                  : 0.0;
+                size_t n_weeks = std::min(residential_prices.size(), restricted_demand.size());
+
+                if (n_weeks > 0 && weekly_average_income > 0.0 && initial_households > 0.0) {
+                    double max_affordability = 0.0;
+                    bool has_value = false;
+                    for (size_t w = 0; w < n_weeks; ++w) {
+                        double weekly_price  = residential_prices[w];
+                        double weekly_demand = restricted_demand[w]
+                                              + (w < demand_offset.size() ? demand_offset[w] : 0.0);
+                        if (weekly_price > 0.0 && weekly_demand > 0.0) {
+                            double affordability = (weekly_price * weekly_demand)
+                                                   / initial_households / weekly_average_income;
+                            if (!has_value || affordability > max_affordability) {
+                                max_affordability = affordability;
+                                has_value = true;
+                            }
+                        }
+                    }
+                    if (has_value) realization_max_affordability.push_back(max_affordability);
+                }
+            }
+        }
+
+        if (!realization_max_affordability.empty()) {
+            sort(realization_max_affordability.begin(), realization_max_affordability.end());
+            size_t index_95th = (size_t)(0.95 * (realization_max_affordability.size() - 1));
+            wss_affordability_95th.push_back(realization_max_affordability[index_95th]);
+        } else {
+            wss_affordability_95th.push_back(0.0);
+        }
+    }
+
+    return wss_affordability_95th;
+}

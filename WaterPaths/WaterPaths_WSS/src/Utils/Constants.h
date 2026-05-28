@@ -26,6 +26,7 @@ namespace Constants {
     // Experiment 2: 4 objs, reliability=AVERAGE
     // Experiment 3: 5 objs, reliability=MIN, affordability=MAX (worst case) [DEFAULT]
     // Experiment 4: 5 objs, reliability=AVERAGE, affordability=AVERAGE
+    // Experiment 5: 7 objs, per-WSS reliability and affordability (no aggregation)
     extern int EXPERIMENT_MODE; // Set via command line (-E flag)
     extern bool INCLUDE_SEVERITY; // Toggle severity objective via -V flag
     
@@ -41,7 +42,7 @@ namespace Constants {
     bool includeAffordabilityObjective();
     bool includeSeverityObjective();
     
-    const int NUM_OBJECTIVES = 6;  // Maximum number of objectives (for array sizing)
+    const int NUM_OBJECTIVES = 7;  // Maximum number of objectives (for array sizing)
 //#define NUM_DEC_VAR 57;
     const int NUM_DEC_VAR = 19;
 
@@ -139,7 +140,18 @@ namespace Constants {
     const int WATER_QUALITY_ALLOCATION = -1;
 
     // Inline function implementations for experiment configuration
+    inline bool includePerWSSObjectives() {
+        // Experiment 5: keep WSS reliability and affordability separate (no aggregation)
+        return EXPERIMENT_MODE == 5;
+    }
+
     inline int getNumObjectives() {
+        if (includePerWSSObjectives()) {
+            // Mode 5: 7 objectives:
+            // WSS0 reliability, WSS1 reliability, restriction freq,
+            // infra NPC, worst case costs, WSS0 affordability, WSS1 affordability
+            return 7;
+        }
         // Base: 4 objectives (reliability, restriction freq, infra NPC, worst case costs)
         int n = 4;
         if (includeAffordabilityObjective()) n++;
@@ -148,7 +160,7 @@ namespace Constants {
     }
     
     inline AggregationMethod getReliabilityAggregationMethod() {
-        // Experiments 1 & 3: MIN (worst case)
+        // Experiments 1, 3 & 5: MIN (worst case)
         // Experiments 2 & 4: AVERAGE
         return (EXPERIMENT_MODE == 2 || EXPERIMENT_MODE == 4) ? AVERAGE : MIN_WORST_CASE;
     }
@@ -161,8 +173,8 @@ namespace Constants {
     
     inline bool includeAffordabilityObjective() {
         // Experiments 1 & 2: No affordability
-        // Experiments 3 & 4: Include affordability
-        return (EXPERIMENT_MODE == 3 || EXPERIMENT_MODE == 4);
+        // Experiments 3, 4 & 5: Include affordability
+        return (EXPERIMENT_MODE == 3 || EXPERIMENT_MODE == 4 || EXPERIMENT_MODE == 5);
     }
     
     inline bool includeSeverityObjective() {
