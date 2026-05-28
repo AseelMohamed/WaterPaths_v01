@@ -30,6 +30,12 @@ private:
     vector<bool> under_construction;
     double infra_net_present_cost = NONE;
 
+    // Gate: Paranoa infrastructure (e.g. IDs 7-9) must not be triggered unless
+    // the EmergencyTransferParanoa has fired at least once this realization.
+    // The pointer addresses ever_triggered_ inside the realization's policy copy.
+    const bool* paranoa_transfer_gate_ = nullptr;
+    vector<int> paranoa_gated_source_ids_;
+
 public:
     InfrastructureManager(int id,
                           const vector<double> &infra_construction_triggers,
@@ -104,6 +110,11 @@ public:
     vector<vector<int>> getAllAndClearInfraBuilt();
 
     const vector<bool> &getUnder_construction() const;
+
+    // Set a gate so that sources in gated_ids can only be triggered after the
+    // EmergencyTransferParanoa has fired. gate_flag points to the policy's
+    // ever_triggered_ member (valid for the lifetime of the realization model).
+    void setParanoaTransferGate(const bool* gate_flag, vector<int> gated_ids);
 
 };
 

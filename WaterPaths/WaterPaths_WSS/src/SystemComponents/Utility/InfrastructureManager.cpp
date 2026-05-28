@@ -367,7 +367,22 @@ int InfrastructureManager::infrastructureConstructionHandler(
         /// Checks if ROF threshold for next infrastructure in line has been
         /// reached and if there is already infrastructure being built.
         if (next_construction != NON_INITIALIZED) {
-            if (long_term_rof > infra_construction_triggers[next_construction]) {
+            // Paranoa gate check: if this source requires the Paranoa emergency
+            // transfer to have fired at least once before construction is allowed,
+            // skip it when the gate is still closed.
+            bool gate_open = true;
+            if (paranoa_transfer_gate_ != nullptr) {
+                bool is_gated = find(paranoa_gated_source_ids_.begin(),
+                                     paranoa_gated_source_ids_.end(),
+                                     next_construction)
+                                != paranoa_gated_source_ids_.end();
+                if (is_gated && !(*paranoa_transfer_gate_)) {
+                    gate_open = false;
+                }
+            }
+
+            if (gate_open &&
+                long_term_rof > infra_construction_triggers[next_construction]) {
                 new_infra_triggered = next_construction;
                 // if (next_construction == 7 && wss_id == 0) {
                 //     printf("[WSS %d] Week %d: Infrastructure %d ROF-triggered (LT_ROF=%.4f > threshold=%.4f)\n",
@@ -588,3 +603,8 @@ const vector<bool> &InfrastructureManager::getUnder_construction() const {
     return under_construction;
 }
 
+void InfrastructureManager::setParanoaTransferGate(const bool* gate_flag,
+                                                    vector<int> gated_ids) {
+    paranoa_transfer_gate_      = gate_flag;
+    paranoa_gated_source_ids_   = std::move(gated_ids);
+}

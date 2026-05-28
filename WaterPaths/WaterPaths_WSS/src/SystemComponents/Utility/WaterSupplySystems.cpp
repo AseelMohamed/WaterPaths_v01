@@ -257,6 +257,7 @@ WaterSupplySystems::WaterSupplySystems(const WaterSupplySystems& other) :
     demand_offset = other.demand_offset;
     offset_rate_per_volume = other.offset_rate_per_volume;
     restricted_demand = other.restricted_demand;
+    customer_restricted_demand = other.customer_restricted_demand;
     unrestricted_demand = other.unrestricted_demand;
     n_sources = other.n_sources;
     max_capacity = other.max_capacity;
@@ -548,7 +549,14 @@ void WaterSupplySystems::splitDemands(
                      apply_demand_buffer * demand_buffer *
                      weekly_peaking_factor[week_of_year];
 
-        restricted_demand = unrestricted_demand * demand_multiplier - demand_offset;
+        // Customer-facing demand: restriction multiplier applied, no transfer offset.
+        // This is what customers actually consume and is used for output and wastewater.
+        customer_restricted_demand = unrestricted_demand * demand_multiplier;
+
+        // Source-withdrawal demand: includes the transfer offset so that TortoSM sources
+        // supply the transfer volume on top of restricted customer demand (sender: offset<0,
+        // receiver: offset>0 reduces own-source withdrawal).
+        restricted_demand = customer_restricted_demand - demand_offset;
 
         unfulfilled_demand = max(max(restricted_demand - total_available_volume,
                          restricted_demand - total_treatment_capacity),
@@ -698,7 +706,10 @@ void WaterSupplySystems::calculateWastewater_releases(int week, double* discharg
     waste_water_discharge = 0;
 
     for (int &id_disch : wwtp_discharge_rule.discharge_to_source_ids) {
-        discharge = restricted_demand * wwtp_discharge_rule
+        // Use customer_restricted_demand (unrestricted × multiplier, no transfer offset).
+        // Wastewater comes from customer consumption only, not from water transferred to
+        // another WSS (sender) or supplied from another WSS (receiver).
+        discharge = customer_restricted_demand * wwtp_discharge_rule
                 .get_dependent_variable(id_disch, Utils::weekOfTheYear(week));
         discharges[id_disch] += discharge;
 
@@ -896,7 +907,7 @@ double WaterSupplySystems::getUnrestrictedDemand(int week) const {
 }
 
 double WaterSupplySystems::getRestrictedDemand() const {
-    return restricted_demand;
+    return customer_restricted_demand;
 }
 
 double WaterSupplySystems::getDemand_multiplier() const {
@@ -1099,6 +1110,12 @@ void WaterSupplySystems::setInfrastructureParameters(const vector<int>& rof_infr
             infrastructure_construction_manager.addWaterSource(water_source);
         }
     }
+}
+
+void WaterSupplySystems::setParanoaTransferGate(const bool* gate_flag,
+                                                 vector<int> gated_ids) {
+    infrastructure_construction_manager.setParanoaTransferGate(gate_flag,
+                                                                std::move(gated_ids));
 }
 
 // ============================================================================

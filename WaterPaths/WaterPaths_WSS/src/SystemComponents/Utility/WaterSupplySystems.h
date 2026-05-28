@@ -108,6 +108,12 @@ public:
                                     const vector<int>& demand_infra_construction_order, 
                                     const vector<double>& infra_construction_triggers);
 
+    // Register the Paranoa transfer gate so that infrastructure IDs in gated_ids
+    // can only be triggered after the EmergencyTransferParanoa has fired once.
+    // gate_flag points to EmergencyTransferParanoa::ever_triggered_ in the
+    // realization copy; it remains valid for the lifetime of the realization model.
+    void setParanoaTransferGate(const bool* gate_flag, vector<int> gated_ids);
+
     // Demand splitting algorithms
     static bool idealDemandSplitUnconstrained(
             double* split_demands,
@@ -231,7 +237,8 @@ private:
     double demand_multiplier = 1;
     double demand_offset = 0;
     double offset_rate_per_volume = 0;
-    double restricted_demand = 0;
+    double restricted_demand = 0;          // source withdrawal demand = customer_restricted_demand - demand_offset
+    double customer_restricted_demand = 0; // customer-facing demand = unrestricted_demand * demand_multiplier (no offset)
     double unrestricted_demand = 0;
     int n_sources = 0;
     double max_capacity = 0;

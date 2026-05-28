@@ -110,9 +110,9 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         caesb_descoberto_inftrigger = 1.1;
         caesb_tortoSM_inftrigger = 1.1;
     }
-    double ETA_paranoaSul_upgrade1_ranking = vars[10]; // ID 7: Etapa 1 da ETA Paranoá Sul (+0.7 m³/s)
-    double ETA_paranoaSul_upgrade2_ranking = vars[11]; // ID 8: Etapa 2 da ETA Paranoá Sul (+0.7 m³/s)
-    double ETA_paranoaSul_upgrade3_ranking = vars[12]; // ID 9: Etapa 3 das ETAs Paranoá Sul e Norte (+0.7 m³/s)
+    double ETA_paranoaSul_upgrade1_ranking = vars[10]; // ID 7: Etapa 1 da ETA Paranoá Sul (+0.1 m³/s)
+    double ETA_paranoaSul_upgrade2_ranking = vars[11]; // ID 8: Etapa 2 da ETA Paranoá Sul (+0.1 m³/s)
+    double ETA_paranoaSul_upgrade3_ranking = vars[12]; // ID 9: Etapa 3 das ETAs Paranoá Sul e Norte (+0.1 m³/s)
     double ETA_corumba_upgrade1_ranking = vars[13]; // ID 5: Etapa 1 da ETA Corumbá (+1.4 m³/s, total 2.8 m³/s)
     double ETA_corumba_upgrade2_ranking = vars[14]; // ID 6: Etapa 2 da ETA Corumbá (+1.2 m³/s, total 4.0 m³/s)
     double descoberto_expansao_ranking = vars[15]; // ID 10: Expansão do Reservatório do Descoberto (+25% storage)
@@ -580,15 +580,15 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     //Sistema Paranoá - Construção da ETA Paranoá Sul (0.7 m³/s), sua primeira ampliação (upgrade 2, com + 0.7 m³/s), segunda ampliação (upgrade 3, com + 0.35 m³/s) e
     // ampliação da ETA Lago Norte (upgrade 3, com + 0.35 m³/s))
 
-    // Paranoa WTP expansions (IDs 7-9) are ROF-triggered investments that expand treatment
-    // capacity at Paranoa. However, water from Paranoa reaches TortoSM ONLY through the
-    // fixed pipeline (EmergencyTransferParanoa, capped at 0.1 m³/s). The pipeline is always
-    // the bottleneck — WTP expansions do not add direct draw capacity to WSS1.
-    // Capacities are set to {0.0, 0.0}: the builds still occur (costs are incurred) but
-    // waterTreatmentPlantConstructionHandler skips draw-list addition when added_capacity == 0.
-    vector<double> capacities_ETA_paranoaSul_upgrade_1 = {0.0, 0.0};
-    vector<double> capacities_ETA_paranoaSul_upgrade_2 = {0.0, 0.0};
-    vector<double> capacities_ETAs_paranoa_upgrade_3   = {0.0, 0.0};
+    // Paranoa WTP expansions (IDs 7-9) each add +100 l/s to treatment capacity
+    // AND +100 l/s to the transfer pipeline capacity (via EmergencyTransferParanoa).
+    // Initial treatment capacity is 100 l/s (set on the AllocatedReservoir), and the
+    // pipeline starts at 100 l/s. Each triggered expansion raises both by 100 l/s.
+    //
+    double paranoa_expansion_capacity = 0.1e-6 * 3600 * 24 * 7; // 100 l/s in hm³/week
+    vector<double> capacities_ETA_paranoaSul_upgrade_1 = {0.0, paranoa_expansion_capacity};
+    vector<double> capacities_ETA_paranoaSul_upgrade_2 = {0.0, paranoa_expansion_capacity};
+    vector<double> capacities_ETAs_paranoa_upgrade_3   = {0.0, paranoa_expansion_capacity};
 
     // Empréstimos para a implantação e ampliação da ETA Paranoá Sul e Norte (Norte: apenas upgrade 3)
 
@@ -724,9 +724,10 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                                         {2}};  // WTP 1 treats Corumba
     vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7,    // WTP 0: Descoberto ETA (6.0 m³/s)
                                              1.4e-6 * 3600 * 24 * 7};   // WTP 1: Corumba ETA (1.4 m³/s)
-    vector<vector<int>> water_sources_to_wtp_caesb_2 = {{1, 4}};  // WTP 0: TortoSM + Bananal/Torto only
+    vector<vector<int>> water_sources_to_wtp_caesb_2 = {{1, 4}, {3}};  // WTP 0: TortoSM + Bananal/Torto; WTP 1: Paranoá
     vector<double> wtp_capacities_caesb_2 = {
-            1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7};  // WTP 0: TortoSM + Bananal ETAs
+            1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7,  // WTP 0: TortoSM + Bananal ETAs (2.8 m³/s)
+            0.1e-6 * 3600 * 24 * 7};  // WTP 1: ETA Lago Norte / Paranoá (0.1 m³/s)
 
     // Create single CAESB utility with two water supply systems
     // First system: Descoberto (system_id=0, utility_id=0)
@@ -928,18 +929,25 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     // POLÍTICA DE TRANSFERÊNCIA DE EMERGÊNCIA — Paranoá → TortoSM
     // Activated when TortoSM ROF exceeds caesb_paranoa_transfer_trigger.
-    // Pipe capacity: 0.1 m³/s. Volume capped at 0.8% of Paranoa total capacity.
+    // Initial pipe capacity: 0.1 m³/s (100 l/s). Each of the three Paranoa
+    // expansions (IDs 7, 8, 9), when built, adds another 0.1 m³/s to the
+    // effective pipeline capacity (matching the +100 l/s treatment expansion).
+    // Volume also bounded by Paranoa's 0.8% supply allocation for TortoSM.
     // Must be added AFTER TransfersBilateral so that TransfersBilateral's demand
     // offset reset does not overwrite the emergency supply offset.
     // Transfer cost: receiver (TortoSM) is charged at its current water price ×
     // 1.1 (10% surcharge), consistent with the TransfersBilateral convention.
+    double paranoa_base_pipe_capacity  = 0.1e-6 * 3600 * 24 * 7; // initial 100 l/s
+    double paranoa_pipe_per_expansion  = 0.1e-6 * 3600 * 24 * 7; // +100 l/s per expansion
     EmergencyTransferParanoa paranoa_emergency(
             (int) drought_mitigation_policies.size(),  // unique policy id
             1,                                          // receiver: TortoSM (system_id = 1)
             3,                                          // Paranoa water source id = 3
-            0.1e-6 * 3600 * 24 * 7,                   // pipe capacity (hm³/week)
+            paranoa_base_pipe_capacity,                 // initial pipe capacity
             caesb_paranoa_transfer_trigger,             // ROF trigger
-            1.1);                                       // cost multiplier (10% surcharge over water price)
+            1.1,                                        // cost multiplier (10% surcharge)
+            {7, 8, 9},                                  // expansion IDs that grow the pipeline
+            paranoa_pipe_per_expansion);                // capacity increment per expansion
     drought_mitigation_policies.push_back(&paranoa_emergency);
 
     /// Creates simulation object depending on use (or lack thereof) ROF tables

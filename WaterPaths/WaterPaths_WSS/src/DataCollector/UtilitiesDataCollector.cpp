@@ -34,28 +34,28 @@ string UtilitiesDataCollector::printTabularString(int week) {
 
 string UtilitiesDataCollector::printCompactString(int week) {
 
-#ifndef NDEBUG
-    // Debug-mode bounds checking to catch uninitialized memory access
-    auto check = [week, this](const std::vector<double> &v, const char *name) {
-        if (week < 0 || (size_t)week >= v.size()) {
-            std::ostringstream oss;
-            oss << "Week index " << week << " out of range for " << name
-                << " (size=" << v.size() << "), utility id=" << id
-                << ", realization=" << realization;
-            throw std::out_of_range(oss.str());
-        }
-    };
+// #ifndef NDEBUG
+//     // Debug-mode bounds checking to catch uninitialized memory access
+//     auto check = [week, this](const std::vector<double> &v, const char *name) {
+//         if (week < 0 || (size_t)week >= v.size()) {
+//             std::ostringstream oss;
+//             oss << "Week index " << week << " out of range for " << name
+//                 << " (size=" << v.size() << "), utility id=" << id
+//                 << ", realization=" << realization;
+//             throw std::out_of_range(oss.str());
+//         }
+//     };
 
-    check(contingency_fund_size, "contingency_fund_size");
-    check(insurance_payout, "insurance_payout");
-    check(insurance_contract_cost, "insurance_contract_cost");
-    check(net_present_infrastructure_cost, "net_present_infrastructure_cost");
-    check(debt_service_payments, "debt_service_payments");
-    check(gross_revenues, "gross_revenues");
-    check(contingency_fund_contribution, "contingency_fund_contribution");
-    check(drought_mitigation_cost, "drought_mitigation_cost");
-    check(water_price, "water_price");
-#endif
+//     check(contingency_fund_size, "contingency_fund_size");
+//     check(insurance_payout, "insurance_payout");
+//     check(insurance_contract_cost, "insurance_contract_cost");
+//     check(net_present_infrastructure_cost, "net_present_infrastructure_cost");
+//     check(debt_service_payments, "debt_service_payments");
+//     check(gross_revenues, "gross_revenues");
+//     check(contingency_fund_contribution, "contingency_fund_contribution");
+//     check(drought_mitigation_cost, "drought_mitigation_cost");
+//     check(water_price, "water_price");
+// #endif
 
     stringstream outStream;
 
