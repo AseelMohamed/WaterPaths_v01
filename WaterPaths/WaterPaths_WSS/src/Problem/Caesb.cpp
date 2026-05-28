@@ -45,8 +45,8 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 3, 0.001, 1.0); //Diferença entre um estágio de maior restrição para o estágio de menor restrição - tortoSM
     BORG_Problem_set_bounds(problem, 4, 0.001, 1.0); //Gatilho para acionar a transferência de água entre sistemas - descoberto
     BORG_Problem_set_bounds(problem, 5, 0.001, 1.0); //Gatilho para acionar a transferência de água entre sistemas - tortoSM
-    BORG_Problem_set_bounds(problem, 6, 0.0, 0.00); // Percentual da receita anual alocada para o fundo de contingência da companhia 0. O limite superior representa 10% da receita anual.
-    BORG_Problem_set_bounds(problem, 7, 0.0, 0.00); // Percentual da receita anual alocada para o fundo de contingência da companhia 1. O limite superior representa 10% da receita anual.
+    BORG_Problem_set_bounds(problem, 6, 0.0, 1e-10); // Percentual da receita anual alocada para o fundo de contingência da companhia 0. Fixado em 0 na avaliação; limite não degenerado para evitar NaN no operador PM.
+    BORG_Problem_set_bounds(problem, 7, 0.0, 1e-10); // Percentual da receita anual alocada para o fundo de contingência da companhia 1. Fixado em 0 na avaliação; limite não degenerado para evitar NaN no operador PM.
     BORG_Problem_set_bounds(problem, 8, 0.001, 1.0); //Gatilho para acionar construção de infraestrutura pela Caesb - descoberto
     BORG_Problem_set_bounds(problem, 9, 0.001, 1.0); //Gatilho para acionar construção de infraestrutura pela Caesb - tortoSM
     BORG_Problem_set_bounds(problem, 10, 0.0, 1.0); //Ordem de "construção" da Etapa 1 da ETA Paranoá Sul (ID 7: + 0.7 m³/s) — TortoSM
@@ -60,15 +60,24 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 18, 0.001, 1.0); //Gatilho ROF para ativar transferência de emergência do Paranoá para TortoSM
 
     // Set epsilons for objectives //(problem, n° de identificação da função objetivo, valor do epsilon). O valor do epsilon indica a precisão das funções objetivo.
-    BORG_Problem_set_epsilon(problem, 0, 0.001);
-    BORG_Problem_set_epsilon(problem, 1, 0.005);
-    BORG_Problem_set_epsilon(problem, 2, 10000000.);
-//     BORG_Problem_set_epsilon(problem, 3, 0.005);
-    BORG_Problem_set_epsilon(problem, 3, 0.005);
-    
-    // Only set affordability epsilon if included in experiment (experiments 3 & 4)
-    if (Constants::includeAffordabilityObjective()) {
-        BORG_Problem_set_epsilon(problem, 4, 0.001);  // Affordability index
+    if (Constants::includePerWSSObjectives()) {
+        // Mode 5: 7 objectives [WSS0_rel, WSS1_rel, restr_freq, NPC, worst_cost, WSS0_afford, WSS1_afford]
+        BORG_Problem_set_epsilon(problem, 0, 0.001);      // WSS0 reliability
+        BORG_Problem_set_epsilon(problem, 1, 0.001);      // WSS1 reliability
+        BORG_Problem_set_epsilon(problem, 2, 0.005);      // Restriction frequency
+        BORG_Problem_set_epsilon(problem, 3, 10000000.);  // Infrastructure NPC
+        BORG_Problem_set_epsilon(problem, 4, 0.005);      // Worst case costs
+        BORG_Problem_set_epsilon(problem, 5, 0.001);      // WSS0 affordability
+        BORG_Problem_set_epsilon(problem, 6, 0.001);      // WSS1 affordability
+    } else {
+        // Modes 1–4: [reliability, restr_freq, NPC, worst_cost (, affordability)]
+        BORG_Problem_set_epsilon(problem, 0, 0.001);      // Reliability
+        BORG_Problem_set_epsilon(problem, 1, 0.005);      // Restriction frequency
+        BORG_Problem_set_epsilon(problem, 2, 10000000.);  // Infrastructure NPC
+        BORG_Problem_set_epsilon(problem, 3, 0.005);      // Worst case costs
+        if (Constants::includeAffordabilityObjective()) {
+            BORG_Problem_set_epsilon(problem, 4, 0.001);  // Affordability index
+        }
     }
 }
 #endif
@@ -1014,29 +1023,37 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     }
 
 // With WSS architecture, there is only ONE utility (CAESB) with 2 WSS.
-// The objectives vector has variable elements depending on experiment mode:
-// [0] = Reliability (minimum across both WSS)
-// [1] = Restriction Frequency
-// [2] = Infrastructure NPC 
-// [3] = Worst Case Costs
-// [4+] = Affordability Index (if included) and/or Failure Severity (if included)
+// The objectives vector layout depends on experiment mode:
+// Mode 5: [WSS0_rel, WSS1_rel, restr_freq, NPC, worst_cost, WSS0_afford, WSS1_afford]
+// Modes 1-4: [reliability, restr_freq, NPC, worst_cost (, affordability (, severity))]
 
-#ifdef  PARALLEL 
-    objs[0] = -objectives[0];  // Negative reliability
-    objs[1] = objectives[1];   // Restriction frequency
-    objs[2] = objectives[2];   // Infrastructure NPC
+#ifdef  PARALLEL
+    if (Constants::includePerWSSObjectives()) {
+        // Mode 5: copy 7 per-WSS objectives; negate both reliability objectives for minimization
+        objs[0] = -objectives[0]; // WSS0 reliability (negated)
+        objs[1] = -objectives[1]; // WSS1 reliability (negated)
+        objs[2] = objectives[2];  // Restriction frequency
+        objs[3] = objectives[3];  // Infrastructure NPC
+        objs[4] = objectives[4];  // Worst case costs
+        objs[5] = objectives[5];  // WSS0 affordability
+        objs[6] = objectives[6];  // WSS1 affordability
+    } else {
+        objs[0] = -objectives[0];  // Negative reliability
+        objs[1] = objectives[1];   // Restriction frequency
+        objs[2] = objectives[2];   // Infrastructure NPC
         objs[3] = objectives[3];   // Worst case costs
-    
-    int obj_idx = 4;
-    // Only copy affordability if it was calculated (experiments 3 & 4)
+
+        int obj_idx = 4;
+        // Only copy affordability if it was calculated (experiments 3 & 4)
         if (Constants::includeAffordabilityObjective() && obj_idx < (int)objectives.size()) {
-                objs[obj_idx] = objectives[obj_idx];   // Affordability index
-        obj_idx++;
-    }
-    // Only copy severity if it was included
+            objs[obj_idx] = objectives[obj_idx];   // Affordability index
+            obj_idx++;
+        }
+        // Only copy severity if it was included
         if (Constants::includeSeverityObjective() && obj_idx < (int)objectives.size()) {
-                objs[obj_idx] = objectives[obj_idx];   // Failure severity
-        obj_idx++;
+            objs[obj_idx] = objectives[obj_idx];   // Failure severity
+            obj_idx++;
+        }
     }
      
         if (s != nullptr) {	 // != significa "diferente de"
