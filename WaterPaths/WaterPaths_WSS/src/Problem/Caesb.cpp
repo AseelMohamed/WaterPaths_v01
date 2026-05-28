@@ -39,16 +39,16 @@
 void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo void permite fazer funções que não retornam nada e funções que não têm parâmetros. Algumas funções não precisam retornar nenhum valor para funcionar, apenas realizar alguma ação.
 { //BORG é o algoritmo de otimização.(problem, número de identificação da variável de decisão, limite inferior da variável, limite superior da variável)
     // The parameter bounds are the same for all formulations
-    BORG_Problem_set_bounds(problem, 0, 0.001, 1.0); //Gatilho para acionar a restrição de uso da água - descoberto
-    BORG_Problem_set_bounds(problem, 1, 0.001, 1.0); //Gatilho para acionar a restrição de uso da água - tortoSM
-    BORG_Problem_set_bounds(problem, 2, 0.001, 1.0); //Diferença entre um estágio de maior restrição para o estágio de menor restrição - descoberto
-    BORG_Problem_set_bounds(problem, 3, 0.001, 1.0); //Diferença entre um estágio de maior restrição para o estágio de menor restrição - tortoSM
-    BORG_Problem_set_bounds(problem, 4, 0.001, 1.0); //Gatilho para acionar a transferência de água entre sistemas - descoberto
-    BORG_Problem_set_bounds(problem, 5, 0.001, 1.0); //Gatilho para acionar a transferência de água entre sistemas - tortoSM
-    BORG_Problem_set_bounds(problem, 6, 0.0, 1e-10); // Percentual da receita anual alocada para o fundo de contingência da companhia 0. Fixado em 0 na avaliação; limite não degenerado para evitar NaN no operador PM.
-    BORG_Problem_set_bounds(problem, 7, 0.0, 1e-10); // Percentual da receita anual alocada para o fundo de contingência da companhia 1. Fixado em 0 na avaliação; limite não degenerado para evitar NaN no operador PM.
-    BORG_Problem_set_bounds(problem, 8, 0.001, 1.0); //Gatilho para acionar construção de infraestrutura pela Caesb - descoberto
-    BORG_Problem_set_bounds(problem, 9, 0.001, 1.0); //Gatilho para acionar construção de infraestrutura pela Caesb - tortoSM
+    BORG_Problem_set_bounds(problem, 0, 0.001, 1.1); //Gatilho para acionar a restrição de uso da água - descoberto
+    BORG_Problem_set_bounds(problem, 1, 0.001, 1.1); //Gatilho para acionar a restrição de uso da água - tortoSM
+    BORG_Problem_set_bounds(problem, 2, 0.001, 1.1); //Diferença entre um estágio de maior restrição para o estágio de menor restrição - descoberto
+    BORG_Problem_set_bounds(problem, 3, 0.001, 1.1); //Diferença entre um estágio de maior restrição para o estágio de menor restrição - tortoSM
+    BORG_Problem_set_bounds(problem, 4, 0.001, 1.1); //Gatilho para acionar a transferência de água entre sistemas - descoberto
+    BORG_Problem_set_bounds(problem, 5, 0.001, 1.1); //Gatilho para acionar a transferência de água entre sistemas - tortoSM
+    BORG_Problem_set_bounds(problem, 6, 0.0, 1e-12); // Percentual da receita anual alocada para o fundo de contingência da companhia 0. Fixado em 0 na avaliação; limite não degenerado para evitar NaN no operador PM.
+    BORG_Problem_set_bounds(problem, 7, 0.0, 1e-12); // Percentual da receita anual alocada para o fundo de contingência da companhia 1. Fixado em 0 na avaliação; limite não degenerado para evitar NaN no operador PM.
+    BORG_Problem_set_bounds(problem, 8, 0.001, 1.1); //Gatilho para acionar construção de infraestrutura pela Caesb - descoberto
+    BORG_Problem_set_bounds(problem, 9, 0.001, 1.1); //Gatilho para acionar construção de infraestrutura pela Caesb - tortoSM
     BORG_Problem_set_bounds(problem, 10, 0.0, 1.0); //Ordem de "construção" da Etapa 1 da ETA Paranoá Sul (ID 7: + 0.7 m³/s) — TortoSM
     BORG_Problem_set_bounds(problem, 11, 0.0, 1.0); //Ordem de "construção" da Etapa 2 da ETA Paranoá Sul (ID 8: + 0.7 m³/s) — TortoSM
     BORG_Problem_set_bounds(problem, 12, 0.0, 1.0); //Ordem de "construção" da Etapa 3 das ETAs Paranoá Sul e Norte (ID 9: + 0.7 m³/s) — TortoSM
@@ -57,7 +57,7 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 15, 0.0, 1.0); //Ordem de "construção" da expansão do Descoberto (ID 10: + 25% storage)
     BORG_Problem_set_bounds(problem, 16, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - descoberto
     BORG_Problem_set_bounds(problem, 17, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - tortoSM
-    BORG_Problem_set_bounds(problem, 18, 0.001, 1.0); //Gatilho ROF para ativar transferência de emergência do Paranoá para TortoSM
+    BORG_Problem_set_bounds(problem, 18, 0.001, 1.1); //Gatilho ROF para ativar transferência de emergência do Paranoá para TortoSM
 
     // Set epsilons for objectives //(problem, n° de identificação da função objetivo, valor do epsilon). O valor do epsilon indica a precisão das funções objetivo.
     if (Constants::includePerWSSObjectives()) {
