@@ -561,6 +561,44 @@ void WaterSupplySystems::splitDemands(
         unfulfilled_demand = max(max(restricted_demand - total_available_volume,
                          restricted_demand - total_treatment_capacity),
                      0.);
+
+        // DEBUG: print when WSS0 has unfulfilled demand
+        if (system_id == 0 && unfulfilled_demand > 1e-6) {
+            bool volume_binding = (restricted_demand - total_available_volume) >=
+                                  (restricted_demand - total_treatment_capacity);
+            printf("[DEBUG WSS0] week=%d  unrestricted=%.4f  demand_mult=%.4f  offset=%.4f"
+                   "  restricted=%.4f  avail_vol=%.4f  treat_cap=%.4f  unfulfilled=%.4f  binding=%s\n",
+                   week, unrestricted_demand, demand_multiplier, demand_offset,
+                   restricted_demand, total_available_volume, total_treatment_capacity,
+                   unfulfilled_demand, volume_binding ? "STORAGE" : "TREATMENT");
+            // Print per-source available volumes so we know which source is depleted
+            for (int ws_id : priority_draw_water_source) {
+                if (ws_id < (int)water_sources.size() && water_sources[ws_id] != nullptr) {
+                    double avail = water_sources[ws_id]->getAvailableAllocatedVolume(system_id);
+                    int wtp = water_source_to_wtp[ws_id];
+                    double wtp_cap = (wtp < (int)wss_owned_wtp_capacities.size())
+                                     ? wss_owned_wtp_capacities[wtp] : -1.0;
+                    printf("  [PRIORITY src=%d '%s'] avail=%.4f  wtp_cap=%.4f  online=%s\n",
+                           ws_id, water_sources[ws_id]->name.c_str(),
+                           avail, wtp_cap,
+                           water_sources[ws_id]->isOnline() ? "YES" : "NO");
+                }
+            }
+            for (int i = 0; i < n_storage_sources; ++i) {
+                int ws_id = non_priority_draw_water_source[i];
+                if (ws_id < (int)water_sources.size() && water_sources[ws_id] != nullptr) {
+                    double avail = water_sources[ws_id]->getAvailableAllocatedVolume(system_id);
+                    int wtp = water_source_to_wtp[ws_id];
+                    double wtp_cap = (wtp < (int)wss_owned_wtp_capacities.size())
+                                     ? wss_owned_wtp_capacities[wtp] : -1.0;
+                    printf("  [STORAGE  src=%d '%s'] avail=%.4f  wtp_cap=%.4f  online=%s\n",
+                           ws_id, water_sources[ws_id]->name.c_str(),
+                           avail, wtp_cap,
+                           water_sources[ws_id]->isOnline() ? "YES" : "NO");
+                }
+            }
+        }
+
         restricted_demand -= unfulfilled_demand;
 
     double demand_non_priority_sources = restricted_demand;

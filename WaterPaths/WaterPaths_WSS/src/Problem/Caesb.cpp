@@ -273,7 +273,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                          39.81 * table_gen_storage_multiplier,
                                          49.49 * table_gen_storage_multiplier,
                                          60.31 * table_gen_storage_multiplier,
-                                         72.29 * table_gen_storage_multiplier};
+                                         10 * 72.29 * table_gen_storage_multiplier};
 
     vector<double> descoberto_area = {412.94, 494.21, 584.10, 670.80,
                                       740.33, 825.34, 917.11, 1023.49,
@@ -427,18 +427,16 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     Reservoir descoberto("Descoberto",//nome do reservatório
                          0,//número de identificação
                          bacia_descoberto,//vetor criado lá em cima - contém as vazões referentes aos afluentes do Descoberto
-                         72.29 *
+                         72.29 * 10 *
                          table_gen_storage_multiplier, //capacidade de armazenamento do reservatório (hm³)
-                         6.0e-6 * 3600 * 24 *
-                         7, //capacidade máxima de tratamento da ETA Descoberto (hm³/semana)
+                         6.0e-6 * 3600 * 24 * 7 * 5, //capacidade máxima de tratamento da ETA Descoberto (hm³/semana)
                          evaporation_descoberto,                //obs: outorga da represa de Sta Maria é de 1.478 l/s (PDSB, 2017)
                          &descoberto_storage_area);
 
     Reservoir tortoSM("Torto / Santa Maria", 1,
                       bacia_tortoSM,
                       61.308 * table_gen_storage_multiplier, //hm³
-                      1.1e-6 * 3600 * 24 *
-                      7, //capacidade máxima de tratamento da ETA Brasília (hm³/semana)
+                      (1.1e-6 * 3600 * 24 * 7) * 1.5, //capacidade máxima de tratamento da ETA Brasília (hm³/semana)
                       evaporation_tortoSM,
                       &tortoSM_storage_area);
 
@@ -479,7 +477,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     // Initial treatment capacity for Corumba IV (online from start)
     // Using the first stage ETA capacity (1.4 m³/s = 1.4e-6 * 3600 * 24 * 7 hm³/week)
-    double cIV_initial_treatment_capacity = 1.4e-6 * 3600 * 24 * 7;
+    double cIV_initial_treatment_capacity = 1.4e-6 * 3600 * 24 * 7 * 5;
 
     AllocatedReservoir corumba("Corumba IV",
                                2,
@@ -519,7 +517,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             "Captacao no Ribeirao Bananal e Ribeiro do Torto",
             4,                                                          //Obs: a série de vazão utilizada referente ao Bananal
             sistema_bananal_torto,                                          //foi retirada de uma estação fluviométrica localizada
-            1.7e-6 * 3600 * 24 * 7); // hm³/semana      //a justante do ponto de captação. Não há problema,
+            (1.7e-6 * 3600 * 24 * 7) * 1.5); // hm³/semana      //a justante do ponto de captação. Não há problema,
     // pois a captação começou apenas ao final de 2017,
     // então a série é basicamente composta pela vazão natural do ribeirão.
 //    Intake ribeirao_torto("Captacao no Ribeirao do Torto",
@@ -731,11 +729,11 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // fixed transfer pipeline (EmergencyTransferParanoa, 0.1 m³/s cap).
     vector<vector<int>> water_sources_to_wtp_caesb_1 = {{0},   // WTP 0 treats Descoberto
                                                         {2}};  // WTP 1 treats Corumba
-    vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7,    // WTP 0: Descoberto ETA (6.0 m³/s)
-                                             1.4e-6 * 3600 * 24 * 7};   // WTP 1: Corumba ETA (1.4 m³/s)
+    vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7 * 5,    // WTP 0: Descoberto ETA (6.0 m³/s)
+                                             1.4e-6 * 3600 * 24 * 7 * 5};   // WTP 1: Corumba ETA (1.4 m³/s)
     vector<vector<int>> water_sources_to_wtp_caesb_2 = {{1, 4}, {3}};  // WTP 0: TortoSM + Bananal/Torto; WTP 1: Paranoá
     vector<double> wtp_capacities_caesb_2 = {
-            1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7,  // WTP 0: TortoSM + Bananal ETAs (2.8 m³/s)
+            (1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7) * 1.5,  // WTP 0: TortoSM + Bananal ETAs (2.8 m³/s)
             0.1e-6 * 3600 * 24 * 7};  // WTP 1: ETA Lago Norte / Paranoá (0.1 m³/s)
 
     // Create single CAESB utility with two water supply systems

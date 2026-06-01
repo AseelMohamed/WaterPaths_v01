@@ -708,14 +708,27 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         // Get WSS-specific price (lookup from stored parameters)
         double wss_unrestricted_price = 0.0;
         double wss_current_price = 0.0;
-        double wss_restricted_price = NON_INITIALIZED;
         
         if (wss_weekly_average_prices.find(system_id) != wss_weekly_average_prices.end()) {
             auto& wss_prices = wss_weekly_average_prices[system_id];
             if (week_of_year >= 0 && week_of_year < (int)wss_prices.size()) {
                 wss_unrestricted_price = wss_prices[week_of_year];
-                
-                // Validation: ensure restricted price is not lower than unrestricted price
+
+                // Look up restricted price if a surcharge is currently active for this WSS
+                double fetched_restricted_price = NON_INITIALIZED;
+                #pragma omp critical(utility_restriction_prices)
+                {
+                    auto it = wss_restricted_prices.find(system_id);
+                    if (it != wss_restricted_prices.end()) {
+                        fetched_restricted_price = it->second;
+                    }
+                }
+
+                // Use restricted price when active, otherwise fall back to unrestricted price
+                wss_current_price = (fetched_restricted_price == NON_INITIALIZED)
+                        ? wss_unrestricted_price : fetched_restricted_price;
+
+                // Ensure restricted price never falls below unrestricted price
                 if (wss_current_price < wss_unrestricted_price) {
                     wss_current_price = wss_unrestricted_price;
                 }
