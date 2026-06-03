@@ -15,6 +15,7 @@ class TransfersBilateral : public DroughtMitigationPolicy {
     double surcharge_percentage_fee;
     vector<double> transfer_triggers;
     vector<double> transfered_volumes;
+    double sender_demand_protection_factor;
 
 public:
     TransfersBilateral(int id,
@@ -22,7 +23,8 @@ public:
                        double source_treatment_buffer,
                        double surcharge_percentage_fee,
                        const vector<double> &transfer_triggers,
-                       const vector<int> &wss_ids);
+                       const vector<int> &wss_ids,
+                       double sender_demand_protection_factor);
 
     TransfersBilateral(const TransfersBilateral &transfer_caesb);
 

@@ -10,13 +10,15 @@ TransfersBilateral::TransfersBilateral(const int id,
                                        double source_treatment_buffer,
                                        double surcharge_percentage_fee,
                                        const vector<double> &transfer_triggers,
-                                       const vector<int> &wss_ids)
+                                       const vector<int> &wss_ids,
+                                       double sender_demand_protection_factor)
         : DroughtMitigationPolicy(id, TRANSFERS_CAESB),
           source_treatment_buffer(source_treatment_buffer),
           surcharge_percentage_fee(surcharge_percentage_fee),
           pipe_transfer_capacities(pipe_transfer_capacities),
           transfer_overhead(surcharge_percentage_fee),
-          transfer_triggers(vector<double>(wss_ids.size(), NON_INITIALIZED)) {
+          transfer_triggers(vector<double>(wss_ids.size(), NON_INITIALIZED)),
+          sender_demand_protection_factor(sender_demand_protection_factor) {
         this->transfer_triggers[wss_ids[0]] = transfer_triggers[0];
         // Only set second trigger if we have a second system
         if (wss_ids.size() > 1 && transfer_triggers.size() > 1) {
@@ -32,7 +34,8 @@ TransfersBilateral::TransfersBilateral(const TransfersBilateral &transfer_caesb)
         surcharge_percentage_fee(transfer_caesb.surcharge_percentage_fee),
         pipe_transfer_capacities(transfer_caesb.pipe_transfer_capacities),
         transfer_overhead(transfer_caesb.surcharge_percentage_fee),
-        transfer_triggers(transfer_caesb.transfer_triggers) {
+        transfer_triggers(transfer_caesb.transfer_triggers),
+        sender_demand_protection_factor(transfer_caesb.sender_demand_protection_factor) {
     this->wss_ids = transfer_caesb.wss_ids;
 }
 
@@ -92,19 +95,23 @@ double TransfersBilateral::performTransfer(WaterSupplySystems *sender, WaterSupp
     
     double trigger = transfer_triggers[receiver->system_id];
 
-    double sender_risk = sender->getRisk_of_failure();
+    // double sender_risk = sender->getRisk_of_failure(); //This is commented so that Torto can 
+                                                          //send water even if it is under failure risk
 
-    
-    if (receiver_risk > trigger && sender_risk == 0.) {
+    if (receiver_risk > trigger /* && sender_risk == 0. */) {
         double treatment_capacity = sender->getTotal_treatment_capacity();
         double unrestricted_demand = sender->getUnrestrictedDemand();
        
-        // Calculate transfer volume
+        // Calculate transfer volume — sender reserves a protected share of its own demand
+        // before making water available for transfer.
+        // sender_demand_protection_factor == 1.0: sender fully covers its own unrestricted demand first.
+        // sender_demand_protection_factor  < 1.0: sender accepts some burden to help the receiver.
+        // sender_demand_protection_factor  > 1.0: sender keeps a safety margin above unrestricted demand.
+        double protected_sender_demand = sender_demand_protection_factor * unrestricted_demand;
         double available_transfer_volume =
-                (treatment_capacity - source_treatment_buffer) * PEAKING_FACTOR
-                - unrestricted_demand;
-        transfer_volume = max(min(available_transfer_volume,
-                              pumping_capacity), 0.);
+                max((treatment_capacity - source_treatment_buffer) * PEAKING_FACTOR
+                    - protected_sender_demand, 0.0);
+        transfer_volume = min(available_transfer_volume, pumping_capacity);
 
         // For within-utility transfers: only operational costs, no benefit to sender
         // Receiver pays operational cost (transfer_overhead factor)

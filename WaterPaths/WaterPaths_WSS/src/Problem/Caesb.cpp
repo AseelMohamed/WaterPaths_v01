@@ -58,6 +58,8 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 16, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - descoberto
     BORG_Problem_set_bounds(problem, 17, 0.1, 0.5); //Buffer de infraestrutura por parte da Caesb - tortoSM
     BORG_Problem_set_bounds(problem, 18, 0.001, 1.1); //Gatilho ROF para ativar transferência de emergência do Paranoá para TortoSM
+    BORG_Problem_set_bounds(problem, 19, 0.0, 1.2); //Fração da demanda irrestrita do emissor protegida antes da transferência (0=sem proteção, 1=proteção total, 2=margem de segurança de 100%)
+    BORG_Problem_set_bounds(problem, 20, 0.0, 1.0); //Ordem de "construção" da Ampliação da ETA Santa Maria (ID 12: +0.7 m³/s) — TortoSM; sequência força esta antes das ETAs do Paranoá
 
     // Set epsilons for objectives //(problem, n° de identificação da função objetivo, valor do epsilon). O valor do epsilon indica a precisão das funções objetivo.
     if (Constants::includePerWSSObjectives()) {
@@ -129,6 +131,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double caesb_tortoSM_inf_buffer = vars[17];
     // Paranoa is emergency-only for TortoSM. Single trigger variable replaces
     double caesb_paranoa_transfer_trigger = vars[18]; // ROF threshold to activate emergency Paranoa supply to TortoSM
+    double sender_demand_protection_factor = vars[19]; // Fraction of sender's unrestricted demand protected before transferring (range 0–2)
+    double ETA_santaMaria_upgrade_ranking = vars[20]; // ID 12: Ampliação da ETA Santa Maria (+0.7 m³/s) — TortoSM
 
     //ANALISAR POSSIBILIDADE DE INCLUIR O RIO DO SAL COMO OPÇÃO DE AMPLIAÇÃO DA INFRAESTRUTURA DE OFERTA
 
@@ -143,12 +147,14 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             infraRank(10, descoberto_expansao_ranking)
     };
 
-    // TortoSM can trigger the Paranoa ETA expansions (IDs 7-9) via ROF.
-    // These expansions add treatment capacity on Paranoá for TortoSM.
+    // TortoSM infra: Santa Maria (ID 12) is triggered by caesb_tortoSM_inftrigger (vars[9]).
+    // Paranoa ETA expansions (IDs 7-9) are emergency-only and triggered by
+    // caesb_paranoa_transfer_trigger (vars[18]) — a separate, independently optimised threshold.
     vector<infraRank> caesb_tortoSM_infra_order_raw = {
-            infraRank(7, ETA_paranoaSul_upgrade1_ranking),
-            infraRank(8, ETA_paranoaSul_upgrade2_ranking),
-            infraRank(9, ETA_paranoaSul_upgrade3_ranking)
+            infraRank(12, ETA_santaMaria_upgrade_ranking), // Santa Maria ETA expansion (+0.7 m³/s)
+            infraRank(7,  ETA_paranoaSul_upgrade1_ranking),
+            infraRank(8,  ETA_paranoaSul_upgrade2_ranking),
+            infraRank(9,  ETA_paranoaSul_upgrade3_ranking)
     };
 
     // GET INFRASTRUCTURE CONSTRUCTION ORDER BASED ON DECISION VARIABLES
@@ -169,9 +175,16 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     vector<double> rofs_infra_caesb_descoberto = vector<double>
             (rof_triggered_infra_order_caesb_descoberto.size(),
              caesb_descoberto_inftrigger);
-    vector<double> rofs_infra_caesb_tortoSM = vector<double>
-            (rof_triggered_infra_order_caesb_tortoSM.size(),
-             caesb_tortoSM_inftrigger);
+    // Santa Maria (ID 12) uses the standard TortoSM infra trigger (vars[9]).
+    // Paranoa ETA expansions (IDs 7-9) use the separate emergency trigger (vars[18]).
+    vector<double> rofs_infra_caesb_tortoSM;
+    for (const auto& ir : caesb_tortoSM_infra_order_raw) {
+        if (ir.id == 12) {
+            rofs_infra_caesb_tortoSM.push_back(caesb_tortoSM_inftrigger);
+        } else { // IDs 7, 8, 9 — Paranoa ETA expansions
+            rofs_infra_caesb_tortoSM.push_back(caesb_paranoa_transfer_trigger);
+        }
+    }
 
     // Remove small expansions being built after big expansions that would encompass the small expansions.
 
@@ -273,7 +286,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
                                          39.81 * table_gen_storage_multiplier,
                                          49.49 * table_gen_storage_multiplier,
                                          60.31 * table_gen_storage_multiplier,
-                                         10 * 72.29 * table_gen_storage_multiplier};
+                                         72.29 * table_gen_storage_multiplier};
 
     vector<double> descoberto_area = {412.94, 494.21, 584.10, 670.80,
                                       740.33, 825.34, 917.11, 1023.49,
@@ -427,16 +440,15 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     Reservoir descoberto("Descoberto",//nome do reservatório
                          0,//número de identificação
                          bacia_descoberto,//vetor criado lá em cima - contém as vazões referentes aos afluentes do Descoberto
-                         72.29 * 10 *
-                         table_gen_storage_multiplier, //capacidade de armazenamento do reservatório (hm³)
-                         6.0e-6 * 3600 * 24 * 7 * 5, //capacidade máxima de tratamento da ETA Descoberto (hm³/semana)
+                         72.29 * table_gen_storage_multiplier, //capacidade de armazenamento do reservatório (hm³)
+                         6.0e-6 * 3600 * 24 * 7, //capacidade máxima de tratamento da ETA Descoberto (hm³/semana)
                          evaporation_descoberto,                //obs: outorga da represa de Sta Maria é de 1.478 l/s (PDSB, 2017)
                          &descoberto_storage_area);
 
     Reservoir tortoSM("Torto / Santa Maria", 1,
                       bacia_tortoSM,
                       61.308 * table_gen_storage_multiplier, //hm³
-                      (1.1e-6 * 3600 * 24 * 7) * 1.5, //capacidade máxima de tratamento da ETA Brasília (hm³/semana)
+                      1.1e-6 * 3600 * 24 * 7, //capacidade máxima de tratamento da ETA Brasília (hm³/semana)
                       evaporation_tortoSM,
                       &tortoSM_storage_area);
 
@@ -477,7 +489,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     // Initial treatment capacity for Corumba IV (online from start)
     // Using the first stage ETA capacity (1.4 m³/s = 1.4e-6 * 3600 * 24 * 7 hm³/week)
-    double cIV_initial_treatment_capacity = 1.4e-6 * 3600 * 24 * 7 * 5;
+    double cIV_initial_treatment_capacity = 1.4e-6 * 3600 * 24 * 7;
 
     AllocatedReservoir corumba("Corumba IV",
                                2,
@@ -517,7 +529,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             "Captacao no Ribeirao Bananal e Ribeiro do Torto",
             4,                                                          //Obs: a série de vazão utilizada referente ao Bananal
             sistema_bananal_torto,                                          //foi retirada de uma estação fluviométrica localizada
-            (1.7e-6 * 3600 * 24 * 7) * 1.5); // hm³/semana      //a justante do ponto de captação. Não há problema,
+            1.7e-6 * 3600 * 24 * 7); // hm³/semana      //a justante do ponto de captação. Não há problema,
     // pois a captação começou apenas ao final de 2017,
     // então a série é basicamente composta pela vazão natural do ribeirão.
 //    Intake ribeirao_torto("Captacao no Ribeirao do Torto",
@@ -643,6 +655,18 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
             0 * WEEKS_IN_YEAR,
             descoberto_exp_bond); //previsão: 2022. ID 10
 
+    // Ampliação da ETA Santa Maria (WSS 1 — TortoSM): +0.7 m³/s treatment capacity. ID 12.
+    // Cost is a placeholder value — adjust based on project-specific estimates.
+    vector<double> capacity_ETA_santaMaria = {0.0, 0.7e-6 * 3600 * 24 * 7}; // WSS0: 0, WSS1: +0.7 m³/s
+    vector<Bond *> debendure_expansao_ETA_santaMaria = {
+            new BalloonPaymentBond(11, 0, 15, 0.12, vector<int>(1, 0)),            // WSS0 — no cost
+            new LevelDebtServiceBond(13, 60332016, 15, 0.12, vector<int>(1, 0))};  // WSS1 — same as Etapa 1 da ETA Paranoá Sul
+    SequentialJointTreatmentExpansion ETA_santaMaria_expansion(
+            "Ampliacao ETA Santa Maria", 12, 1, 0, {12},
+            capacity_ETA_santaMaria,
+            debendure_expansao_ETA_santaMaria, construction_time_interval,
+            0 * WEEKS_IN_YEAR); // ID 12 — standalone expansion for TortoSM
+
     vector<WaterSource *> water_sources; //water_sources é um vetor comum, que comportará todas as
     // opções descritas acima de ampliação da infraestrutura de abastecimento
     water_sources.push_back(&descoberto);
@@ -660,6 +684,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     water_sources.push_back(&etapa2_ETA_paranoaSul);
     water_sources.push_back(&etapa3_ETAs_paranoa);
     water_sources.push_back(&descoberto_expansion);
+    water_sources.push_back(&ETA_santaMaria_expansion);  // ID 12 at index 12
 
     water_sources.push_back(&dummy_endpoint);
 
@@ -674,7 +699,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
      *                                  1 (Santa Maria)
      *      0(10)                       |
      *       \                          |
-     *        \                         |  4(Ban)   4 (Torto)
+     *        \                         |  4(Ban)   4 (Torto) (12)
      *         \                        |   \      /
      *          \                       |    \ __/
      *           \                      |     3 (Paranoá) (7, 8, 9)
@@ -693,7 +718,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
      *
      */
 
-    Graph g(12); //graph é uma forma de estruturar dados que consiste em dois componentes:
+    Graph g(13); //graph é uma forma de estruturar dados que consiste em dois componentes:
     // um conjunto finito de vértices denominado de nós; e um cojunto finito de pares ordenados (x,y), denominados de edges.
     g.addEdge(0,
               2); //essa conexão indica que existe uma aresta do vértice 0 ao vértice 2.
@@ -729,11 +754,11 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // fixed transfer pipeline (EmergencyTransferParanoa, 0.1 m³/s cap).
     vector<vector<int>> water_sources_to_wtp_caesb_1 = {{0},   // WTP 0 treats Descoberto
                                                         {2}};  // WTP 1 treats Corumba
-    vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7 * 5,    // WTP 0: Descoberto ETA (6.0 m³/s)
-                                             1.4e-6 * 3600 * 24 * 7 * 5};   // WTP 1: Corumba ETA (1.4 m³/s)
+    vector<double> wtp_capacities_caesb_1 = {6.0e-6 * 3600 * 24 * 7,    // WTP 0: Descoberto ETA (6.0 m³/s)
+                                             1.4e-6 * 3600 * 24 * 7};   // WTP 1: Corumba ETA (1.4 m³/s)
     vector<vector<int>> water_sources_to_wtp_caesb_2 = {{1, 4}, {3}};  // WTP 0: TortoSM + Bananal/Torto; WTP 1: Paranoá
     vector<double> wtp_capacities_caesb_2 = {
-            (1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7) * 1.5,  // WTP 0: TortoSM + Bananal ETAs (2.8 m³/s)
+            (1.1e-6 * 3600 * 24 * 7 + 1.7e-6 * 3600 * 24 * 7),  // WTP 0: TortoSM + Bananal ETAs (2.8 m³/s)
             0.1e-6 * 3600 * 24 * 7};  // WTP 1: ETA Lago Norte / Paranoá (0.1 m³/s)
 
     // Create single CAESB utility with two water supply systems
@@ -816,6 +841,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         wss_tortoSM.setSourceFailureThreshold(7, 0.20);     // Paranoa ETA Etapa 1
         wss_tortoSM.setSourceFailureThreshold(8, 0.20);     // Paranoa ETA Etapa 2
         wss_tortoSM.setSourceFailureThreshold(9, 0.20);     // Paranoa ETA Etapa 3
+        wss_tortoSM.setSourceFailureThreshold(12, 0.20);    // Santa Maria ETA expansion
 
         vector<Utility *> utilities; //vetor que contém a única companhia CAESB
         utilities.push_back(&caesb);
@@ -824,8 +850,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // WSS 0 (Descoberto): sources {0, 2, 5, 6, 10, 11}
     // WSS 1 (TortoSM):    sources {1, 4, 3, 7, 8, 9} — Paranoa and its ETAs now ROF-triggered by TortoSM
     vector<vector<int>> reservoir_wss_connectivity_matrix = {
-            {0, 2, 5, 6, 10, 11},     // Descoberto(0), Corumba(2), Corumba_E1(5), Corumba_E2(6), Descoberto_Exp(10), Dummy(11)
-            {1, 4, 3, 7, 8, 9}        // TortoSM(1), Bananal/Torto(4), Paranoa(3), Paranoa_E1(7), Paranoa_E2(8), Paranoa_E3(9)
+            {0, 2, 5, 6, 10, 11},        // Descoberto(0), Corumba(2), Corumba_E1(5), Corumba_E2(6), Descoberto_Exp(10), Dummy(11)
+            {1, 4, 3, 7, 8, 9, 12}       // TortoSM(1), Bananal/Torto(4), Paranoa(3), Paranoa_E1(7), Paranoa_E2(8), Paranoa_E3(9), SantaMaria_Exp(12)
     };
 
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
@@ -931,7 +957,8 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 
     vector<int> tranfers_wss_ids = {0, 1};  // system_id 0=Descoberto, system_id 1=TortoSM
     TransfersBilateral transfers(0, transfer_capacities, 0.1, 1.1,
-                                 transfer_rofs, tranfers_wss_ids);
+                                 transfer_rofs, tranfers_wss_ids,
+                                 sender_demand_protection_factor);
     drought_mitigation_policies.push_back(&transfers);
 
     // POLÍTICA DE TRANSFERÊNCIA DE EMERGÊNCIA — Paranoá → TortoSM
@@ -1072,7 +1099,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 int Caesb::simulationExceptionHander(const std::exception &e,
                                      Simulation *s, // :: significa "resolução de escopo"
                                      double *objs, const double *vars) {
-    int num_dec_var = 20; //número de variáveis desse estudo de caso
+    int num_dec_var = 21; //número de variáveis desse estudo de caso
 //        printf("Exception called during calculations. Decision variables are below:\n");
     ofstream sol;
     int world_rank;
