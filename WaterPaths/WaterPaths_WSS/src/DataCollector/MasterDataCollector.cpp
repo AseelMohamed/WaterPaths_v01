@@ -1609,6 +1609,11 @@ void MasterDataCollector::printPathways(string file_name) {
         output_rows.push_back(kv.second);
     }
 
+    sort(output_rows.begin(), output_rows.end(), [](const PathwayRow &a, const PathwayRow &b) {
+        if (a.realization != b.realization) return a.realization < b.realization;
+        return a.week < b.week;
+    });
+
     for (const auto &row : output_rows) {
         outStream << row.realization << "\t" << row.utility_id << "\t" << row.wss_id << "\t"
                   << row.week << "\t" << row.infra_id << endl;

@@ -857,9 +857,9 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 //    @TODO: verificar se há necessidade de corrigir volumes de reservatórios construídos.
 //    // O que table_storage_shift representa? O que são esses números (2000, 5000...) [3] [17]
     // Update table storage shift to match WSS structure (2 WSS within single utility)
-    // Vector size matches water source count: 12 sources (IDs 0-11)
+    // Vector size matches water source count: 13 sources (IDs 0-12, including ETA_santaMaria ID 12)
     auto table_storage_shift = vector<vector<double>>(2,  // Two WSS
-                                                      vector<double>(12, 0.));
+                                                      vector<double>(13, 0.));
     // No storage shift needed for current configuration
 //    table_storage_shift[3][17] = 2000.; //tem a ver com a RdF
 //    table_storage_shift[3][8] = 5000.;
