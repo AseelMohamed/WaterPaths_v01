@@ -104,9 +104,6 @@ double TransfersBilateral::performTransfer(WaterSupplySystems *sender, WaterSupp
        
         // Calculate transfer volume — sender reserves a protected share of its own demand
         // before making water available for transfer.
-        // sender_demand_protection_factor == 1.0: sender fully covers its own unrestricted demand first.
-        // sender_demand_protection_factor  < 1.0: sender accepts some burden to help the receiver.
-        // sender_demand_protection_factor  > 1.0: sender keeps a safety margin above unrestricted demand.
         double protected_sender_demand = sender_demand_protection_factor * unrestricted_demand;
         double available_transfer_volume =
                 max((treatment_capacity - source_treatment_buffer) * PEAKING_FACTOR

@@ -151,7 +151,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // Paranoa ETA expansions (IDs 7-9) are emergency-only and triggered by
     // caesb_paranoa_transfer_trigger (vars[18]) — a separate, independently optimised threshold.
     vector<infraRank> caesb_tortoSM_infra_order_raw = {
-            infraRank(12, ETA_santaMaria_upgrade_ranking), // Santa Maria ETA expansion (+0.7 m³/s)
+            infraRank(12, ETA_santaMaria_upgrade_ranking), // Santa Maria ETA expansion (+0.7 m³/s) — TEMPORARILY DISABLED
             infraRank(7,  ETA_paranoaSul_upgrade1_ranking),
             infraRank(8,  ETA_paranoaSul_upgrade2_ranking),
             infraRank(9,  ETA_paranoaSul_upgrade3_ranking)

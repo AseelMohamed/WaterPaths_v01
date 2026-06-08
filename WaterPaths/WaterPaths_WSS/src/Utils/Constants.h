@@ -44,7 +44,7 @@ namespace Constants {
     
     const int NUM_OBJECTIVES = 7;  // Maximum number of objectives (for array sizing)
 //#define NUM_DEC_VAR 57;
-    const int NUM_DEC_VAR = 19;
+    const int NUM_DEC_VAR = 21;
 
     const std::string DEFAULT_DATA_DIR = "InputFiles" + BAR;
     const std::string DEFAULT_OUTPUT_DIR = "output" + BAR;
