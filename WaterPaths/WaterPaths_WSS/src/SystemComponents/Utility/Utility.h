@@ -293,7 +293,12 @@ public:
     double getInfraDiscountRate() const;
     
     double getBaseInfraDiscountRate() const;
-    
+
+    // THREAD-SAFE: read-only access to base (unscaled) per-WSS prices.
+    // base_wss_weekly_average_prices is set once during problem setup and never modified
+    // during parallel simulation, making concurrent reads safe.
+    const vector<double>& getBaseWssWeeklyAveragePrices(int system_id) const;
+
     void resetFinancialState();
 
     bool isUsedForRealization() const; // Getter for realization flag

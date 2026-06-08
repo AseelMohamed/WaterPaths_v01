@@ -709,9 +709,10 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
         double wss_unrestricted_price = 0.0;
         double wss_current_price = 0.0;
         
-        if (wss_weekly_average_prices.find(system_id) != wss_weekly_average_prices.end()) {
-            auto& wss_prices = wss_weekly_average_prices[system_id];
-            if (week_of_year >= 0 && week_of_year < (int)wss_prices.size()) {
+        // THREAD-SAFE: read per-realization prices from the WSS copy (no shared state).
+        {
+            const auto& wss_prices = wss->getWeeklyAvgPrices();
+            if (!wss_prices.empty() && week_of_year >= 0 && week_of_year < (int)wss_prices.size()) {
                 wss_unrestricted_price = wss_prices[week_of_year];
 
                 // Look up restricted price if a surcharge is currently active for this WSS
@@ -733,12 +734,9 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
                     wss_current_price = wss_unrestricted_price;
                 }
             } else {
-                printf("WARNING: week_of_year %d out of bounds for WSS %d prices\n", week_of_year, system_id);
+                printf("WARNING: week_of_year %d out of bounds or no prices for WSS %d\n", week_of_year, system_id);
                 continue;
             }
-        } else {
-            printf("WARNING: No prices stored for WSS %d\n", system_id);
-            continue;
         }
 
         // Calculate current residential first-tier weekly price for affordability
@@ -749,7 +747,7 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
             int month_index = min((int) (week_of_year / WEEKS_IN_MONTH), NUMBER_OF_MONTHS - 1);
             if (month_index >= 0 && month_index < (int)monthly_prices.size() &&
                 !monthly_prices[month_index].empty()) {
-                wss_residential_base_price = monthly_prices[month_index][0] / WEEKS_IN_MONTH * price_rdm_multiplier;
+                wss_residential_base_price = monthly_prices[month_index][0] / WEEKS_IN_MONTH * wss->getPriceRdmMultiplier();
             }
         }
 
@@ -866,9 +864,10 @@ void Utility::updateUtilityFinancialCalculations(int week, const std::vector<Wat
             wss_contingency_pct = wss_contingency_percentages[system_id];
         }
         
-        if (wss_weekly_average_prices.find(system_id) != wss_weekly_average_prices.end()) {
-            auto& wss_prices = wss_weekly_average_prices[system_id];
-            if (week_of_year >= 0 && week_of_year < (int)wss_prices.size()) {
+        // THREAD-SAFE: read per-realization prices from the WSS copy (no shared state).
+        {
+            const auto& wss_prices = wss->getWeeklyAvgPrices();
+            if (!wss_prices.empty() && week_of_year >= 0 && week_of_year < (int)wss_prices.size()) {
                 wss_price = wss_prices[week_of_year];
             }
         }
@@ -1273,16 +1272,11 @@ void Utility::setRealization(unsigned long r, vector<double> &rdm_factors) {
         }
     }
 
-    if (!base_wss_weekly_average_prices.empty()) {
-        wss_weekly_average_prices.clear();
-        for (const auto &pair : base_wss_weekly_average_prices) {
-            vector<double> scaled_prices = pair.second;
-            for (double &price : scaled_prices) {
-                price *= price_rdm_multiplier;
-            }
-            wss_weekly_average_prices[pair.first] = std::move(scaled_prices);
-        }
-    }
+    // NOTE: Per-WSS scaled prices are now stored directly in each WaterSupplySystems copy
+    // via WaterSupplySystems::setRealization() (called above). The shared
+    // wss_weekly_average_prices map is intentionally NOT rebuilt here to eliminate
+    // the data race between setRealization() (writer) and updateUtilityFinancialCalculations()
+    // (reader). See WaterSupplySystems::weekly_avg_prices_ for the thread-safe replacement.
 
 }
 
@@ -1520,6 +1514,13 @@ double Utility::getInfraDiscountRate() const {
 
 double Utility::getBaseInfraDiscountRate() const {
     return base_infra_discount_rate;
+}
+
+const vector<double>& Utility::getBaseWssWeeklyAveragePrices(int system_id) const {
+    static const vector<double> empty;
+    auto it = base_wss_weekly_average_prices.find(system_id);
+    if (it == base_wss_weekly_average_prices.end()) return empty;
+    return it->second;
 }
 
 double Utility::getTotal_storage_capacity() const {

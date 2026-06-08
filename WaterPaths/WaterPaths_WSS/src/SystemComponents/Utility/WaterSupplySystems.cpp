@@ -799,6 +799,20 @@ void WaterSupplySystems::setRealization(unsigned long r, vector<double> &rdm_fac
     weekly_peaking_factor = calculateWeeklyPeakingFactor
             (&demands_all_realizations.at(r));
 
+    // THREAD-SAFE: Store per-realization scaled prices in this WSS copy.
+    // Each realization owns its own WaterSupplySystems copy, so writing here is
+    // race-free and eliminates the data race on Utility::wss_weekly_average_prices.
+    price_rdm_multiplier_ = (rdm_factors.size() > 4) ? rdm_factors.at(4) : 1.0;
+    if (owner != nullptr) {
+        const vector<double>& base_prices = owner->getBaseWssWeeklyAveragePrices(system_id);
+        if (!base_prices.empty()) {
+            weekly_avg_prices_.resize(base_prices.size());
+            for (size_t w = 0; w < base_prices.size(); ++w) {
+                weekly_avg_prices_[w] = base_prices[w] * price_rdm_multiplier_;
+            }
+        }
+    }
+
 }
 
 vector<double> WaterSupplySystems::calculateWeeklyPeakingFactor(vector<double> *demands) {

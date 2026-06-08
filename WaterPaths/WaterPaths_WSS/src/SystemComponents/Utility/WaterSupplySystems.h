@@ -200,7 +200,11 @@ public:
 
     // Per-WTP-slot maximum delivery capacity (pipeline cap independent of WTP size)
     void setWtpMaxDeliveryCapacity(int wtp_slot, double max_delivery_capacity);
-    
+
+    // THREAD-SAFE getters for per-realization price data (no locking needed - each realization owns its WSS copy)
+    const vector<double>& getWeeklyAvgPrices() const { return weekly_avg_prices_; }
+    double getPriceRdmMultiplier() const { return price_rdm_multiplier_; }
+
 private:
     Utility* owner;
     vector<int> priority_draw_water_source;
@@ -256,7 +260,13 @@ private:
     // Per-source failure thresholds (source_id -> threshold ratio)
     // If a source is not in this map, it uses STORAGE_CAPACITY_RATIO_FAIL default
     std::map<int, double> source_failure_thresholds;
-    
+
+    // THREAD-SAFE: per-realization scaled weekly average prices for this WSS.
+    // Populated by setRealization() so each realization's WSS copy carries its own
+    // price series, eliminating the data race on the shared Utility::wss_weekly_average_prices.
+    vector<double> weekly_avg_prices_;
+    double price_rdm_multiplier_ = 1.0;
+
     bool hasTreatmentCapacity() const;
 };
 
