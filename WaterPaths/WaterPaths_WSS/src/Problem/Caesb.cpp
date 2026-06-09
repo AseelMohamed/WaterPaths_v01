@@ -60,6 +60,7 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
     BORG_Problem_set_bounds(problem, 18, 0.001, 1.1); //Gatilho ROF para ativar transferência de emergência do Paranoá para TortoSM
     BORG_Problem_set_bounds(problem, 19, 0.0, 1.2); //Fração da demanda irrestrita do emissor protegida antes da transferência (0=sem proteção, 1=proteção total, 2=margem de segurança de 100%)
     BORG_Problem_set_bounds(problem, 20, 0.0, 1.0); //Ordem de "construção" da Ampliação da ETA Santa Maria (ID 12: +0.7 m³/s) — TortoSM; sequência força esta antes das ETAs do Paranoá
+    BORG_Problem_set_bounds(problem, 21, 1.0, 1.4); //Multiplicador de preço para restrição de uso residencial (estágio 3, col 0) — Descoberto e TortoSM
 
     // Set epsilons for objectives //(problem, n° de identificação da função objetivo, valor do epsilon). O valor do epsilon indica a precisão das funções objetivo.
     if (Constants::includePerWSSObjectives()) {
@@ -133,6 +134,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double caesb_paranoa_transfer_trigger = vars[18]; // ROF threshold to activate emergency Paranoa supply to TortoSM
     double sender_demand_protection_factor = vars[19]; // Fraction of sender's unrestricted demand protected before transferring (range 0–2)
     double ETA_santaMaria_upgrade_ranking = vars[20]; // ID 12: Ampliação da ETA Santa Maria (+0.7 m³/s) — TortoSM
+    double residential_price_restriction_multiplier = vars[21]; // Multiplicador de tarifa residencial no estágio 3 (caesbPriceRestrictionMultipliers[2][0])
 
     //ANALISAR POSSIBILIDADE DE INCLUIR O RIO DO SAL COMO OPÇÃO DE AMPLIAÇÃO DA INFRAESTRUTURA DE OFERTA
 
@@ -905,6 +907,9 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // Criação das políticas de restrição de uso da água (agora referenciando sistemas de abastecimento)
     // Restrictions now target specific water supply systems within the single utility
 
+    // Override residential price restriction multiplier (row 2, col 0) with DV[21]
+    caesbPriceRestrictionMultipliers[2][0] = residential_price_restriction_multiplier;
+
     Restrictions restrictions_descoberto(0,  // utility_id=0, targets system_id=0 (Descoberto)
                                          restriction_stage_multipliers_caesb_descoberto,
                                          restriction_stage_triggers_caesb_descoberto,
@@ -1099,7 +1104,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
 int Caesb::simulationExceptionHander(const std::exception &e,
                                      Simulation *s, // :: significa "resolução de escopo"
                                      double *objs, const double *vars) {
-    int num_dec_var = 21; //número de variáveis desse estudo de caso
+    int num_dec_var = 22; //número de variáveis desse estudo de caso
 //        printf("Exception called during calculations. Decision variables are below:\n");
     ofstream sol;
     int world_rank;
