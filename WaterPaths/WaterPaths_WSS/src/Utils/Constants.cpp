@@ -9,4 +9,5 @@
 namespace Constants {
     int EXPERIMENT_MODE = 3;
     bool INCLUDE_SEVERITY = false; // Toggle severity objective via -V flag
+    int TARGET_WSS_ID = 0;        // Target WSS for experiment 6 (default: WSS 0)
 }

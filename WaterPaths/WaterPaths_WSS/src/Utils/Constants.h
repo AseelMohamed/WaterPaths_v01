@@ -27,8 +27,10 @@ namespace Constants {
     // Experiment 3: 5 objs, reliability=MIN, affordability=MAX (worst case) [DEFAULT]
     // Experiment 4: 5 objs, reliability=AVERAGE, affordability=AVERAGE
     // Experiment 5: 7 objs, per-WSS reliability and affordability (no aggregation)
+    // Experiment 6: 5 objs, single-WSS reliability and affordability (target WSS set by -w flag)
     extern int EXPERIMENT_MODE; // Set via command line (-E flag)
     extern bool INCLUDE_SEVERITY; // Toggle severity objective via -V flag
+    extern int TARGET_WSS_ID;  // Target WSS for experiment 6 (set via -w flag, default 0)
     
     // Aggregation methods for WSS-level objectives
     enum AggregationMethod {
@@ -145,12 +147,21 @@ namespace Constants {
         return EXPERIMENT_MODE == 5;
     }
 
+    inline bool includeSingleWSSObjectives() {
+        // Experiment 6: optimize for one specific WSS (TARGET_WSS_ID), no aggregation
+        return EXPERIMENT_MODE == 6;
+    }
+
     inline int getNumObjectives() {
         if (includePerWSSObjectives()) {
             // Mode 5: 7 objectives:
             // WSS0 reliability, WSS1 reliability, restriction freq,
             // infra NPC, worst case costs, WSS0 affordability, WSS1 affordability
             return 7;
+        }
+        if (includeSingleWSSObjectives()) {
+            // Mode 6: 5 objectives [WSS_N reliability, restr_freq, NPC, worst_cost, WSS_N affordability]
+            return 5;
         }
         // Base: 4 objectives (reliability, restriction freq, infra NPC, worst case costs)
         int n = 4;
@@ -173,8 +184,8 @@ namespace Constants {
     
     inline bool includeAffordabilityObjective() {
         // Experiments 1 & 2: No affordability
-        // Experiments 3, 4 & 5: Include affordability
-        return (EXPERIMENT_MODE == 3 || EXPERIMENT_MODE == 4 || EXPERIMENT_MODE == 5);
+        // Experiments 3, 4, 5 & 6: Include affordability
+        return (EXPERIMENT_MODE == 3 || EXPERIMENT_MODE == 4 || EXPERIMENT_MODE == 5 || EXPERIMENT_MODE == 6);
     }
     
     inline bool includeSeverityObjective() {

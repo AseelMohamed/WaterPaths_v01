@@ -664,6 +664,35 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
         objectives.push_back(inf_npc);
         objectives.push_back(worse_cost);
         for (double a : per_wss_afford) objectives.push_back(a);
+    } else if (Constants::includeSingleWSSObjectives()) {
+        // Mode 6: single target WSS reliability and affordability
+        vector<double> per_wss_rel;
+        vector<double> per_wss_afford;
+        if (!wss_collectors.empty()) {
+            vector<vector<WSSDataCollector *>> utility_wss_mode6;
+            isolateWSSDataCollectors(u, utility_wss_mode6);
+            if (!utility_wss_mode6.empty()) {
+                per_wss_rel    = ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
+                    utility_wss_mode6, realizations_ran);
+                per_wss_afford = ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_PerWSS(
+                    utility_wss_mode6, realizations_ran);
+            }
+        }
+        int target = Constants::TARGET_WSS_ID;
+        double target_rel    = (target < (int)per_wss_rel.size())    ? per_wss_rel[target]    : reliability;
+        double target_afford = (target < (int)per_wss_afford.size()) ? per_wss_afford[target] : affordability_index;
+        outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << target_rel
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << restriction_freq
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << inf_npc
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << worse_cost
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << target_afford
+                  << endl;
+        objectives.push_back(target_rel);
+        objectives.push_back(restriction_freq);
+        objectives.push_back(inf_npc);
+        objectives.push_back(worse_cost);
+        objectives.push_back(target_afford);
     } else {
         // Modes 1-4: aggregated objectives
         outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
@@ -734,6 +763,16 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                       << setw(COLUMN_WIDTH * 2) << "Affordability WSS0"
                       << setw(COLUMN_WIDTH * 2) << "Affordability WSS1"
                       << endl;
+        } else if (Constants::includeSingleWSSObjectives()) {
+            // Mode 6: single target WSS headers
+            string wss_label = "WSS" + to_string(Constants::TARGET_WSS_ID);
+            outStream << setw(COLUMN_WIDTH) << "      "
+                      << setw(COLUMN_WIDTH * 2) << ("Reliability " + wss_label)
+                      << setw(COLUMN_WIDTH * 2) << "Restriction Freq."
+                      << setw(COLUMN_WIDTH * 2) << "Infrastructure NPC"
+                      << setw(COLUMN_WIDTH * 2) << "Worse Case Costs"
+                      << setw(COLUMN_WIDTH * 2) << ("Affordability " + wss_label)
+                      << endl;
         } else {
             outStream << setw(COLUMN_WIDTH) << "      " << setw((COLUMN_WIDTH * 2))
                       << "Reliability"
@@ -795,6 +834,23 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                     double rel = ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran);
                     objectives.push_back(rel);
                     objectives.push_back(rel);
+                }
+            } else if (Constants::includeSingleWSSObjectives()) {
+                // Mode 6: push reliability for target WSS only
+                if (!wss_collectors.empty()) {
+                    vector<vector<WSSDataCollector *>> utility_wss_mode6;
+                    isolateWSSDataCollectors(u, utility_wss_mode6);
+                    if (!utility_wss_mode6.empty()) {
+                        vector<double> per_wss_rel =
+                            ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
+                                utility_wss_mode6, realizations_ran);
+                        int target = Constants::TARGET_WSS_ID;
+                        objectives.push_back(target < (int)per_wss_rel.size() ? per_wss_rel[target] : 1.0);
+                    } else {
+                        objectives.push_back(ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran));
+                    }
+                } else {
+                    objectives.push_back(ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran));
                 }
             } else if (!wss_collectors.empty()) {
                 // Filter WSS collectors to only include those belonging to this utility
@@ -875,6 +931,23 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                         }
                     } else {
                         objectives.push_back(1.0);
+                        objectives.push_back(1.0);
+                    }
+                } else if (Constants::includeSingleWSSObjectives()) {
+                    // Mode 6: push affordability for target WSS only
+                    if (!wss_collectors.empty()) {
+                        vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;
+                        isolateWSSDataCollectors(u, utility_wss_collectors_affordability);
+                        if (!utility_wss_collectors_affordability.empty()) {
+                            vector<double> per_wss_afford =
+                                ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_PerWSS(
+                                    utility_wss_collectors_affordability, realizations_ran);
+                            int target = Constants::TARGET_WSS_ID;
+                            objectives.push_back(target < (int)per_wss_afford.size() ? per_wss_afford[target] : 1.0);
+                        } else {
+                            objectives.push_back(1.0);
+                        }
+                    } else {
                         objectives.push_back(1.0);
                     }
                 } else if (!wss_collectors.empty()) {

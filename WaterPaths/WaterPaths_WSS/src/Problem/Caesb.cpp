@@ -73,7 +73,7 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
         BORG_Problem_set_epsilon(problem, 5, 0.001);      // WSS0 affordability
         BORG_Problem_set_epsilon(problem, 6, 0.001);      // WSS1 affordability
     } else {
-        // Modes 1–4: [reliability, restr_freq, NPC, worst_cost (, affordability)]
+        // Modes 1–4 & 6: [reliability, restr_freq, NPC, worst_cost (, affordability)]
         BORG_Problem_set_epsilon(problem, 0, 0.001);      // Reliability
         BORG_Problem_set_epsilon(problem, 1, 0.005);      // Restriction frequency
         BORG_Problem_set_epsilon(problem, 2, 10000000.);  // Infrastructure NPC

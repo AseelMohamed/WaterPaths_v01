@@ -37,13 +37,19 @@ void eval(double *vars, double *objs, double *consts) {
         failures += problem_ptr->functionEvaluation(vars, objs, consts);
         problem_ptr->destroyDataCollector();
     } catch (...) {
-        ofstream sol_out; // for debugging borg
-        sol_out << endl;
-        sol_out << "Failure! Decision Variable values: " << endl;
-        printf("\n");
-        printf("Failure! Decision variable values:\n");
-        for (int i = 0; i < NUM_DEC_VAR; ++i) sol_out << vars[i] << " ";
-        sol_out << endl;
+        int rank = 0;
+#ifdef PARALLEL
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#endif
+        string sol_out_name = "eval_failure_rank_" + to_string(rank) + ".csv";
+        ofstream sol_out(sol_out_name.c_str(), ios::app);
+        printf("\nFailure! Decision variable values (rank %d):\n", rank);
+        for (int i = 0; i < NUM_DEC_VAR; ++i) {
+            printf("  vars[%d] = %f\n", i, vars[i]);
+            if (sol_out.is_open()) sol_out << vars[i] << ",";
+        }
+        if (sol_out.is_open()) sol_out << "\n";
+        printf("Objectives set to 1e5 for this evaluation.\n");
         int num_objs = Constants::getNumObjectives();
         for (int i = 0; i < num_objs; ++i) objs[i] = 1e5;
     }
@@ -86,6 +92,7 @@ int main(int argc, char *argv[]) {
     int rdm_no = -1;
     int n_sets = -1;
     int n_bs_samples = -1;
+    int target_wss_id = 0;
     vector<vector<int>> realizations_to_run;
     vector<vector<double>> utilities_rdm;
     vector<vector<double>> water_sources_rdm;
@@ -113,11 +120,15 @@ int main(int argc, char *argv[]) {
         else if (arg == "-e" && i + 1 < argc) seed = atoi(argv[++i]);
         else if (arg == "-E" && i + 1 < argc) {
             Constants::EXPERIMENT_MODE = atoi(argv[++i]);
-            if (Constants::EXPERIMENT_MODE < 1 || Constants::EXPERIMENT_MODE > 5) {
-                fprintf(stderr, "Invalid experiment mode. Must be 1, 2, 3, 4, or 5.\n");
+            if (Constants::EXPERIMENT_MODE < 1 || Constants::EXPERIMENT_MODE > 6) {
+                fprintf(stderr, "Invalid experiment mode. Must be 1, 2, 3, 4, 5, or 6.\n");
                 return -1;
             }
             c_num_obj = Constants::getNumObjectives(); // Update objective count
+        }
+        else if (arg == "-w" && i + 1 < argc) {
+            target_wss_id = atoi(argv[++i]);
+            Constants::TARGET_WSS_ID = target_wss_id;
         }
         else if (arg == "-V" && i + 1 < argc) {
             int sev_flag = atoi(argv[++i]);
@@ -172,12 +183,14 @@ int main(int argc, char *argv[]) {
                     "\t-C: Import/export rof tables (1: export, 0:"
                     " do nothing (standard), -1: import)\n"
                     "\t-B: Export objectives for all utilities on a single line\n"
-                    "\t-E: Experiment mode (1-5):\n"
+                    "\t-E: Experiment mode (1-6):\n"
                     "\t    1: 4 objs, reliability=MIN (worst case)\n"
                     "\t    2: 4 objs, reliability=AVERAGE\n"
                     "\t    3: 5 objs, reliability=MIN, affordability=MAX [DEFAULT]\n"
                     "\t    4: 5 objs, reliability=AVERAGE, affordability=AVERAGE\n"
                     "\t    5: 7 objs, per-WSS reliability and affordability (no aggregation)\n"
+                    "\t    6: 5 objs, single-WSS reliability and affordability (use -w to set target WSS)\n"
+                    "\t-w: Target WSS ID for experiment 6 (default: 0)\n"
                     "\t-V: Include severity objective (1=yes [default], 0=no)\n",
                     argv[0], n_realizations, n_weeks, system_io.c_str());
             return -1;
@@ -197,6 +210,8 @@ int main(int argc, char *argv[]) {
     printf("  Number of Objectives: %d\n", Constants::getNumObjectives());
     if (Constants::includePerWSSObjectives()) {
         printf("  Mode: per-WSS (no aggregation across WSS)\n");
+    } else if (Constants::includeSingleWSSObjectives()) {
+        printf("  Mode: single-WSS (target WSS ID: %d)\n", Constants::TARGET_WSS_ID);
     } else {
     printf("  Reliability Aggregation: %s\n", 
            Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
@@ -410,6 +425,8 @@ int main(int argc, char *argv[]) {
             printf("  Number of Objectives: %d\n", Constants::getNumObjectives());
             if (Constants::includePerWSSObjectives()) {
                 printf("  Mode: per-WSS (no aggregation across WSS)\n");
+            } else if (Constants::includeSingleWSSObjectives()) {
+                printf("  Mode: single-WSS (target WSS ID: %d)\n", Constants::TARGET_WSS_ID);
             } else {
             printf("  Reliability Aggregation: %s\n", 
                    Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
@@ -446,8 +463,8 @@ int main(int argc, char *argv[]) {
 	    BORG_Random_seed(seed);
         }
         string output_directory = system_io + DEFAULT_OUTPUT_DIR;
-        string output_file_name = output_directory + "NC_output_MS_S" + to_string(seed) + "_N" + to_string(nfe) + ".set";
-        string runtime_file = output_directory + "NC_runtime_MS_S" + to_string(seed) + "_N" + to_string(nfe) + ".runtime";
+        string output_file_name = output_directory + "NC_output_MS_E" + to_string(Constants::EXPERIMENT_MODE) + "_S" + to_string(seed) + "_N" + to_string(nfe) + ".set";
+        string runtime_file = output_directory + "NC_runtime_MS_E" + to_string(Constants::EXPERIMENT_MODE) + "_S" + to_string(seed) + "_N" + to_string(nfe) + ".runtime";
         
         printf("Reference set will be in %s.\n", output_file_name.c_str());
         printf("Runtime files will be in %s.\n", runtime_file.c_str());
