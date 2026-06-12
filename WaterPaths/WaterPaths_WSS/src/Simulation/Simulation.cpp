@@ -503,8 +503,8 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
             error_m += to_string(realization) + " ";
             error_file_name += "_" + to_string(realization);
             error_file_content += to_string(realization) + ",";
-            }
             master_data_collector->removeRealization(realization);
+            }
         }
 
         // Delete ROF model first since it only references shared objects
