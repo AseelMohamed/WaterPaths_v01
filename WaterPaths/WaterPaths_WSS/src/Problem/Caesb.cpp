@@ -102,7 +102,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     // ===================== SET UP DECISION VARIABLES  =====================
 
     Simulation *s = nullptr; //nullptr: ponteiro nulo //*operador de dereferencia: a dereferencia busca o VALOR que está contida no endereço gravado no ponteiro
-//    try {
+    try {
     //throw invalid_argument("Test error");
 
     //VARIÁVEIS DE DECISÃO
@@ -1091,10 +1091,10 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     }
     s = nullptr;
 #endif
-//    } catch (const std::exception& e) {
-//        simulationExceptionHander(e, s, objs, vars);
-//	return 1;
-//    }
+    } catch (const std::exception& e) {
+        simulationExceptionHander(e, s, objs, vars);
+	return 1;
+    }
 
     delete s;
 

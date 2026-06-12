@@ -428,6 +428,7 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
         // Create continuity models.
         ContinuityModelRealization *realization_model = nullptr;
         ContinuityModelROF *rof_model = nullptr;
+        try {
         createContinuityModels(realization, realization_model, rof_model);
 
         // Initialize data collector.
@@ -494,14 +495,17 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
 //                 (double) master_data_collector->getRealizations_created() /
 //                 (double) realizations_to_run_unique.size());
 
-//        } catch (...) {
-//#pragma omp atomic
-//            ++had_catch;
-//            error_m += to_string(realization) + " ";
-//            error_file_name += "_" + to_string(realization);
-//            error_file_content += to_string(realization) + ",";
-//            master_data_collector->removeRealization(realization);
-//        }
+        } catch (...) {
+#pragma omp atomic
+            ++had_catch;
+#pragma omp critical
+            {
+            error_m += to_string(realization) + " ";
+            error_file_name += "_" + to_string(realization);
+            error_file_content += to_string(realization) + ",";
+            }
+            master_data_collector->removeRealization(realization);
+        }
 
         // Delete ROF model first since it only references shared objects
         delete rof_model;
