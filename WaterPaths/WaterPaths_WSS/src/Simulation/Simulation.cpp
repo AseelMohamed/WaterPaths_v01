@@ -230,11 +230,8 @@ void Simulation::createContinuityModels(unsigned long realization,
                                         ContinuityModelRealization *&realization_model,
                                         ContinuityModelROF *&rof_model) {
     // Create realization models by copying the water sources and water supply systems.
-    vector<WaterSource *> water_sources_realization =
-            Utils::copyWaterSourceVector(water_sources);
-    vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization =
-            Utils::copyDroughtMitigationPolicyVector(
-                    drought_mitigation_policies);
+    vector<WaterSource *> water_sources_realization;
+    vector<DroughtMitigationPolicy *> drought_mitigation_policies_realization;
     
     // Extract water supply systems from utilities for realization model
     vector<std::unique_ptr<WaterSupplySystems>> wss_realization;
@@ -246,6 +243,14 @@ void Simulation::createContinuityModels(unsigned long realization,
     // copy from shared utility objects simultaneously
     #pragma omp critical(model_creation)
     {
+        // Copy all template objects inside the critical section so no thread reads
+        // shared mutable template state (total_outflow, available_volume, etc.)
+        // while another thread's model setup writes to the shared Utility objects.
+        water_sources_realization =
+                Utils::copyWaterSourceVector(water_sources);
+        drought_mitigation_policies_realization =
+                Utils::copyDroughtMitigationPolicyVector(drought_mitigation_policies);
+
         // Copy WSS from utilities
         for (auto* utility : utilities) {
             for (const auto& wss : utility->getWaterSupplySystems()) {
