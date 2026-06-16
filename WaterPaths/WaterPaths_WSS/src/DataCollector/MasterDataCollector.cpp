@@ -917,6 +917,7 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                         }
                     }
                 }
+                diff_rel *= 100.0;
                 objectives.push_back(diff_rel);
             } else if (!wss_collectors.empty()) {
                 // Filter WSS collectors to only include those belonging to this utility
@@ -1032,6 +1033,7 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                             }
                         }
                     }
+                    diff_afford *= 100.0;
                     objectives.push_back(diff_afford);
                 } else if (!wss_collectors.empty()) {
                     // Modes 3/4: aggregated affordability
