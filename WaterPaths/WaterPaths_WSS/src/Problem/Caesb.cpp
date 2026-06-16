@@ -72,6 +72,13 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
         BORG_Problem_set_epsilon(problem, 4, 0.005);      // Worst case costs
         BORG_Problem_set_epsilon(problem, 5, 0.001);      // WSS0 affordability
         BORG_Problem_set_epsilon(problem, 6, 0.001);      // WSS1 affordability
+    } else if (Constants::includePenaltyObjectives()) {
+        // Mode 7: 5 objectives [diff_rel, restr_freq, NPC, worst_cost, diff_afford]
+        BORG_Problem_set_epsilon(problem, 0, 1e-6);       // diff_rel (penalty, squared)
+        BORG_Problem_set_epsilon(problem, 1, 0.005);      // Restriction frequency
+        BORG_Problem_set_epsilon(problem, 2, 10000000.);  // Infrastructure NPC
+        BORG_Problem_set_epsilon(problem, 3, 0.005);      // Worst case costs
+        BORG_Problem_set_epsilon(problem, 4, 1e-6);       // diff_afford (penalty, squared)
     } else {
         // Modes 1–4 & 6: [reliability, restr_freq, NPC, worst_cost (, affordability)]
         BORG_Problem_set_epsilon(problem, 0, 0.001);      // Reliability
@@ -1067,6 +1074,13 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         objs[4] = objectives[4];  // Worst case costs
         objs[5] = objectives[5];  // WSS0 affordability
         objs[6] = objectives[6];  // WSS1 affordability
+    } else if (Constants::includePenaltyObjectives()) {
+        // Mode 7: penalty objectives are already minimized (0 = best), no negation needed
+        objs[0] = objectives[0];  // diff_rel
+        objs[1] = objectives[1];  // Restriction frequency
+        objs[2] = objectives[2];  // Infrastructure NPC
+        objs[3] = objectives[3];  // Worst case costs
+        objs[4] = objectives[4];  // diff_afford
     } else {
         objs[0] = -objectives[0];  // Negative reliability
         objs[1] = objectives[1];   // Restriction frequency

@@ -500,12 +500,22 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
 //                 (double) master_data_collector->getRealizations_created() /
 //                 (double) realizations_to_run_unique.size());
 
+        } catch (const std::exception& e) {
+#pragma omp atomic
+            ++had_catch;
+#pragma omp critical
+            {
+            error_m += to_string(realization) + " (exception: " + string(e.what()) + ") ";
+            error_file_name += "_" + to_string(realization);
+            error_file_content += to_string(realization) + ",";
+            master_data_collector->removeRealization(realization);
+            }
         } catch (...) {
 #pragma omp atomic
             ++had_catch;
 #pragma omp critical
             {
-            error_m += to_string(realization) + " ";
+            error_m += to_string(realization) + " (unknown exception) ";
             error_file_name += "_" + to_string(realization);
             error_file_content += to_string(realization) + ",";
             master_data_collector->removeRealization(realization);
@@ -550,8 +560,7 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
         error_file.close();
         printf("%s", error_m.c_str());
 
-//	master_data_collector->cleanCollectorsOfDeletedRealizations();
-//        throw_with_nested(runtime_error(error_m.c_str()));
+        throw std::runtime_error(error_m);
     }
     
     return master_data_collector;

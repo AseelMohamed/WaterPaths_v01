@@ -28,6 +28,9 @@ namespace Constants {
     // Experiment 4: 5 objs, reliability=AVERAGE, affordability=AVERAGE
     // Experiment 5: 7 objs, per-WSS reliability and affordability (no aggregation)
     // Experiment 6: 5 objs, single-WSS reliability and affordability (target WSS set by -w flag)
+    // Experiment 7: 5 objs, penalty-based (diff_rel + diff_afford summed over WSS)
+    //               diff_rel   = sum_wss[ max(0.97 - rel_wss,   0)^2 ]
+    //               diff_afford= sum_wss[ max(afford_wss - 0.03, 0)^2 ]
     extern int EXPERIMENT_MODE; // Set via command line (-E flag)
     extern bool INCLUDE_SEVERITY; // Toggle severity objective via -V flag
     extern int TARGET_WSS_ID;  // Target WSS for experiment 6 (set via -w flag, default 0)
@@ -43,6 +46,10 @@ namespace Constants {
     AggregationMethod getAffordabilityAggregationMethod();
     bool includeAffordabilityObjective();
     bool includeSeverityObjective();
+
+    // Thresholds for mode 7 penalty objectives
+    const double PENALTY_RELIABILITY_THRESHOLD  = 0.98;
+    const double PENALTY_AFFORDABILITY_THRESHOLD = 0.03;
     
     const int NUM_OBJECTIVES = 7;  // Maximum number of objectives (for array sizing)
 //#define NUM_DEC_VAR 57;
@@ -152,6 +159,13 @@ namespace Constants {
         return EXPERIMENT_MODE == 6;
     }
 
+    inline bool includePenaltyObjectives() {
+        // Experiment 7: penalty-based objectives
+        // diff_rel    = sum_wss[ max(0.97 - rel_wss,    0)^2 ]
+        // diff_afford = sum_wss[ max(afford_wss - 0.03, 0)^2 ]
+        return EXPERIMENT_MODE == 7;
+    }
+
     inline int getNumObjectives() {
         if (includePerWSSObjectives()) {
             // Mode 5: 7 objectives:
@@ -161,6 +175,10 @@ namespace Constants {
         }
         if (includeSingleWSSObjectives()) {
             // Mode 6: 5 objectives [WSS_N reliability, restr_freq, NPC, worst_cost, WSS_N affordability]
+            return 5;
+        }
+        if (includePenaltyObjectives()) {
+            // Mode 7: 5 objectives [diff_rel, restr_freq, NPC, worst_cost, diff_afford]
             return 5;
         }
         // Base: 4 objectives (reliability, restriction freq, infra NPC, worst case costs)
@@ -184,8 +202,9 @@ namespace Constants {
     
     inline bool includeAffordabilityObjective() {
         // Experiments 1 & 2: No affordability
-        // Experiments 3, 4, 5 & 6: Include affordability
-        return (EXPERIMENT_MODE == 3 || EXPERIMENT_MODE == 4 || EXPERIMENT_MODE == 5 || EXPERIMENT_MODE == 6);
+        // Experiments 3, 4, 5, 6 & 7: Include affordability
+        return (EXPERIMENT_MODE == 3 || EXPERIMENT_MODE == 4 || EXPERIMENT_MODE == 5 ||
+                EXPERIMENT_MODE == 6 || EXPERIMENT_MODE == 7);
     }
     
     inline bool includeSeverityObjective() {

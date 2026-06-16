@@ -693,6 +693,46 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
         objectives.push_back(inf_npc);
         objectives.push_back(worse_cost);
         objectives.push_back(target_afford);
+    } else if (Constants::includePenaltyObjectives()) {
+        // Mode 7: penalty-based objectives
+        // diff_rel    = sum_wss[ max(REL_THRESHOLD   - rel_wss,    0)^2 ]
+        // diff_afford = 100 * sum_wss[ max(afford_wss - AFFORD_THRESHOLD, 0)^2 ]
+        vector<double> per_wss_rel;
+        vector<double> per_wss_afford;
+        if (!wss_collectors.empty()) {
+            vector<vector<WSSDataCollector *>> utility_wss_mode7;
+            isolateWSSDataCollectors(u, utility_wss_mode7);
+            if (!utility_wss_mode7.empty()) {
+                per_wss_rel    = ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
+                    utility_wss_mode7, realizations_ran);
+                per_wss_afford = ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_PerWSS(
+                    utility_wss_mode7, realizations_ran);
+            }
+        }
+        double diff_rel    = 0.0;
+        double diff_afford = 0.0;
+        for (double r : per_wss_rel) {
+            double d = std::max(Constants::PENALTY_RELIABILITY_THRESHOLD - r, 0.0);
+            diff_rel += d * d;
+        }
+        diff_rel *= 100.0;
+        for (double a : per_wss_afford) {
+            double d = std::max(a - Constants::PENALTY_AFFORDABILITY_THRESHOLD, 0.0);
+            diff_afford += d * d;
+        }
+        diff_afford *= 100.0;
+        outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << diff_rel
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << restriction_freq
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << inf_npc
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << worse_cost
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << diff_afford
+                  << endl;
+        objectives.push_back(diff_rel);
+        objectives.push_back(restriction_freq);
+        objectives.push_back(inf_npc);
+        objectives.push_back(worse_cost);
+        objectives.push_back(diff_afford);
     } else {
         // Modes 1-4: aggregated objectives
         outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
@@ -773,6 +813,15 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                       << setw(COLUMN_WIDTH * 2) << "Worse Case Costs"
                       << setw(COLUMN_WIDTH * 2) << ("Affordability " + wss_label)
                       << endl;
+        } else if (Constants::includePenaltyObjectives()) {
+            // Mode 7: penalty-based headers
+            outStream << setw(COLUMN_WIDTH) << "      "
+                      << setw(COLUMN_WIDTH * 2) << "Diff Reliability"
+                      << setw(COLUMN_WIDTH * 2) << "Restriction Freq."
+                      << setw(COLUMN_WIDTH * 2) << "Infrastructure NPC"
+                      << setw(COLUMN_WIDTH * 2) << "Worse Case Costs"
+                      << setw(COLUMN_WIDTH * 2) << "Diff Affordability"
+                      << endl;
         } else {
             outStream << setw(COLUMN_WIDTH) << "      " << setw((COLUMN_WIDTH * 2))
                       << "Reliability"
@@ -852,6 +901,23 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                 } else {
                     objectives.push_back(ObjectivesCalculator::calculateReliabilityObjective(u, realizations_ran));
                 }
+            } else if (Constants::includePenaltyObjectives()) {
+                // Mode 7: push diff_rel = sum_wss[ max(threshold - rel_wss, 0)^2 ]
+                double diff_rel = 0.0;
+                if (!wss_collectors.empty()) {
+                    vector<vector<WSSDataCollector *>> utility_wss_mode7;
+                    isolateWSSDataCollectors(u, utility_wss_mode7);
+                    if (!utility_wss_mode7.empty()) {
+                        vector<double> per_wss_rel =
+                            ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
+                                utility_wss_mode7, realizations_ran);
+                        for (double r : per_wss_rel) {
+                            double d = std::max(Constants::PENALTY_RELIABILITY_THRESHOLD - r, 0.0);
+                            diff_rel += d * d;
+                        }
+                    }
+                }
+                objectives.push_back(diff_rel);
             } else if (!wss_collectors.empty()) {
                 // Filter WSS collectors to only include those belonging to this utility
                 vector<vector<WSSDataCollector *>> utility_wss_collectors;
@@ -950,6 +1016,23 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                     } else {
                         objectives.push_back(1.0);
                     }
+                } else if (Constants::includePenaltyObjectives()) {
+                    // Mode 7: push diff_afford = sum_wss[ max(afford_wss - threshold, 0)^2 ]
+                    double diff_afford = 0.0;
+                    if (!wss_collectors.empty()) {
+                        vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;
+                        isolateWSSDataCollectors(u, utility_wss_collectors_affordability);
+                        if (!utility_wss_collectors_affordability.empty()) {
+                            vector<double> per_wss_afford =
+                                ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_PerWSS(
+                                    utility_wss_collectors_affordability, realizations_ran);
+                            for (double a : per_wss_afford) {
+                                double d = std::max(a - Constants::PENALTY_AFFORDABILITY_THRESHOLD, 0.0);
+                                diff_afford += d * d;
+                            }
+                        }
+                    }
+                    objectives.push_back(diff_afford);
                 } else if (!wss_collectors.empty()) {
                     // Modes 3/4: aggregated affordability
                     vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;

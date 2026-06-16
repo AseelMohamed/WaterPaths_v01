@@ -515,7 +515,9 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         
         // Check failures for this WSS across all realizations
         // Uses pre-computed per-source failure flags from WSSDataCollector
-        for (const unsigned long &r : realizations) {
+        // Use compact index rr to avoid out-of-bounds when realizations are non-contiguous
+        for (size_t rr = 0; rr < realizations.size(); ++rr) {
+            const unsigned long r = realizations[rr];
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
                 const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
                 
@@ -537,7 +539,7 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
                         }
                         
                         if (failure_flag[w] == 1) {
-                            realizations_year_reliabilities[r][y] = FAILURE;
+                            realizations_year_reliabilities[rr][y] = FAILURE;
                             break; // Year already failed, no need to check more weeks
                         }
                     }
@@ -547,9 +549,8 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS(
         
         // Count failures per year for this WSS
         for (unsigned long y = 0; y < n_years; ++y) {
-            for (const unsigned long &r : realizations) {
-                if (r < realizations_year_reliabilities.size() && 
-                    realizations_year_reliabilities[r][y] == FAILURE) {
+            for (size_t rr = 0; rr < realizations.size(); ++rr) {
+                if (realizations_year_reliabilities[rr][y] == FAILURE) {
                     year_reliabilities[y]++;
                 }
             }
@@ -798,7 +799,9 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
         
         // Check failures for this WSS across all realizations
         // Uses pre-computed per-source failure flags from WSSDataCollector
-        for (const unsigned long &r : realizations) {
+        // Use compact index rr to avoid out-of-bounds when realizations are non-contiguous
+        for (size_t rr = 0; rr < realizations.size(); ++rr) {
+            const unsigned long r = realizations[rr];
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
                 const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
                 
@@ -817,7 +820,7 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
                         }
                         
                         if (failure_flag[w] == 1) {
-                            realizations_year_reliabilities[r][y] = FAILURE;
+                            realizations_year_reliabilities[rr][y] = FAILURE;
                             break;
                         }
                     }
@@ -827,9 +830,8 @@ double ObjectivesCalculator::calculateReliabilityObjective_WSS_Configurable(
         
         // Count failures per year for this WSS
         for (unsigned long y = 0; y < n_years; ++y) {
-            for (const unsigned long &r : realizations) {
-                if (r < realizations_year_reliabilities.size() && 
-                    realizations_year_reliabilities[r][y] == FAILURE) {
+            for (size_t rr = 0; rr < realizations.size(); ++rr) {
+                if (realizations_year_reliabilities[rr][y] == FAILURE) {
                     year_reliabilities[y]++;
                 }
             }
@@ -1323,7 +1325,9 @@ vector<double> ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
                 n_realizations, vector<int>(n_years, NON_INITIALIZED));
         vector<int> year_reliabilities(n_years, 0);
 
-        for (const unsigned long &r : realizations) {
+        // Use compact index rr to avoid out-of-bounds when realizations are non-contiguous
+        for (size_t rr = 0; rr < realizations.size(); ++rr) {
+            const unsigned long r = realizations[rr];
             if (r < wss_realization_data.size() && wss_realization_data[r] != nullptr) {
                 const auto& failure_flag = wss_realization_data[r]->getWeekly_failure_flag();
                 if (failure_flag.empty()) continue;
@@ -1336,7 +1340,7 @@ vector<double> ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
                             throw std::out_of_range(error);
                         }
                         if (failure_flag[w] == 1) {
-                            realizations_year_reliabilities[r][y] = FAILURE;
+                            realizations_year_reliabilities[rr][y] = FAILURE;
                             break;
                         }
                     }
@@ -1345,9 +1349,8 @@ vector<double> ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
         }
 
         for (unsigned long y = 0; y < n_years; ++y) {
-            for (const unsigned long &r : realizations) {
-                if (r < realizations_year_reliabilities.size() &&
-                    realizations_year_reliabilities[r][y] == FAILURE) {
+            for (size_t rr = 0; rr < realizations.size(); ++rr) {
+                if (realizations_year_reliabilities[rr][y] == FAILURE) {
                     year_reliabilities[y]++;
                 }
             }

@@ -120,8 +120,8 @@ int main(int argc, char *argv[]) {
         else if (arg == "-e" && i + 1 < argc) seed = atoi(argv[++i]);
         else if (arg == "-E" && i + 1 < argc) {
             Constants::EXPERIMENT_MODE = atoi(argv[++i]);
-            if (Constants::EXPERIMENT_MODE < 1 || Constants::EXPERIMENT_MODE > 6) {
-                fprintf(stderr, "Invalid experiment mode. Must be 1, 2, 3, 4, 5, or 6.\n");
+            if (Constants::EXPERIMENT_MODE < 1 || Constants::EXPERIMENT_MODE > 7) {
+                fprintf(stderr, "Invalid experiment mode. Must be 1, 2, 3, 4, 5, 6, or 7.\n");
                 return -1;
             }
             c_num_obj = Constants::getNumObjectives(); // Update objective count
@@ -183,13 +183,16 @@ int main(int argc, char *argv[]) {
                     "\t-C: Import/export rof tables (1: export, 0:"
                     " do nothing (standard), -1: import)\n"
                     "\t-B: Export objectives for all utilities on a single line\n"
-                    "\t-E: Experiment mode (1-6):\n"
+                    "\t-E: Experiment mode (1-7):\n"
                     "\t    1: 4 objs, reliability=MIN (worst case)\n"
                     "\t    2: 4 objs, reliability=AVERAGE\n"
                     "\t    3: 5 objs, reliability=MIN, affordability=MAX [DEFAULT]\n"
                     "\t    4: 5 objs, reliability=AVERAGE, affordability=AVERAGE\n"
                     "\t    5: 7 objs, per-WSS reliability and affordability (no aggregation)\n"
                     "\t    6: 5 objs, single-WSS reliability and affordability (use -w to set target WSS)\n"
+                    "\t    7: 5 objs, penalty-based (diff_rel + diff_afford summed over WSS)\n"
+                    "\t       diff_rel   = 100 * sum_wss[max(0.97 - rel_wss,    0)^2]\n"
+                    "\t       diff_afford= 100 * sum_wss[max(afford_wss - 0.03, 0)^2]\n"
                     "\t-w: Target WSS ID for experiment 6 (default: 0)\n"
                     "\t-V: Include severity objective (1=yes [default], 0=no)\n",
                     argv[0], n_realizations, n_weeks, system_io.c_str());
@@ -212,6 +215,10 @@ int main(int argc, char *argv[]) {
         printf("  Mode: per-WSS (no aggregation across WSS)\n");
     } else if (Constants::includeSingleWSSObjectives()) {
         printf("  Mode: single-WSS (target WSS ID: %d)\n", Constants::TARGET_WSS_ID);
+    } else if (Constants::includePenaltyObjectives()) {
+        printf("  Mode: penalty-based\n");
+        printf("  diff_rel    = 100 * sum_wss[max(%.2f - rel_wss,    0)^2]\n", Constants::PENALTY_RELIABILITY_THRESHOLD);
+        printf("  diff_afford = 100 * sum_wss[max(afford_wss - %.2f, 0)^2]\n", Constants::PENALTY_AFFORDABILITY_THRESHOLD);
     } else {
     printf("  Reliability Aggregation: %s\n", 
            Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
@@ -427,6 +434,10 @@ int main(int argc, char *argv[]) {
                 printf("  Mode: per-WSS (no aggregation across WSS)\n");
             } else if (Constants::includeSingleWSSObjectives()) {
                 printf("  Mode: single-WSS (target WSS ID: %d)\n", Constants::TARGET_WSS_ID);
+            } else if (Constants::includePenaltyObjectives()) {
+                printf("  Mode: penalty-based\n");
+                printf("  diff_rel    = 100 * sum_wss[max(%.2f - rel_wss,    0)^2]\n", Constants::PENALTY_RELIABILITY_THRESHOLD);
+                printf("  diff_afford = 100 * sum_wss[max(afford_wss - %.2f, 0)^2]\n", Constants::PENALTY_AFFORDABILITY_THRESHOLD);
             } else {
             printf("  Reliability Aggregation: %s\n", 
                    Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
