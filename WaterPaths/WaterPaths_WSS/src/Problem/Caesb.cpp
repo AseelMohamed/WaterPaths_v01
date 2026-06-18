@@ -74,11 +74,11 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
         BORG_Problem_set_epsilon(problem, 6, 0.001);      // WSS1 affordability
     } else if (Constants::includePenaltyObjectives()) {
         // Mode 7: 5 objectives [diff_rel, restr_freq, NPC, worst_cost, diff_afford]
-        BORG_Problem_set_epsilon(problem, 0, 1e-6);       // diff_rel (penalty, squared)
+        BORG_Problem_set_epsilon(problem, 0, 1e-3);       // diff_rel (penalty, squared)
         BORG_Problem_set_epsilon(problem, 1, 0.005);      // Restriction frequency
         BORG_Problem_set_epsilon(problem, 2, 10000000.);  // Infrastructure NPC
         BORG_Problem_set_epsilon(problem, 3, 0.005);      // Worst case costs
-        BORG_Problem_set_epsilon(problem, 4, 1e-6);       // diff_afford (penalty, squared)
+        BORG_Problem_set_epsilon(problem, 4, 1e-3);       // diff_afford (penalty, squared)
     } else {
         // Modes 1–4 & 6: [reliability, restr_freq, NPC, worst_cost (, affordability)]
         BORG_Problem_set_epsilon(problem, 0, 0.001);      // Reliability
