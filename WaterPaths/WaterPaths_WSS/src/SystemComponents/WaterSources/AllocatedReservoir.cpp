@@ -95,6 +95,18 @@ AllocatedReservoir::~AllocatedReservoir() = default;
 void AllocatedReservoir::applyContinuity(int week, double upstream_source_inflow,
                                          double wastewater_inflow, vector<double> &demand_outflow) {
 
+    // Guard against NaN or astronomically large inflow values that would corrupt
+    // the water balance. These can arise from numerical overflow in upstream
+    // policy calculations (e.g. emergency transfer with extreme decision variables).
+    if (!isfinite(upstream_source_inflow) || !isfinite(wastewater_inflow)
+        || fabs(upstream_source_inflow) > 1e10 || fabs(wastewater_inflow) > 1e10) {
+        throw runtime_error(
+            "Non-finite or overflow inflow in " + string(name) +
+            " at week " + to_string(week) +
+            " (upstream_source_inflow=" + to_string(upstream_source_inflow) +
+            ", wastewater_inflow=" + to_string(wastewater_inflow) + ")");
+    }
+
     double total_upstream_inflow;
     continuity_error = 0;
 

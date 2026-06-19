@@ -34,8 +34,14 @@ void eval(double *vars, double *objs, double *consts) {
                 throw invalid_argument(error);
             }
         }
-        failures += problem_ptr->functionEvaluation(vars, objs, consts);
-        problem_ptr->destroyDataCollector();
+        int eval_result = problem_ptr->functionEvaluation(vars, objs, consts);
+        failures += eval_result;
+        // Only destroy if the evaluation succeeded and master_data_collector was set.
+        // On exception paths, functionEvaluation returns 1 and master_data_collector
+        // is nullptr (never assigned), so we skip the destroy call to avoid noise.
+        if (eval_result == 0) {
+            problem_ptr->destroyDataCollector();
+        }
     } catch (...) {
         int rank = 0;
 #ifdef PARALLEL
