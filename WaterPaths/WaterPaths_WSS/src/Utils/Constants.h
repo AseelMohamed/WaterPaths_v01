@@ -31,6 +31,9 @@ namespace Constants {
     // Experiment 7: 5 objs, penalty-based (diff_rel + diff_afford summed over WSS)
     //               diff_rel   = sum_wss[ max(0.97 - rel_wss,   0)^2 ]
     //               diff_afford= sum_wss[ max(afford_wss - 0.03, 0)^2 ]
+    // Experiment 8: 5 objs, normalized disparity between WSS 0 and WSS 1
+    //               rel_gap    = |rel_wss0 - rel_wss1| / (rel_wss0 + rel_wss1)
+    //               afford_gap = |afford_wss0 - afford_wss1| / (afford_wss0 + afford_wss1)
     extern int EXPERIMENT_MODE; // Set via command line (-E flag)
     extern bool INCLUDE_SEVERITY; // Toggle severity objective via -V flag
     extern int TARGET_WSS_ID;  // Target WSS for experiment 6 (set via -w flag, default 0)
@@ -166,6 +169,11 @@ namespace Constants {
         return EXPERIMENT_MODE == 7;
     }
 
+    inline bool includeDisparityObjectives() {
+        // Experiment 8: minimize normalized disparity between WSS0 and WSS1
+        return EXPERIMENT_MODE == 8;
+    }
+
     inline int getNumObjectives() {
         if (includePerWSSObjectives()) {
             // Mode 5: 7 objectives:
@@ -179,6 +187,10 @@ namespace Constants {
         }
         if (includePenaltyObjectives()) {
             // Mode 7: 5 objectives [diff_rel, restr_freq, NPC, worst_cost, diff_afford]
+            return 5;
+        }
+        if (includeDisparityObjectives()) {
+            // Mode 8: 5 objectives [rel_gap, restr_freq, NPC, worst_cost, afford_gap]
             return 5;
         }
         // Base: 4 objectives (reliability, restriction freq, infra NPC, worst case costs)
@@ -202,13 +214,15 @@ namespace Constants {
     
     inline bool includeAffordabilityObjective() {
         // Experiments 1 & 2: No affordability
-        // Experiments 3, 4, 5, 6 & 7: Include affordability
+        // Experiments 3, 4, 5, 6, 7 & 8: Include affordability
         return (EXPERIMENT_MODE == 3 || EXPERIMENT_MODE == 4 || EXPERIMENT_MODE == 5 ||
-                EXPERIMENT_MODE == 6 || EXPERIMENT_MODE == 7);
+            EXPERIMENT_MODE == 6 || EXPERIMENT_MODE == 7 || EXPERIMENT_MODE == 8);
     }
     
     inline bool includeSeverityObjective() {
-        return INCLUDE_SEVERITY;
+        return INCLUDE_SEVERITY && !includePerWSSObjectives() &&
+               !includeSingleWSSObjectives() && !includePenaltyObjectives() &&
+               !includeDisparityObjectives();
     }
 
     static constexpr int WEEK_OF_YEAR[4017] = {

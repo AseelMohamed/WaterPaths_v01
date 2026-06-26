@@ -38,6 +38,21 @@ static const int NC_ERR = 2;
 #include "QuaryDataCollector.h"
 #include "WaterReuseDataCollector.h"
 #include "AllocatedReservoirDataCollector.h"
+
+namespace {
+double calculateNormalizedDisparity(const vector<double> &values) {
+    if (values.size() < 2) {
+        return 0.0;
+    }
+
+    const double denominator = values[0] + values[1];
+    if (denominator <= 0.0) {
+        return 0.0;
+    }
+
+    return std::abs(values[0] - values[1]) / denominator;
+}
+}
 #include "EmptyDataCollector.h"
 #include "TransfersBilateralDataCollector.h"
 #include "EmergencyTransferParanoaDataCollector.h"
@@ -733,6 +748,34 @@ void MasterDataCollector::printUtilityObjectivesToRowOutStream(vector<UtilitiesD
         objectives.push_back(inf_npc);
         objectives.push_back(worse_cost);
         objectives.push_back(diff_afford);
+    } else if (Constants::includeDisparityObjectives()) {
+        // Mode 8: normalized disparity objectives between WSS0 and WSS1
+        vector<double> per_wss_rel;
+        vector<double> per_wss_afford;
+        if (!wss_collectors.empty()) {
+            vector<vector<WSSDataCollector *>> utility_wss_mode8;
+            isolateWSSDataCollectors(u, utility_wss_mode8);
+            if (!utility_wss_mode8.empty()) {
+                per_wss_rel = ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
+                    utility_wss_mode8, realizations_ran);
+                per_wss_afford = ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_PerWSS(
+                    utility_wss_mode8, realizations_ran);
+            }
+        }
+        double rel_gap = calculateNormalizedDisparity(per_wss_rel);
+        double afford_gap = calculateNormalizedDisparity(per_wss_afford);
+        outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << rel_gap
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << restriction_freq
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << inf_npc
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << worse_cost
+                  << setw(COLUMN_WIDTH * 2) << setprecision(COLUMN_PRECISION) << afford_gap
+                  << endl;
+        objectives.push_back(rel_gap);
+        objectives.push_back(restriction_freq);
+        objectives.push_back(inf_npc);
+        objectives.push_back(worse_cost);
+        objectives.push_back(afford_gap);
     } else {
         // Modes 1-4: aggregated objectives
         outStream << setw(COLUMN_WIDTH) << u[realizations_ran[0]]->name
@@ -821,6 +864,15 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                       << setw(COLUMN_WIDTH * 2) << "Infrastructure NPC"
                       << setw(COLUMN_WIDTH * 2) << "Worse Case Costs"
                       << setw(COLUMN_WIDTH * 2) << "Diff Affordability"
+                      << endl;
+        } else if (Constants::includeDisparityObjectives()) {
+            // Mode 8: normalized disparity headers
+            outStream << setw(COLUMN_WIDTH) << "      "
+                      << setw(COLUMN_WIDTH * 2) << "Reliability Gap"
+                      << setw(COLUMN_WIDTH * 2) << "Restriction Freq."
+                      << setw(COLUMN_WIDTH * 2) << "Infrastructure NPC"
+                      << setw(COLUMN_WIDTH * 2) << "Worse Case Costs"
+                      << setw(COLUMN_WIDTH * 2) << "Affordability Gap"
                       << endl;
         } else {
             outStream << setw(COLUMN_WIDTH) << "      " << setw((COLUMN_WIDTH * 2))
@@ -919,6 +971,19 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                 }
                 diff_rel *= 100.0;
                 objectives.push_back(diff_rel);
+            } else if (Constants::includeDisparityObjectives()) {
+                double rel_gap = 0.0;
+                if (!wss_collectors.empty()) {
+                    vector<vector<WSSDataCollector *>> utility_wss_mode8;
+                    isolateWSSDataCollectors(u, utility_wss_mode8);
+                    if (!utility_wss_mode8.empty()) {
+                        vector<double> per_wss_rel =
+                                ObjectivesCalculator::calculateReliabilityObjective_WSS_PerWSS(
+                                        utility_wss_mode8, realizations_ran);
+                        rel_gap = calculateNormalizedDisparity(per_wss_rel);
+                    }
+                }
+                objectives.push_back(rel_gap);
             } else if (!wss_collectors.empty()) {
                 // Filter WSS collectors to only include those belonging to this utility
                 vector<vector<WSSDataCollector *>> utility_wss_collectors;
@@ -1035,6 +1100,19 @@ vector<double> MasterDataCollector::calculatePrintObjectives(string file_name, b
                     }
                     diff_afford *= 100.0;
                     objectives.push_back(diff_afford);
+                } else if (Constants::includeDisparityObjectives()) {
+                    double afford_gap = 0.0;
+                    if (!wss_collectors.empty()) {
+                        vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;
+                        isolateWSSDataCollectors(u, utility_wss_collectors_affordability);
+                        if (!utility_wss_collectors_affordability.empty()) {
+                            vector<double> per_wss_afford =
+                                    ObjectivesCalculator::calculateAffordabilityIndexObjective_WSS_PerWSS(
+                                            utility_wss_collectors_affordability, realizations_ran);
+                            afford_gap = calculateNormalizedDisparity(per_wss_afford);
+                        }
+                    }
+                    objectives.push_back(afford_gap);
                 } else if (!wss_collectors.empty()) {
                     // Modes 3/4: aggregated affordability
                     vector<vector<WSSDataCollector *>> utility_wss_collectors_affordability;

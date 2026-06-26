@@ -79,6 +79,13 @@ void Caesb::setProblemDefinition(BORG_Problem &problem) //void = vazio. O tipo v
         BORG_Problem_set_epsilon(problem, 2, 10000000.);  // Infrastructure NPC
         BORG_Problem_set_epsilon(problem, 3, 0.005);      // Worst case costs
         BORG_Problem_set_epsilon(problem, 4, 1e-3);       // diff_afford (penalty, squared)
+        } else if (Constants::includeDisparityObjectives()) {
+                // Mode 8: 5 objectives [rel_gap, restr_freq, NPC, worst_cost, afford_gap]
+                BORG_Problem_set_epsilon(problem, 0, 1e-3);       // rel_gap
+                BORG_Problem_set_epsilon(problem, 1, 0.005);      // Restriction frequency
+                BORG_Problem_set_epsilon(problem, 2, 10000000.);  // Infrastructure NPC
+                BORG_Problem_set_epsilon(problem, 3, 0.005);      // Worst case costs
+                BORG_Problem_set_epsilon(problem, 4, 1e-3);       // afford_gap
     } else {
         // Modes 1–4 & 6: [reliability, restr_freq, NPC, worst_cost (, affordability)]
         BORG_Problem_set_epsilon(problem, 0, 0.001);      // Reliability
@@ -1081,6 +1088,13 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
         objs[2] = objectives[2];  // Infrastructure NPC
         objs[3] = objectives[3];  // Worst case costs
         objs[4] = objectives[4];  // diff_afford
+        } else if (Constants::includeDisparityObjectives()) {
+                // Mode 8: disparity objectives are already minimized (0 = best), no negation needed
+                objs[0] = objectives[0];  // rel_gap
+                objs[1] = objectives[1];  // Restriction frequency
+                objs[2] = objectives[2];  // Infrastructure NPC
+                objs[3] = objectives[3];  // Worst case costs
+                objs[4] = objectives[4];  // afford_gap
     } else {
         objs[0] = -objectives[0];  // Negative reliability
         objs[1] = objectives[1];   // Restriction frequency

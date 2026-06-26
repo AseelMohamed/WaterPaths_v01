@@ -125,7 +125,7 @@ int Caesb::functionEvaluation(double *vars, double *objs, double *consts) {
     double caesb_tortoSM_paranoa_alloc = vars[19]; 
     double caesb_insurance_trigger_offset = vars[20]; // ROF offset above each WSS's restriction trigger that activates insurance payout
     double caesb_insurance_payout_rate = vars[21]; // Fixed payout rate (fraction of annual utility revenue per triggering WSS)
-    const double caesb_insurance_premium = 1.2;     // Fixed premium loading factor (20% above actuarially fair); hardcoded as in reference file
+    const double caesb_insurance_premium = 1.2;     // Fixed premium loading factor (20% above actuarially fair)
 
     // Per-WSS insurance triggers: each WSS's restriction trigger + shared offset DV.
     // Mirrors the reference-file pattern: caesb_*_insurance_use = restriction_trigger + vars[x].

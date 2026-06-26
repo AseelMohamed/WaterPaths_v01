@@ -88,7 +88,7 @@ int main(int argc, char *argv[]) {
     int import_export_rof_table = 0;
     bool verbose = false;
     bool tabular = false;
-    bool plotting = true;
+    bool plotting = false;
     bool run_optimization = false;
     bool print_objs_row = false;
     unsigned long n_islands = 2;
@@ -126,8 +126,8 @@ int main(int argc, char *argv[]) {
         else if (arg == "-e" && i + 1 < argc) seed = atoi(argv[++i]);
         else if (arg == "-E" && i + 1 < argc) {
             Constants::EXPERIMENT_MODE = atoi(argv[++i]);
-            if (Constants::EXPERIMENT_MODE < 1 || Constants::EXPERIMENT_MODE > 7) {
-                fprintf(stderr, "Invalid experiment mode. Must be 1, 2, 3, 4, 5, 6, or 7.\n");
+            if (Constants::EXPERIMENT_MODE < 1 || Constants::EXPERIMENT_MODE > 8) {
+                fprintf(stderr, "Invalid experiment mode. Must be 1, 2, 3, 4, 5, 6, 7, or 8.\n");
                 return -1;
             }
             c_num_obj = Constants::getNumObjectives(); // Update objective count
@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
                     "\t-C: Import/export rof tables (1: export, 0:"
                     " do nothing (standard), -1: import)\n"
                     "\t-B: Export objectives for all utilities on a single line\n"
-                    "\t-E: Experiment mode (1-7):\n"
+                    "\t-E: Experiment mode (1-8):\n"
                     "\t    1: 4 objs, reliability=MIN (worst case)\n"
                     "\t    2: 4 objs, reliability=AVERAGE\n"
                     "\t    3: 5 objs, reliability=MIN, affordability=MAX [DEFAULT]\n"
@@ -199,6 +199,9 @@ int main(int argc, char *argv[]) {
                     "\t    7: 5 objs, penalty-based (diff_rel + diff_afford summed over WSS)\n"
                     "\t       diff_rel   = 100 * sum_wss[max(0.97 - rel_wss,    0)^2]\n"
                     "\t       diff_afford= 100 * sum_wss[max(afford_wss - 0.03, 0)^2]\n"
+                    "\t    8: 5 objs, normalized disparity between WSS0 and WSS1\n"
+                    "\t       rel_gap    = |rel_wss0 - rel_wss1| / (rel_wss0 + rel_wss1)\n"
+                    "\t       afford_gap = |afford_wss0 - afford_wss1| / (afford_wss0 + afford_wss1)\n"
                     "\t-w: Target WSS ID for experiment 6 (default: 0)\n"
                     "\t-V: Include severity objective (1=yes [default], 0=no)\n",
                     argv[0], n_realizations, n_weeks, system_io.c_str());
@@ -225,6 +228,10 @@ int main(int argc, char *argv[]) {
         printf("  Mode: penalty-based\n");
         printf("  diff_rel    = 100 * sum_wss[max(%.2f - rel_wss,    0)^2]\n", Constants::PENALTY_RELIABILITY_THRESHOLD);
         printf("  diff_afford = 100 * sum_wss[max(afford_wss - %.2f, 0)^2]\n", Constants::PENALTY_AFFORDABILITY_THRESHOLD);
+    } else if (Constants::includeDisparityObjectives()) {
+        printf("  Mode: normalized WSS disparity\n");
+        printf("  rel_gap    = |rel_wss0 - rel_wss1| / (rel_wss0 + rel_wss1)\n");
+        printf("  afford_gap = |afford_wss0 - afford_wss1| / (afford_wss0 + afford_wss1)\n");
     } else {
     printf("  Reliability Aggregation: %s\n", 
            Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
@@ -444,6 +451,10 @@ int main(int argc, char *argv[]) {
                 printf("  Mode: penalty-based\n");
                 printf("  diff_rel    = 100 * sum_wss[max(%.2f - rel_wss,    0)^2]\n", Constants::PENALTY_RELIABILITY_THRESHOLD);
                 printf("  diff_afford = 100 * sum_wss[max(afford_wss - %.2f, 0)^2]\n", Constants::PENALTY_AFFORDABILITY_THRESHOLD);
+            } else if (Constants::includeDisparityObjectives()) {
+                printf("  Mode: normalized WSS disparity\n");
+                printf("  rel_gap    = |rel_wss0 - rel_wss1| / (rel_wss0 + rel_wss1)\n");
+                printf("  afford_gap = |afford_wss0 - afford_wss1| / (afford_wss0 + afford_wss1)\n");
             } else {
             printf("  Reliability Aggregation: %s\n", 
                    Constants::getReliabilityAggregationMethod() == Constants::AVERAGE ? "AVERAGE" : "MIN");
