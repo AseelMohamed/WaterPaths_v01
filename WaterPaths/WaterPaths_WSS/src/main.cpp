@@ -386,6 +386,10 @@ int main(int argc, char *argv[]) {
                     (rdm_no == NON_INITIALIZED ? "" : "_RDM" + to_string(rdm_no)) +
                                "_sols" + to_string(first_solution) + "_to_" + to_string(last_solution) + ".csv";
             objs_file.open(file_name);
+            if (!objs_file.is_open()) {
+                fprintf(stderr, "ERROR: Could not open objectives file for writing: %s\n", file_name.c_str());
+                return -1;
+            }
             printf("Objectives file will be printed at %s.\n", file_name.c_str());
             for (int s = first_solution; s < last_solution; ++s) {
                 printf("\n\n\nRunning solution %d%s%s\n", 
@@ -396,12 +400,20 @@ int main(int argc, char *argv[]) {
                 problem_ptr->functionEvaluation(solutions[s].data(), c_obj, c_constr);
                 if (problem_ptr->getMaster_data_collector() != nullptr) {
                     problem_ptr->getMaster_data_collector()->setOutputDirectory(system_io);
-                    problem_ptr->getMaster_data_collector()->printWeeklyReliabilityByWSSCsv(
-                            "annualWSS_s" + std::to_string(s) +
-                            (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
-                    problem_ptr->getMaster_data_collector()->printAnnualReliabilityBySourceCsv(
-                            "annualSource_s" + std::to_string(s) +
-                            (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
+                    try {
+                        problem_ptr->getMaster_data_collector()->printWeeklyReliabilityByWSSCsv(
+                                "annualWSS_s" + std::to_string(s) +
+                                (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
+                    } catch (const std::exception &e) {
+                        fprintf(stderr, "WARNING: printWeeklyReliabilityByWSSCsv failed for s=%d: %s\n", s, e.what());
+                    }
+                    try {
+                        problem_ptr->getMaster_data_collector()->printAnnualReliabilityBySourceCsv(
+                                "annualSource_s" + std::to_string(s) +
+                                (rdm_no == NON_INITIALIZED ? "" : "_RDM" + std::to_string(rdm_no)));
+                    } catch (const std::exception &e) {
+                        fprintf(stderr, "WARNING: printAnnualReliabilityBySourceCsv failed for s=%d: %s\n", s, e.what());
+                    }
                 }
                 vector<double> objectives = problem_ptr->calculateAndPrintObjectives(false);
                 // problem.printTimeSeriesAndPathways(plotting);
@@ -411,8 +423,8 @@ int main(int argc, char *argv[]) {
                 for (double &o : objectives) {
                     line += to_string(o) + ",";
                 }
-                line.pop_back();
-                objs_file << line << endl;
+                if (!line.empty()) line.pop_back();
+                objs_file << line << "\n";
             }
             objs_file.close();
 //            printf("Time to simulate %d solutions: %f s", last_solution - first_solution, omp_get_wtime() - time_0);
