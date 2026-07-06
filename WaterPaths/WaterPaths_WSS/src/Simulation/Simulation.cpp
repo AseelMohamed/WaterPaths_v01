@@ -426,7 +426,7 @@ Simulation::runFullSimulation(unsigned long n_threads, double *vars) {
     Utility::clearGlobalBondTracking();
 
     // Run realizations.
-#pragma omp parallel for num_threads(n_threads) shared(had_catch, realizations_to_run_unique, error_m, error_file_name, error_file_content) default(none)
+#pragma omp parallel for ordered num_threads(n_threads) shared(had_catch, realizations_to_run_unique, error_m, error_file_name, error_file_content) default(none)
     for (unsigned long r = 0; r < realizations_to_run_unique.size(); ++r) {
         unsigned long realization = realizations_to_run_unique[r];
 

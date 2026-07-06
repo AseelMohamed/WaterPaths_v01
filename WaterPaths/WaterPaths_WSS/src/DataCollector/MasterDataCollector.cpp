@@ -1936,6 +1936,7 @@ void MasterDataCollector::addRealization(
         realizations_created++;
     };
 
+    // Create utilities data collectors
     // Calculate realization-specific discount rate from RDM factors (deterministic)
     // rdm_factors[3] is the discount rate multiplier
     double base_discount_rate = 0.05; // This should match utility's base rate
@@ -1943,44 +1944,36 @@ void MasterDataCollector::addRealization(
         base_discount_rate = utilities_realization[0]->getBaseInfraDiscountRate();
     }
     double realization_discount_rate = base_discount_rate * (rdm_factors.size() > 3 ? rdm_factors[3] : 1.0);
+    
+    for (int u = 0; u < (int) utilities_realization.size(); ++u) {
+        utility_collectors[u][r] = new UtilitiesDataCollector(utilities_realization[u], r, realization_discount_rate);
+    }
 
-    // All collector element writes are serialized in the critical section to prevent
-    // memory-ordering races on non-x86-64 NUMA architectures (e.g. on HPC nodes).
-    // Each realization writes to a unique index r, so there is no contention on data;
-    // the critical section provides the required store-release / load-acquire barrier.
-#pragma omp critical
-    {
-        // Create utilities data collectors
-        for (int u = 0; u < (int) utilities_realization.size(); ++u) {
-            utility_collectors[u][r] = new UtilitiesDataCollector(utilities_realization[u], r, realization_discount_rate);
+    // Create WSS data collectors pointing to realization WSS (where bonds are actually issued)
+    // This ensures we collect the correct infrastructure NPC values
+    for (size_t wss_index = 0; wss_index < wss_realization.size(); ++wss_index) {
+        if (wss_index >= wss_collectors.size()) {
+            char error[256];
+            sprintf(error, "WSS collector index %zu out of bounds (size=%zu) for realization %lu",
+                    wss_index, wss_collectors.size(), r);
+            throw std::out_of_range(error);
         }
-
-        // Create WSS data collectors pointing to realization WSS (where bonds are actually issued)
-        // This ensures we collect the correct infrastructure NPC values
-        for (size_t wss_index = 0; wss_index < wss_realization.size(); ++wss_index) {
-            if (wss_index >= wss_collectors.size()) {
-                char error[256];
-                sprintf(error, "WSS collector index %zu out of bounds (size=%zu) for realization %lu",
-                        wss_index, wss_collectors.size(), r);
-                throw std::out_of_range(error);
-            }
-            if (wss_realization[wss_index] == nullptr || wss_realization[wss_index].get() == nullptr) {
-                char error[256];
-                sprintf(error, "Realization WSS at index %zu is null for realization %lu", wss_index, r);
-                throw std::runtime_error(error);
-            }
-            wss_collectors[wss_index][r] = new WSSDataCollector(wss_realization[wss_index].get(), r);
+        if (wss_realization[wss_index] == nullptr || wss_realization[wss_index].get() == nullptr) {
+            char error[256];
+            sprintf(error, "Realization WSS at index %zu is null for realization %lu", wss_index, r);
+            throw std::runtime_error(error);
         }
+        wss_collectors[wss_index][r] = new WSSDataCollector(wss_realization[wss_index].get(), r);
+    }
 
-        // Create drought mitigation policies data collector
-        for (int dmp = 0; dmp < (int) drought_mitigation_policies_realization.size(); ++dmp)
-            drought_mitigation_policy_collectors[dmp][r] =
-                    createPolicyDataCollector(drought_mitigation_policies_realization[dmp], r);
+    // Create drought mitigation policies data collector
+    for (int dmp = 0; dmp < (int) drought_mitigation_policies_realization.size(); ++dmp)
+        drought_mitigation_policy_collectors[dmp][r] =
+                createPolicyDataCollector(drought_mitigation_policies_realization[dmp], r);
 
-        // Create water sources data collectors
-        for (int ws = 0; ws < (int) water_sources_realization.size(); ++ws) {
-            water_source_collectors[ws][r] = createWaterSourceDataCollector(water_sources_realization[ws], r);
-        }
+    // Create water sources data collectors
+    for (int ws = 0; ws < (int) water_sources_realization.size(); ++ws) {
+        water_source_collectors[ws][r] = createWaterSourceDataCollector(water_sources_realization[ws], r);
     }
 } 
 
